@@ -35,6 +35,16 @@ export interface WooCouponLine {
   discount: string;
 }
 
+/**
+ * Deliberadamente mínima: sólo la ciudad, para poder poblar
+ * `comanda.poblacio_desti` (propiedad del sync, ver ADR-005). El resto de
+ * la dirección (calle, nombre, teléfono) no se modela acá — no hace falta
+ * para esta capa y es dato personal que no queremos acarrear sin necesidad.
+ */
+export interface WooShippingAddress {
+  city: string;
+}
+
 export interface WooOrder {
   id: number;
   status: string;
@@ -45,6 +55,7 @@ export interface WooOrder {
   created_via: string;
   /** Con IVA. Los precios de línea (WooLineItem.price) llegan sin IVA. */
   total: string;
+  shipping: WooShippingAddress;
   line_items: WooLineItem[];
   shipping_lines: WooShippingLine[];
   coupon_lines: WooCouponLine[];

@@ -7,6 +7,11 @@
   tareas (`/tasques/sync-*`, ADR-009) todavía no existe — es de la capa de
   servidor HTTP. Cuando esa capa llegue, el endpoint llama a las mismas
   funciones (`ingerirComandes`/`ingerirCataleg`), no reemplaza este script.
+- **`transformar.ts`** — dispara la transformación (`src/transform/`) a
+  mano: `npm run transformar -- cataleg|comandes|tots`. Corre DESPUÉS de la
+  ingesta, nunca antes: transforma lo que ya está aterrizado crudo en
+  `aterratge_woocommerce`. El catálogo va primero si se corre "tots" — las
+  líneas de pedido resuelven artículo contra `alias_producte`.
 
 ## Diagnóstico, de un solo uso
 

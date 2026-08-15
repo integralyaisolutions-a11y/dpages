@@ -24,6 +24,8 @@ export interface Comanda {
 
   // Propiedad de WooCommerce (ADR-005): el sync puede sobrescribir estos
   // campos mientras `congelatA` sea null.
+  /** Status crudo de WooCommerce (processing/completed/...) — distinto de `estat`, que es el flujo operativo propio. Null en pedidos que no vienen de Woo. */
+  estatWeb: string | null;
   poblacioDesti: string | null;
   /** Con IVA, tal como llega de WooCommerce. NUMERIC(10,2) como string. */
   total: string | null;
@@ -47,19 +49,27 @@ export interface ComandaLinia {
   ordinal: number;
   /** Inestable: WooCommerce recrea los ids al editar un pedido desde el admin. Ver ADR-006. */
   wooLineItemId: number | null;
-  /** Artículo canónico. Es la referencia que importa para reportes/paneles. */
-  producteId: string;
-  /** Qué alias (idioma/variación) concreto resolvió esta línea. Null si el pedido no vino de WooCommerce. Sólo trazabilidad. */
+  /**
+   * Artículo canónico. Null cuando la resolución de artículo no encontró
+   * nada (ej. los 14 artículos publicados sin código) — la línea NO se
+   * descarta, se guarda igual y la comanda queda con incidencia.
+   */
+  producteId: string | null;
+  /** Qué alias (idioma/variación) concreto resolvió esta línea. Null si no se resolvió o si el pedido no vino de WooCommerce. Sólo trazabilidad. */
   aliasProducteId: string | null;
+  /** Traza cruda de WooCommerce (product_id/variation_id/sku de la línea), aunque la resolución falle. Null en líneas que no vienen de Woo. */
+  wooProductId: number | null;
+  wooVariationId: number | null;
+  wooSku: string | null;
 
   // Propiedad de WooCommerce
   unitatsDemanades: number;
   /** Sin IVA, tal como llega de WooCommerce. NUMERIC(10,2) como string. */
   preuUnitari: string;
 
-  /** Peso de ficha del artículo (NUMERIC(10,3), kg). Null si el artículo es "a medida". */
+  /** Peso de ficha del artículo (NUMERIC(10,3), kg). Null si el artículo es "a medida" o no se resolvió. */
   pesFitxaKg: string | null;
-  /** unitatsDemanades × pesFitxaKg, o el valor manual si es "a medida". Nunca en cero. */
+  /** unitatsDemanades × pesFitxaKg. 0 cuando es "a medida" (pesEditable=true) — es un estado válido, a la espera de que alguien lo complete. */
   pesCalculatKg: string;
   pesEditable: boolean;
 

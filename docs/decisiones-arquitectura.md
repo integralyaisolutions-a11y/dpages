@@ -354,3 +354,40 @@ nativo.
   igual sin importar qué `.env` tenga cada quien.
 - Quien clone el repo tiene que copiar `.env.example` a `.env` en la raíz
   antes de correr `dev`/`migrate` — documentado en el README.
+
+---
+
+## ADR-014 — `aterratge_woocommerce` guarda el último payload, no un historial de versiones
+
+**Estado**: Aceptado.
+
+**Contexto**: `aterratge_woocommerce` tiene `PRIMARY KEY (recurs, woo_id)` y
+la ingesta hace `ON CONFLICT (recurs, woo_id) DO UPDATE` (capa 5) — cada
+ingesta pisa el payload anterior del mismo recurso. Esto se decidió al
+implementar la capa 5, razonando que el propósito declarado en ADR-003 es
+"reprocesar la transformación sin volver a pegarle a la API" — para eso
+alcanza con el último estado crudo, no hace falta un historial. **Pero esa
+consecuencia (se pierde la posibilidad de ver cómo evolucionó un pedido en
+WooCommerce a lo largo del tiempo) no se puso a consideración explícita ni
+quedó escrita en ningún ADR** — fue una decisión tomada al codificar, no
+una decisión conjunta documentada. Correcto marcarla ahora como lo que es.
+
+**Decisión**: Se mantiene el comportamiento actual (upsert, sin historial)
+por estos motivos, ahora sí explícitos:
+
+- El propósito de la tabla de aterrizaje es desacoplar ingesta de
+  transformación (ADR-003), no auditoría. Para reprocesar el estado
+  _actual_, el histórico no aporta nada.
+- El historial de negocio que sí importa — cómo cambió un pedido real, con
+  fecha — vive en `comanda`/`comanda_linia` (con `creat_en`,
+  `data_modificacio_woo`) una vez transformado, que es donde oficina y
+  producción lo necesitan consultar.
+- Guardar cada versión cruda que llega (pedidos se pueden modificar varias
+  veces) crece sin cota y sin un caso de uso concreto hoy que lo pida.
+
+**Consecuencias**: Si en el futuro aparece una necesidad real de auditoría
+del payload crudo tal como lo mandó WooCommerce en cada momento (no sólo el
+estado transformado), esto se revisita — la migración sería agregar un `id`
+autoincremental y sacar el upsert (pasar a log append-only), o una tabla de
+auditoría aparte. No es un cambio grande, pero tampoco se construye ahora
+sin un motivo concreto que lo pida.

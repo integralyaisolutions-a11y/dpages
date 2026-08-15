@@ -7,6 +7,7 @@
   "customer_id": 4821,
   "created_via": "checkout",
   "total": "8.80",
+  "shipping": { "city": "Manresa" },
   "line_items": [
     {
       "id": 501001,
