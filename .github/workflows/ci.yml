@@ -40,9 +40,8 @@ jobs:
           cache: 'npm'
 
       - run: npm ci
-
-      - name: Build @dpages/shared
-        run: npm run build:shared
+        # "npm ci" ya compila @dpages/shared por su cuenta (script
+        # "postinstall" en la raíz) — no hace falta un paso de build aparte.
 
       - name: Lint
         run: npm run lint

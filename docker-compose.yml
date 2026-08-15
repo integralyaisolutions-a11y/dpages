@@ -1,0 +1,47 @@
+services:
+  # Base de desarrollo. Puerto 5433 en el host para no chocar con un
+  # PostgreSQL local existente. Volumen persistente con nombre: los datos
+  # sobreviven a `docker compose down` (no a `-v`).
+  postgres:
+    image: postgres:16
+    container_name: dpages-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dpages
+      POSTGRES_PASSWORD: dpages
+      POSTGRES_DB: dpages
+    ports:
+      - '5433:5432'
+    volumes:
+      - dpages_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U dpages -d dpages']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Base para tests. Puerto y base de datos propios, SIN volumen persistente
+  # (tmpfs: vive en memoria y desaparece con el contenedor). Que un test
+  # borre datos de desarrollo es sólo cuestión de tiempo si comparten base;
+  # ésta se puede tirar y recrear sin perder nada porque nunca tuvo nada que
+  # valiera la pena conservar.
+  postgres-test:
+    image: postgres:16
+    container_name: dpages-postgres-test
+    environment:
+      POSTGRES_USER: dpages
+      POSTGRES_PASSWORD: dpages
+      POSTGRES_DB: dpages_test
+    ports:
+      - '5434:5432'
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U dpages -d dpages_test']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  dpages_postgres_data:
+    name: dpages_postgres_data

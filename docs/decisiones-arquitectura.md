@@ -222,5 +222,8 @@ como paquete de node_modules (symlink de npm workspaces), nunca importando
 **Consecuencias**: El build de `shared` tiene que correr antes que el de
 `backend` (y antes de levantar el dev server de `frontend`), tanto en local
 como en CI — resuelto explícitamente en los scripts de la raíz
-(`build`, `dev`, `typecheck`, `test` corren `build:shared` primero). Cambiar
-un tipo en `shared` no se refleja en los otros paquetes hasta recompilar.
+(`build`, `dev`, `typecheck`, `test` corren `build:shared` primero, y
+`postinstall` lo compila automáticamente después de todo `npm install`/
+`npm ci`, para que clonar el repo y arrancar no dependa de que alguien sepa
+este detalle). Cambiar un tipo en `shared` no se refleja en los otros
+paquetes hasta recompilar — no hay watch automático entre paquetes.

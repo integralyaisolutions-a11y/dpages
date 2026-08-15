@@ -1,0 +1,20 @@
+node_modules
+**/dist
+**/*.tsbuildinfo
+**/coverage
+
+.git
+.env
+.env.*.local
+
+data
+*.log
+.DS_Store
+
+# El frontend no entra en la imagen del backend ni de casualidad: se excluye
+# todo su contenido del contexto de build salvo el package.json (manifiesto
+# vacío), que el Dockerfile necesita copiar sólo para que "npm ci" no se
+# queje de un workspace que package-lock.json conoce pero no encuentra en
+# disco. Ni un archivo del código de Michel llega al daemon de Docker.
+packages/frontend/**
+!packages/frontend/package.json

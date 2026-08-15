@@ -30,9 +30,11 @@ Contexto de negocio completo: [`docs/contexto-negocio.md`](./docs/contexto-negoc
 
 Trabajan en paralelo. Por eso el monorepo con `packages/shared`: es el
 contrato de tipos entre los dos, y **se consume como paquete compilado**
-(`dist/`), no como código fuente vía paths de TypeScript — ver ADR-010. Si
-tocás `packages/shared`, corré `npm run build:shared` antes de que backend o
-frontend lo usen.
+(`dist/`), no como código fuente vía paths de TypeScript — ver ADR-010.
+`npm install` ya lo compila solo (script `postinstall` en la raíz), así que
+clonar y arrancar no requiere ningún paso manual. Pero si **editás**
+`packages/shared` en una sesión de trabajo, corré `npm run build:shared` (no
+hay watch automático) antes de que backend o frontend vean el cambio.
 
 Construcción por capas: configuración base y tooling → Docker y base de datos
 → migraciones → cliente de WooCommerce → ingesta → transformación → servidor

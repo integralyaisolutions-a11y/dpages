@@ -1,0 +1,50 @@
+import { describe, expect, it } from 'vitest';
+import { ErrorConfiguracion, parsearEnv } from './env.js';
+
+describe('parsearEnv', () => {
+  it('acepta una configuración mínima y aplica los defaults', () => {
+    const env = parsearEnv({ DATABASE_URL: 'postgres://dpages:dpages@localhost:5433/dpages' });
+
+    expect(env.NODE_ENV).toBe('development');
+    expect(env.PORT).toBe(8080);
+    expect(env.LOG_LEVEL).toBe('info');
+    expect(env.DB_POOL_MAX).toBe(5);
+  });
+
+  it('acepta la forma de Cloud SQL de DATABASE_URL (socket unix, sin host)', () => {
+    const env = parsearEnv({
+      DATABASE_URL: 'postgresql://dpages:secret@/dpages?host=/cloudsql/proj:region:instance',
+    });
+
+    expect(env.DATABASE_URL).toContain('/cloudsql/');
+  });
+
+  it('coacciona PORT y DB_POOL_MAX desde string a número', () => {
+    const env = parsearEnv({
+      DATABASE_URL: 'postgres://dpages:dpages@localhost:5433/dpages',
+      PORT: '3000',
+      DB_POOL_MAX: '3',
+    });
+
+    expect(env.PORT).toBe(3000);
+    expect(env.DB_POOL_MAX).toBe(3);
+  });
+
+  it('falla si falta DATABASE_URL, y el mensaje dice qué variable falta', () => {
+    expect(() => parsearEnv({})).toThrow(ErrorConfiguracion);
+    expect(() => parsearEnv({})).toThrow(/DATABASE_URL/);
+  });
+
+  it('falla si DATABASE_URL no tiene forma de cadena de conexión de Postgres', () => {
+    expect(() => parsearEnv({ DATABASE_URL: 'no-es-una-url-de-postgres' })).toThrow(/DATABASE_URL/);
+  });
+
+  it('falla si NODE_ENV trae un valor fuera de la lista permitida', () => {
+    expect(() =>
+      parsearEnv({
+        DATABASE_URL: 'postgres://dpages:dpages@localhost:5433/dpages',
+        NODE_ENV: 'staging',
+      }),
+    ).toThrow(/NODE_ENV/);
+  });
+});

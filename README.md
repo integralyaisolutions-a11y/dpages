@@ -20,15 +20,35 @@ Monorepo con npm workspaces:
 ## Requisitos
 
 - Node 22 (ver `.nvmrc`)
-- Docker (para PostgreSQL en local — se agrega en la próxima capa)
+- Docker + Docker Compose (para PostgreSQL en local)
 
 ## Arranque en local
 
 ```bash
-npm install                # instala todo el workspace y activa Husky (script "prepare")
-npm run build:shared       # compila @dpages/shared — hace falta antes de tocar backend/frontend
-cp .env.example .env       # completar valores
-npm run dev                # backend en modo watch
+npm install                # instala todo el workspace, compila @dpages/shared (postinstall) y activa Husky
+cp .env.example .env       # completar valores (por defecto ya apunta al Postgres de docker-compose)
+docker compose up -d postgres   # levanta PostgreSQL 16 en el puerto 5433 del host
+npm run dev                 # backend en modo watch
+```
+
+`npm install` ya deja `@dpages/shared` compilado (script `postinstall`) — no
+hace falta un paso manual aparte al clonar. Si **editás** `packages/shared`
+durante el desarrollo, corré `npm run build:shared` (o `npm run dev -w
+@dpages/shared` en otra terminal, en modo watch) para que backend/frontend
+vean los cambios: no hay recompilación automática de shared al vuelo.
+
+### Base de datos en local
+
+`docker-compose.yml` levanta dos PostgreSQL 16 independientes:
+
+| Servicio        | Puerto host | Base          | Persistencia                                                                                   |
+| --------------- | ----------- | ------------- | ---------------------------------------------------------------------------------------------- |
+| `postgres`      | 5433        | `dpages`      | volumen con nombre (sobrevive a `down`)                                                        |
+| `postgres-test` | 5434        | `dpages_test` | `tmpfs` — efímera, pensada para que los tests no toquen los datos con los que estás trabajando |
+
+```bash
+docker compose up -d              # ambas bases
+docker compose up -d postgres     # sólo la de desarrollo
 ```
 
 ## Scripts de la raíz

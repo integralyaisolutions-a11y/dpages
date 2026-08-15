@@ -10,12 +10,12 @@ fuente vía paths de TypeScript. Next.js lo resuelve sin configuración
 adicional, siempre que esté compilado:
 
 ```bash
-npm install
-npm run build:shared   # desde la raíz del monorepo, antes de levantar el dev server
+npm install   # desde la raíz del monorepo — ya compila @dpages/shared solo (script "postinstall")
 ```
 
-Si el editor no encuentra los tipos de `@dpages/shared`, corré
-`npm run build:shared` desde la raíz — el `dist/` no está commiteado.
+El `dist/` de `shared` no está commiteado, así que si lo ves desactualizado
+(por ejemplo, Gerardo editó un tipo y no volvió a compilar) corré
+`npm run build:shared` desde la raíz.
 
 ## Pendiente de definir con el cliente (no bloquea empezar el frontend)
 
