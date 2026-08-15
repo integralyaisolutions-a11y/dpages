@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS comanda_linia;
+DROP TABLE IF EXISTS comanda;
+DROP TABLE IF EXISTS tarifa;
+DROP TABLE IF EXISTS transportista;
+DROP TABLE IF EXISTS client;

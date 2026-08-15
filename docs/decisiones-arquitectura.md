@@ -126,8 +126,9 @@ nuevos. Un DELETE+INSERT en cada sync borraría también los kilos y unidades
 que empaquetado ya registró para esas líneas.
 
 **Decisión**: Emparejar líneas primero por `woo_line_item_id`; si no
-coincide, por `(producto, ordinal)`. Las líneas que ya no vienen de
-WooCommerce se marcan `esborrada = true`, nunca se eliminan físicamente.
+coincide, por `(producte_id, ordinal)`. Las líneas que ya no vienen de
+WooCommerce se marcan `esborrat = true` (columna en `comanda_linia`), nunca
+se eliminan físicamente.
 
 **Consecuencias**: Se preserva el trabajo de empaquetado incluso cuando
 WooCommerce cambia los ids de línea por detrás. El esquema necesita una
@@ -143,14 +144,15 @@ filtrar por ella.
 **Contexto**: Un cliente editando su pedido en la web no puede alterar en
 silencio una orden de trabajo que el obrador ya está ejecutando.
 
-**Decisión**: Una vez que un pedido entra en producción (`congelada =
-true`), el sync deja de sobrescribirlo. Si llega una actualización de
+**Decisión**: Una vez que un pedido entra en producción, se graba
+`congelat_a` (columna `TIMESTAMPTZ` en `comanda`, no nula desde ese
+momento) y el sync deja de sobrescribirlo. Si llega una actualización de
 WooCommerce para un pedido congelado, se registra como **incidencia** para
 que oficina la resuelva manualmente, en vez de aplicarse.
 
-**Consecuencias**: Requiere que todo el código de sync chequee el flag
-`congelada` antes de aplicar un upsert de cabecera o de líneas, y que exista
-un mecanismo de incidencias visible para oficina.
+**Consecuencias**: Requiere que todo el código de sync chequee
+`congelat_a IS NULL` antes de aplicar un upsert de cabecera o de líneas, y
+que exista un mecanismo de incidencias visible para oficina.
 
 ---
 
@@ -227,3 +229,44 @@ como en CI — resuelto explícitamente en los scripts de la raíz
 `npm ci`, para que clonar el repo y arrancar no dependa de que alguien sepa
 este detalle). Cambiar un tipo en `shared` no se refleja en los otros
 paquetes hasta recompilar — no hay watch automático entre paquetes.
+
+---
+
+## ADR-011 — Runner de migraciones propio: transacción por archivo y verificación por hash
+
+**Estado**: Aceptado.
+
+**Contexto**: Las migraciones son SQL plano numerado (`NNNN_nombre.up.sql` /
+`.down.sql`, ver el agente `db-schema`). Hacía falta decidir cómo se
+aplican: todo el lote en una sola transacción o una por archivo, y cómo
+detectar el error más difícil de este esquema — que alguien edite una
+migración que otra persona ya aplicó, en vez de agregar una nueva.
+
+**Decisión**:
+
+- Una tabla `esquema_migraciones` (nombre genérico, no catalán: es
+  infraestructura de la herramienta, no una entidad del dominio del
+  cliente) registra `id`, `nombre_archivo`, `checksum` (SHA-256 del
+  contenido) y `aplicada_en`.
+- **Cada migración se aplica en su propia transacción** (`BEGIN`/`COMMIT`
+  por archivo, no una transacción para todo el lote). Si la 0003 falla, la
+  0001 y la 0002 quedan aplicadas y registradas — no hay que reintentar
+  desde cero.
+- **Antes de aplicar nada**, el runner compara el checksum de cada
+  migración ya aplicada contra el contenido actual del archivo en disco. Si
+  no coincide, corta con un error explícito y no aplica ninguna migración
+  pendiente hasta que se resuelva.
+- Correr el runner sin migraciones pendientes es un no-op: es lo que lo hace
+  seguro de correr en cada arranque o cada CI.
+- El runner vive en `packages/backend/src/db/migrate.ts`, expone `up` y
+  `status` por ahora (no `down` automatizado — los `.down.sql` existen para
+  reversión manual en desarrollo, nunca para producción, ver el agente
+  `db-schema`).
+
+**Consecuencias**: Ver un fallo a mitad de un lote no obliga a averiguar qué
+quedó a medias — el estado en `esquema_migraciones` es la fuente de verdad.
+El chequeo de hash convierte "alguien editó una migración vieja" en un error
+ruidoso al arrancar en vez de un esquema desincronizado que se descubre
+semanas después. Costo: si de verdad hace falta corregir una migración ya
+aplicada (typo, etc.), no se edita — se agrega una migración nueva que
+corrige, igual que con cualquier cambio de esquema posterior.

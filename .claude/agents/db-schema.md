@@ -28,13 +28,13 @@ WooCommerce. Sin ORM: SQL explícito y revisable (`pg` como cliente).
 3. **Líneas de pedido: nunca DELETE+INSERT.** Borraría los kilos y unidades
    que empaquetado ya registró, y los `woo_line_item_id` no son estables
    (WooCommerce los recrea al editar un pedido desde el admin). Emparejar
-   primero por `woo_line_item_id`, si no está, por (producto, ordinal). Las
-   líneas que ya no vienen de WooCommerce se marcan `esborrada`, nunca se
-   eliminan físicamente.
+   primero por `woo_line_item_id`, si no está, por (`producte_id`, `ordinal`).
+   Las líneas que ya no vienen de WooCommerce se marcan `esborrat` (columna
+   en `comanda_linia`), nunca se eliminan físicamente.
 4. **Regla de congelación.** Una vez que un pedido entra en producción, el
    sync deja de sobrescribirlo — registra la discrepancia como incidencia en
-   vez de pisar. Cualquier UPDATE de sincronización tiene que respetar el
-   flag `congelada`.
+   vez de pisar. Cualquier UPDATE de sincronización tiene que respetar
+   `congelat_a IS NULL` (columna `TIMESTAMPTZ` en `comanda`; no nula = congelada).
 5. **Catálogo con alias, no mapeo directo.** El catálogo está duplicado por
    idioma en WooCommerce (mismo SKU, dos `product_id`). La tabla de alias
    (`alias_producte`) es la que vincula cada `woo_product_id` con el artículo

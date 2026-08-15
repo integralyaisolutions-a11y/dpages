@@ -60,7 +60,8 @@ Puesta en producción objetivo: **finales de septiembre de 2026**.
 - Si el artículo tiene peso de ficha, el peso de línea no es editable (se
   calcula como unidades × peso de ficha). Si no tiene peso, es un artículo "a
   medida": arranca en cero, es editable, y no puede quedar en cero.
-- En empaquetado, "unidades enviadas" y "kilos enviados" son campos
+- En empaquetado, "unidades entregadas" y "kilos entregados"
+  (`unitats_lliurades` / `kg_lliurats` en `comanda_linia`) son campos
   editables en línea, obligatorios, arrancan en cero, y requieren checkbox de
   confirmación explícita aunque coincidan con lo pedido (doble confirmación
   — motivo: por mermas se puede enviar menos de lo pedido, y hay que emitir
@@ -89,3 +90,11 @@ que se cierren — el código no debería anticiparlas ni asumir una respuesta:
   las pantallas (por categoría, por tipo de corte, etc.).
 - **Bilingüismo del sistema**: si la UI final es sólo catalán o
   catalán/castellano.
+
+**El esquema de base de datos (capa de migraciones) no modela todavía nada
+de esto a propósito**: `producte` no tiene columna de categoría/agrupación,
+no existe ninguna tabla de descuentos, y aunque `transportista`/`tarifa`
+existen como catálogos mínimos (`id`, `nom`), no hay ninguna regla de
+asignación implementada — son referencias vacías a la espera de la
+definición. Preferible una migración adicional después que columnas que
+haya que rehacer.

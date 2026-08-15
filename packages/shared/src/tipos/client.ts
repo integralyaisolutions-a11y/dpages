@@ -5,6 +5,7 @@ export interface Client {
   esConvidat: boolean;
   /** Cobertura ~57% en los pedidos históricos; puede venir de dos campos de WooCommerce que a veces discrepan. */
   nif: string | null;
+  email: string | null;
 }
 
 export interface Transportista {
