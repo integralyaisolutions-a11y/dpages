@@ -13,6 +13,14 @@ export default defineConfig({
     // con un error de conexión claro, no en silencio.
     env: {
       DATABASE_URL: 'postgres://dpages:dpages@localhost:5434/dpages_test',
+      // Dummies: los tests del cliente de WooCommerce interceptan fetch, así
+      // que nunca salen a la red de verdad con estos valores (ver requisito
+      // "ningún test debe pegarle a dpages.cat"). .invalid es un TLD
+      // reservado por la IANA justamente para esto, para que sea imposible
+      // que resuelva a un dominio real si algún test se olvida de mockear.
+      WC_BASE_URL: 'https://woocommerce-test.invalid',
+      WC_CONSUMER_KEY: 'ck_test',
+      WC_CONSUMER_SECRET: 'cs_test',
     },
   },
 });

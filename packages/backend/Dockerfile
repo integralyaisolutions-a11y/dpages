@@ -61,6 +61,14 @@ COPY --from=build --chown=dpages:dpages /app/packages/shared/package.json ./node
 COPY --from=build --chown=dpages:dpages /app/packages/backend/dist ./dist
 COPY --chown=dpages:dpages packages/backend/package.json ./package.json
 
+# Migraciones (ADR-012): NUNCA se aplican al arrancar el servicio — Cloud Run
+# puede levantar varias instancias a la vez y no tiene que haber N procesos
+# compitiendo por aplicar el mismo esquema, ni un fallo de migración
+# impidiendo que el servicio arranque. Se corren aparte, antes de desplegar
+# la revisión nueva (hoy a mano; como Job de Cloud Run cuando se automatice
+# el despliegue): `docker run <imagen> node dist/db/migrate.js up`.
+COPY --from=build --chown=dpages:dpages /app/packages/backend/migrations ./migrations
+
 USER dpages
 
 EXPOSE 8080

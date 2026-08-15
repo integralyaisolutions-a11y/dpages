@@ -19,6 +19,18 @@ const esquemaEnv = z.object({
   // Cloud Run escala instancias y cada una abre su propio pool; Cloud SQL en
   // instancias chicas tiene pocas conexiones disponibles. Techo bajo a propósito.
   DB_POOL_MAX: z.coerce.number().int().positive().max(20).default(5),
+
+  // API REST v3 de WooCommerce (ADR-001) — /wp-json/wc/v3/, nunca la legacy.
+  // Credencial de SÓLO LECTURA (ver docs/hallazgos-woocommerce.md).
+  WC_BASE_URL: z
+    .string({ required_error: 'falta esta variable de entorno' })
+    .url('debe ser una URL válida, ej. https://dpages.cat'),
+  WC_CONSUMER_KEY: z
+    .string({ required_error: 'falta esta variable de entorno' })
+    .min(1, 'no puede estar vacía'),
+  WC_CONSUMER_SECRET: z
+    .string({ required_error: 'falta esta variable de entorno' })
+    .min(1, 'no puede estar vacía'),
 });
 
 export type Env = z.infer<typeof esquemaEnv>;

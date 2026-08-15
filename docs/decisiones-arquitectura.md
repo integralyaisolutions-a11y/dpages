@@ -257,7 +257,8 @@ migración que otra persona ya aplicó, en vez de agregar una nueva.
   no coincide, corta con un error explícito y no aplica ninguna migración
   pendiente hasta que se resuelva.
 - Correr el runner sin migraciones pendientes es un no-op: es lo que lo hace
-  seguro de correr en cada arranque o cada CI.
+  seguro de correr las veces que haga falta (en CI, a mano, o como paso de
+  despliegue — nunca automáticamente al arrancar el servicio, ver ADR-012).
 - El runner vive en `packages/backend/src/db/migrate.ts`, expone `up` y
   `status` por ahora (no `down` automatizado — los `.down.sql` existen para
   reversión manual en desarrollo, nunca para producción, ver el agente
@@ -270,3 +271,36 @@ ruidoso al arrancar en vez de un esquema desincronizado que se descubre
 semanas después. Costo: si de verdad hace falta corregir una migración ya
 aplicada (typo, etc.), no se edita — se agrega una migración nueva que
 corrige, igual que con cualquier cambio de esquema posterior.
+
+---
+
+## ADR-012 — Las migraciones se aplican como paso separado, nunca al arrancar el servicio
+
+**Estado**: Aceptado.
+
+**Contexto**: Cloud Run puede levantar varias instancias del backend a la
+vez (arranque en frío, escalado, un deploy nuevo mientras la revisión vieja
+todavía atiende tráfico). Si el runner de migraciones corriera dentro de
+`src/index.ts` al arrancar, N instancias podrían competir por aplicar el
+mismo esquema al mismo tiempo. El guardián de checksum e `INSERT` con clave
+primaria de `esquema_migraciones` (ADR-011) evitarían una corrupción real,
+pero el resultado seguiría siendo frágil: una instancia aplicando DDL
+mientras otra ya sirve tráfico con el esquema viejo, y una migración que
+falla tirando abajo el arranque de TODAS las instancias nuevas en vez de
+sólo bloquear el paso de despliegue que la necesita.
+
+**Decisión**: El runner de migraciones nunca se invoca desde el código de
+arranque del servidor HTTP. Se ejecuta como un paso separado y explícito
+(`node dist/db/migrate.js up`), antes de desplegar la revisión nueva. En
+Cloud Run esto se traduce en un Job aparte (o una ejecución manual) que
+corre y termina, no en el propio servicio. Por eso la imagen de Docker
+incluye `migrations/` y el runner ya compilado — el comando alternativo
+está disponible en la misma imagen que se despliega, sin necesitar una
+imagen distinta para migrar.
+
+**Consecuencias**: Desplegar pasa a ser dos pasos (migrar, después
+desplegar la revisión) en vez de uno, y todavía no está automatizado — el
+Job de Cloud Scheduler/Run para esto es trabajo de `infra/gcp/`, pendiente.
+A cambio, un fallo de migración nunca puede tirar abajo el servicio: se
+detecta y se resuelve ANTES de que una instancia nueva intente arrancar con
+un esquema a medio aplicar.

@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { ErrorConfiguracion, parsearEnv } from './env.js';
 
+const entornoValido = {
+  DATABASE_URL: 'postgres://dpages:dpages@localhost:5433/dpages',
+  WC_BASE_URL: 'https://dpages.cat',
+  WC_CONSUMER_KEY: 'ck_test',
+  WC_CONSUMER_SECRET: 'cs_test',
+};
+
 describe('parsearEnv', () => {
   it('acepta una configuración mínima y aplica los defaults', () => {
-    const env = parsearEnv({ DATABASE_URL: 'postgres://dpages:dpages@localhost:5433/dpages' });
+    const env = parsearEnv(entornoValido);
 
     expect(env.NODE_ENV).toBe('development');
     expect(env.PORT).toBe(8080);
@@ -13,6 +20,7 @@ describe('parsearEnv', () => {
 
   it('acepta la forma de Cloud SQL de DATABASE_URL (socket unix, sin host)', () => {
     const env = parsearEnv({
+      ...entornoValido,
       DATABASE_URL: 'postgresql://dpages:secret@/dpages?host=/cloudsql/proj:region:instance',
     });
 
@@ -20,31 +28,36 @@ describe('parsearEnv', () => {
   });
 
   it('coacciona PORT y DB_POOL_MAX desde string a número', () => {
-    const env = parsearEnv({
-      DATABASE_URL: 'postgres://dpages:dpages@localhost:5433/dpages',
-      PORT: '3000',
-      DB_POOL_MAX: '3',
-    });
+    const env = parsearEnv({ ...entornoValido, PORT: '3000', DB_POOL_MAX: '3' });
 
     expect(env.PORT).toBe(3000);
     expect(env.DB_POOL_MAX).toBe(3);
   });
 
   it('falla si falta DATABASE_URL, y el mensaje dice qué variable falta', () => {
-    expect(() => parsearEnv({})).toThrow(ErrorConfiguracion);
-    expect(() => parsearEnv({})).toThrow(/DATABASE_URL/);
+    const { DATABASE_URL: _omitida, ...sinDatabaseUrl } = entornoValido;
+    expect(() => parsearEnv(sinDatabaseUrl)).toThrow(ErrorConfiguracion);
+    expect(() => parsearEnv(sinDatabaseUrl)).toThrow(/DATABASE_URL/);
   });
 
   it('falla si DATABASE_URL no tiene forma de cadena de conexión de Postgres', () => {
-    expect(() => parsearEnv({ DATABASE_URL: 'no-es-una-url-de-postgres' })).toThrow(/DATABASE_URL/);
+    expect(() =>
+      parsearEnv({ ...entornoValido, DATABASE_URL: 'no-es-una-url-de-postgres' }),
+    ).toThrow(/DATABASE_URL/);
   });
 
   it('falla si NODE_ENV trae un valor fuera de la lista permitida', () => {
-    expect(() =>
-      parsearEnv({
-        DATABASE_URL: 'postgres://dpages:dpages@localhost:5433/dpages',
-        NODE_ENV: 'staging',
-      }),
-    ).toThrow(/NODE_ENV/);
+    expect(() => parsearEnv({ ...entornoValido, NODE_ENV: 'staging' })).toThrow(/NODE_ENV/);
+  });
+
+  it('falla si falta alguna variable de WooCommerce', () => {
+    const { WC_CONSUMER_KEY: _omitida, ...sinConsumerKey } = entornoValido;
+    expect(() => parsearEnv(sinConsumerKey)).toThrow(/WC_CONSUMER_KEY/);
+  });
+
+  it('falla si WC_BASE_URL no es una URL válida', () => {
+    expect(() => parsearEnv({ ...entornoValido, WC_BASE_URL: 'dpages.cat' })).toThrow(
+      /WC_BASE_URL/,
+    );
   });
 });
