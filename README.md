@@ -19,7 +19,7 @@ Monorepo con npm workspaces:
 
 ## Requisitos
 
-- Node 22 (ver `.nvmrc`)
+- Node 24 (ver `.nvmrc`)
 - Docker + Docker Compose (para PostgreSQL en local)
 
 ## Arranque en local

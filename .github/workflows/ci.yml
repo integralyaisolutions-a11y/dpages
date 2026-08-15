@@ -9,9 +9,9 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
-    # El backend no tiene todavía tests que toquen base de datos (llegan con
-    # la capa de migraciones/transformación), pero el service container queda
-    # wireado desde ahora para no tener que tocar este workflow ese día.
+    # El runner de migraciones y los transformadores corren tests de
+    # integración reales contra este Postgres (esquemas aislados y
+    # descartables por corrida, ver los *.test.ts de db/ y transform/).
     services:
       postgres:
         image: postgres:16
@@ -36,7 +36,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
 
       - run: npm ci

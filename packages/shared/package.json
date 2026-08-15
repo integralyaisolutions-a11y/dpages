@@ -4,6 +4,9 @@
   "private": true,
   "description": "Tipos TypeScript compartidos entre @dpages/backend y @dpages/frontend. Se consume compilado (ADR-010), nunca como código fuente.",
   "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

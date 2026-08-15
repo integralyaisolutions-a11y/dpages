@@ -5,8 +5,9 @@
 # package-lock.json y a packages/shared) —
 #   docker build -f packages/backend/Dockerfile .
 #
-# Node 22 en todas las etapas: misma versión mayor que .nvmrc y CI (fijarla
+# Node 24 en todas las etapas: misma versión mayor que .nvmrc y CI (fijarla
 # igual en los tres lugares evita fallos que sólo aparecen en un entorno).
+# Node 24 es la LTS activa (soporte hasta abril de 2028) — ver ADR-015.
 
 # ─── deps: instala TODO (dev incluido) para poder compilar más abajo ───────
 # Sólo se copian manifiestos (package.json), nunca código fuente, para que
@@ -14,7 +15,7 @@
 # el package.json (vacío) de packages/frontend únicamente porque
 # package-lock.json lo conoce como workspace — así "npm ci" no se queja de
 # un workspace ausente. Ni una línea del código de Michel entra acá.
-FROM node:22-alpine AS deps
+FROM node:24-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/shared/package.json ./packages/shared/package.json
@@ -33,7 +34,7 @@ RUN npm run build -w @dpages/shared
 RUN npm run build -w @dpages/backend
 
 # ─── prod-deps: sólo dependencias de producción (sin devDependencies) ──────
-FROM node:22-alpine AS prod-deps
+FROM node:24-alpine AS prod-deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/shared/package.json ./packages/shared/package.json
@@ -42,7 +43,7 @@ COPY packages/frontend/package.json ./packages/frontend/package.json
 RUN npm ci --omit=dev --ignore-scripts
 
 # ─── runtime: nada de código fuente, nada de devDependencies ───────────────
-FROM node:22-alpine AS runtime
+FROM node:24-alpine AS runtime
 ENV NODE_ENV=production
 ENV PORT=8080
 WORKDIR /app

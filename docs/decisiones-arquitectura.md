@@ -391,3 +391,48 @@ estado transformado), esto se revisita — la migración sería agregar un `id`
 autoincremental y sacar el upsert (pasar a log append-only), o una tabla de
 auditoría aparte. No es un cambio grande, pero tampoco se construye ahora
 sin un motivo concreto que lo pida.
+
+---
+
+## ADR-015 — Node 24 como versión única del proyecto (LTS activa, no la más nueva por comodidad)
+
+**Estado**: Aceptado.
+
+**Contexto**: El proyecto arrancó fijando Node 22 en todos lados (`.nvmrc`,
+`engines`, `Dockerfile`, CI). A los dos días de vida, con cero dependencias
+que pudieran romperse por el cambio, se revisó esa elección contra el
+calendario real de releases de Node.js:
+
+| Versión | Fase actual (agosto 2026)              | Pasa a Mantenimiento | Fin de vida (EOL) |
+| ------- | -------------------------------------- | -------------------- | ----------------- |
+| Node 22 | LTS de Mantenimiento (desde oct. 2025) | ya pasó              | **abril de 2027** |
+| Node 24 | LTS Activa (desde oct. 2025)           | octubre de 2026      | **abril de 2028** |
+
+Node 22 ya está en la fase donde sólo recibe parches de seguridad críticos,
+no mejoras — y muere un año antes que Node 24. Seguir con Node 22 significa
+heredar una migración de versión mayor en algún punto de 2026-2027, ya con
+el sistema en producción (puesta en marcha objetivo: septiembre de 2026) y
+con dependencias reales acumuladas. Este es el momento más barato posible
+para este cambio: dos días de código, sin nada que validar contra una
+versión vieja.
+
+**Decisión**: Node 24 es la versión única del proyecto, en todos los
+lugares donde antes decía 22: `.nvmrc`, `engines` de los cuatro
+`package.json` (raíz y los tres paquetes), las tres etapas del `Dockerfile`,
+`node-version` en `ci.yml`, y `@types/node` fijado explícitamente en la
+línea `24.x` (antes llegaba de arrastre transitivo vía `@types/pg`/`vitest`
+en la `26.x` — desalineado con la versión real del runtime, sin que nadie
+lo hubiera decidido).
+
+No es "la versión más nueva porque sí": es la LTS **activa** — la que
+recibe mejoras y parches por igual, no sólo parches de seguridad — con el
+mayor tiempo de vida útil por delante para un proyecto que recién empieza.
+
+**Consecuencias**: Ninguna dependencia del proyecto quedó atada a Node 22
+(cero código heredado), así que el cambio fue mecánico. Revisar esta
+decisión de nuevo cuando Node 24 pase a Mantenimiento (**octubre de
+2026**) — para entonces evaluar si conviene saltar a la siguiente LTS activa
+(Node 26, prevista) antes de que dPagès esté en producción, o esperar a
+después del go-live. No adoptar Node 25/27/... (versiones impares, "Current"
+sin garantía de LTS) en ningún entorno: son de vida corta y no están
+pensadas para producción.
