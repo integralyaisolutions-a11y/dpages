@@ -304,3 +304,53 @@ Job de Cloud Scheduler/Run para esto es trabajo de `infra/gcp/`, pendiente.
 A cambio, un fallo de migración nunca puede tirar abajo el servicio: se
 detecta y se resuelve ANTES de que una instancia nueva intente arrancar con
 un esquema a medio aplicar.
+
+---
+
+## ADR-013 — Carga de `.env` vía `--env-file-if-exists`, nunca en código de aplicación
+
+**Estado**: Aceptado.
+
+**Contexto**: `env.ts` siempre leyó `process.env` directamente (a propósito:
+es lo correcto para Cloud Run, donde las variables las inyecta la
+plataforma y Secret Manager). El problema es que **nada** cargaba el
+`.env` local hacia `process.env` antes de que `env.ts` lo leyera — no había
+`dotenv` instalado ni ningún flag de Node en los scripts. Resultado real:
+copiar `.env.example` a `.env` y completarlo no alcanzaba, porque nadie lo
+leía. Además, los scripts de npm corren con cwd en el paquete
+(`packages/backend`), no en la raíz del monorepo donde vive `.env` — una
+carga que asuma cwd se rompe apenas alguien invoca el script desde otro
+lado.
+
+**Decisión**: Cargar `.env` con el flag nativo de Node
+`--env-file-if-exists=../../.env`, agregado en los scripts de
+`packages/backend/package.json` que lo necesitan (`dev`, `start`,
+`migrate`, `migrate:status`) — **no** en `env.ts` ni en ningún otro código
+de aplicación. La ruta es relativa a la raíz del monorepo, fija, sin
+depender de desde dónde se invoque `npm run`.
+
+Se eligió `--env-file-if-exists` (silencioso si el archivo no existe) en
+vez de `--env-file` (que aborta con un error de Node si falta el archivo):
+así, si falta `.env`, quien lo ve es el mensaje de `env.ts` ("falta esta
+variable de entorno... revisá `.env.example`") — el mismo mensaje claro
+tanto si falta el archivo entero como si falta una sola variable dentro de
+uno que sí existe. Un solo camino de error, no dos.
+
+No se agregó `dotenv` ni ninguna dependencia nueva: Node 20.6+/22 lo trae
+nativo.
+
+**Consecuencias**:
+
+- **Producción nunca carga nada**: el `CMD` del `Dockerfile` es
+  `node dist/index.js`, directo, sin pasar por los scripts de npm — nunca
+  lleva el flag, así que en Cloud Run jamás se intenta leer un archivo
+  `.env` (que además ni siquiera viaja en la imagen). No hizo falta
+  ninguna rama `if (NODE_ENV === 'production')` en el código para lograr
+  esto: la garantía es estructural, no una condición que alguien podría
+  romper.
+- **Los tests no dependen de ningún `.env`**: `vitest.config.ts` ya seteaba
+  sus propias variables dummy vía `test.env` (nunca leyó archivos) — esto
+  no cambió, y sigue significando que CI y una máquina local se comportan
+  igual sin importar qué `.env` tenga cada quien.
+- Quien clone el repo tiene que copiar `.env.example` a `.env` en la raíz
+  antes de correr `dev`/`migrate` — documentado en el README.

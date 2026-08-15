@@ -8,14 +8,14 @@
     "node": ">=22 <23"
   },
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
     "build": "tsc -p tsconfig.build.json",
-    "start": "node dist/index.js",
+    "start": "node --env-file-if-exists=../../.env dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "migrate": "tsx src/db/migrate.ts up",
-    "migrate:status": "tsx src/db/migrate.ts status",
+    "migrate": "tsx --env-file-if-exists=../../.env src/db/migrate.ts up",
+    "migrate:status": "tsx --env-file-if-exists=../../.env src/db/migrate.ts status",
     "clean": "rimraf dist *.tsbuildinfo"
   },
   "dependencies": {

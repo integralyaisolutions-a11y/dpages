@@ -24,11 +24,18 @@ Monorepo con npm workspaces:
 
 ## Arranque en local
 
+**Antes de correr nada** (`npm run dev`, `migrate`, lo que sea): copiá
+`.env.example` a `.env` **en la raíz del monorepo** y completá los
+valores reales (credenciales de WooCommerce, etc.). Sin este paso, `dev` y
+`migrate` fallan al arrancar con un mensaje de `env.ts` diciendo qué
+variable falta — es el primer tropiezo esperable al clonar el repo.
+
 ```bash
-npm install                # instala todo el workspace, compila @dpages/shared (postinstall) y activa Husky
-cp .env.example .env       # completar valores (por defecto ya apunta al Postgres de docker-compose)
+npm install                     # instala todo el workspace, compila @dpages/shared (postinstall) y activa Husky
+cp .env.example .env            # EN LA RAÍZ — completar valores reales antes de seguir
 docker compose up -d postgres   # levanta PostgreSQL 16 en el puerto 5433 del host
-npm run dev                 # backend en modo watch
+npm run migrate                 # aplica el esquema (ver docs/decisiones-arquitectura.md, ADR-011)
+npm run dev                     # backend en modo watch
 ```
 
 `npm install` ya deja `@dpages/shared` compilado (script `postinstall`) — no
@@ -36,6 +43,14 @@ hace falta un paso manual aparte al clonar. Si **editás** `packages/shared`
 durante el desarrollo, corré `npm run build:shared` (o `npm run dev -w
 @dpages/shared` en otra terminal, en modo watch) para que backend/frontend
 vean los cambios: no hay recompilación automática de shared al vuelo.
+
+`.env` vive en la raíz, pero los scripts de `@dpages/backend` corren con
+cwd en `packages/backend` — `dev`, `start`, `migrate` y `migrate:status` lo
+cargan explícitamente desde ahí (`--env-file-if-exists=../../.env`, ver
+ADR-013). `npm run test`/`build`/`typecheck` **no** lo tocan: los tests
+usan sus propias variables (`vitest.config.ts`), no las de tu `.env`, para
+que tu máquina y CI se comporten igual. En producción (Cloud Run) tampoco
+se carga ningún `.env` — las variables las inyecta la plataforma.
 
 ### Base de datos en local
 
@@ -53,15 +68,16 @@ docker compose up -d postgres     # sólo la de desarrollo
 
 ## Scripts de la raíz
 
-| Script                            | Qué hace                                                                        |
-| --------------------------------- | ------------------------------------------------------------------------------- |
-| `npm run build`                   | Compila `shared` y después `backend`, en ese orden (ver ADR-010)                |
-| `npm run dev`                     | Compila `shared` y levanta `backend` en modo watch                              |
-| `npm run typecheck`               | Typecheck de todo el monorepo                                                   |
-| `npm run test`                    | Compila `shared` y corre los tests de `backend`                                 |
-| `npm run lint` / `lint:fix`       | ESLint sobre todo el repo                                                       |
-| `npm run format` / `format:check` | Prettier                                                                        |
-| `npm run migrate`                 | Corre el runner de migraciones del backend (llega con la capa de base de datos) |
+| Script                            | Qué hace                                                               |
+| --------------------------------- | ---------------------------------------------------------------------- |
+| `npm run build`                   | Compila `shared` y después `backend`, en ese orden (ver ADR-010)       |
+| `npm run dev`                     | Compila `shared` y levanta `backend` en modo watch                     |
+| `npm run typecheck`               | Typecheck de todo el monorepo                                          |
+| `npm run test`                    | Compila `shared` y corre los tests de `backend`                        |
+| `npm run lint` / `lint:fix`       | ESLint sobre todo el repo                                              |
+| `npm run format` / `format:check` | Prettier                                                               |
+| `npm run migrate`                 | Aplica las migraciones pendientes contra `DATABASE_URL` (carga `.env`) |
+| `npm run migrate:status`          | Muestra qué migraciones están aplicadas y cuáles faltan (carga `.env`) |
 
 ## Documentación
 
