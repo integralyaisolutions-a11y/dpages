@@ -1,17 +1,22 @@
-# Scripts de diagnóstico
+# Scripts
 
-Utilidades ejecutables de un solo uso: no son parte del servicio, no se
-despliegan a Cloud Run. Se corren a mano desde este paquete con `tsx`.
+## Disparo manual (no diagnóstico — parte real del flujo, sin HTTP todavía)
 
-Previstas:
+- **`ingerir.ts`** — dispara la ingesta (`src/sync/ingesta.ts`) a mano:
+  `npm run ingerir -- comandes|cataleg|tots`. Existe porque el endpoint de
+  tareas (`/tasques/sync-*`, ADR-009) todavía no existe — es de la capa de
+  servidor HTTP. Cuando esa capa llegue, el endpoint llama a las mismas
+  funciones (`ingerirComandes`/`ingerirCataleg`), no reemplaza este script.
+
+## Diagnóstico, de un solo uso
+
+No son parte del servicio, no se despliegan a Cloud Run.
+
+Previstas, todavía sin escribir:
 
 - **Perfilado de la tienda WooCommerce** — reutilizando
-  `src/woocommerce/cliente.ts` una vez exista. Se necesita de nuevo cuando el
-  cliente entregue la tabla maestra de artículos (para cruzarla contra lo
-  que hay hoy en WooCommerce).
-- Verificación de conectividad a la base de datos / a WooCommerce.
+  `src/woocommerce/cliente.ts`. Se necesita de nuevo cuando el cliente
+  entregue la tabla maestra de artículos (para cruzarla contra lo que hay
+  hoy en WooCommerce).
 - Cargas puntuales (por ejemplo, la importación inicial de pesos por
   artículo).
-
-Todavía no hay scripts acá: se agregan en la capa que corresponde (el
-perfilador se porta cuando exista el cliente de WooCommerce, no antes).

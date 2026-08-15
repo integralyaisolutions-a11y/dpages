@@ -23,6 +23,7 @@
     "format:check": "prettier --check .",
     "migrate": "npm run migrate -w @dpages/backend",
     "migrate:status": "npm run migrate:status -w @dpages/backend",
+    "ingerir": "npm run ingerir -w @dpages/backend --",
     "postinstall": "npm run build:shared",
     "prepare": "husky"
   },

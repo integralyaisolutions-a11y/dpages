@@ -16,6 +16,7 @@
     "test:watch": "vitest",
     "migrate": "tsx --env-file-if-exists=../../.env src/db/migrate.ts up",
     "migrate:status": "tsx --env-file-if-exists=../../.env src/db/migrate.ts status",
+    "ingerir": "tsx --env-file-if-exists=../../.env src/scripts/ingerir.ts",
     "clean": "rimraf dist *.tsbuildinfo"
   },
   "dependencies": {
