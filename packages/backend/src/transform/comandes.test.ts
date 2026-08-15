@@ -175,8 +175,8 @@ describe('transformarComanda (Postgres real, esquema aislado)', () => {
       `INSERT INTO comanda_linia (
          comanda_id, ordinal, woo_line_item_id, producte_id,
          unitats_demanades, preu_unitari, pes_calculat_kg,
-         unitats_lliurades, kg_lliurats, confirmat_empaquetat
-       ) VALUES ($1, 0, 555001, $2, 1, '8.00', '1.250', 1, '1.250', true)
+         unitats_lliurades, kg_lliurats, confirmat_a, confirmat_per
+       ) VALUES ($1, 0, 555001, $2, 1, '8.00', '1.250', 1, '1.250', '2026-01-08T09:00:00Z', 'firebase-uid-empaquetat')
        RETURNING id`,
       [comandaId, producteLlomId],
     );
@@ -214,17 +214,19 @@ describe('transformarComanda (Postgres real, esquema aislado)', () => {
     const liniaDespues = await poolTest.query<{
       unitats_lliurades: number;
       kg_lliurats: string;
-      confirmat_empaquetat: boolean;
+      confirmat_a: Date | null;
+      confirmat_per: string | null;
       unitats_demanades: number;
     }>(
-      `SELECT unitats_lliurades, kg_lliurats, confirmat_empaquetat, unitats_demanades
+      `SELECT unitats_lliurades, kg_lliurats, confirmat_a, confirmat_per, unitats_demanades
        FROM comanda_linia WHERE id = $1`,
       [linia.rows[0]?.id],
     );
     // Propiedad del sistema: intactos.
     expect(liniaDespues.rows[0]?.unitats_lliurades).toBe(1);
     expect(liniaDespues.rows[0]?.kg_lliurats).toBe('1.250');
-    expect(liniaDespues.rows[0]?.confirmat_empaquetat).toBe(true);
+    expect(liniaDespues.rows[0]?.confirmat_a?.toISOString()).toBe('2026-01-08T09:00:00.000Z');
+    expect(liniaDespues.rows[0]?.confirmat_per).toBe('firebase-uid-empaquetat');
     // Propiedad de WooCommerce: si hubiera cambiado, esto sí se actualiza (no cambió en este caso).
     expect(liniaDespues.rows[0]?.unitats_demanades).toBe(1);
   });

@@ -10,9 +10,9 @@ import { leerMigraciones, migrarArriba, obtenerEstado } from './migrate.js';
 describe('leerMigraciones', () => {
   it('encuentra las migraciones reales del proyecto, ordenadas', () => {
     const migraciones = leerMigraciones();
-    expect(migraciones.map((m) => m.id)).toEqual([1, 2, 3, 4, 5]);
+    expect(migraciones.map((m) => m.id)).toEqual([1, 2, 3, 4, 5, 6]);
     expect(migraciones[0]?.archivo).toBe('0001_infraestructura_sincronizacion.up.sql');
-    expect(migraciones[4]?.archivo).toBe('0005_transformacio_comandes.up.sql');
+    expect(migraciones[5]?.archivo).toBe('0006_categories_i_confirmacio.up.sql');
   });
 });
 
@@ -36,7 +36,7 @@ describe('runner de migraciones (Postgres real, esquema aislado)', () => {
     await client.end();
   });
 
-  it('aplica las 5 migraciones reales del proyecto', async () => {
+  it('aplica las 6 migraciones reales del proyecto', async () => {
     const { aplicadas } = await migrarArriba(client);
     expect(aplicadas).toEqual([
       '0001_infraestructura_sincronizacion.up.sql',
@@ -44,6 +44,7 @@ describe('runner de migraciones (Postgres real, esquema aislado)', () => {
       '0003_model_transaccional.up.sql',
       '0004_seguiment_sincronitzacio.up.sql',
       '0005_transformacio_comandes.up.sql',
+      '0006_categories_i_confirmacio.up.sql',
     ]);
 
     const tablas = await client.query<{ table_name: string }>(
@@ -64,6 +65,7 @@ describe('runner de migraciones (Postgres real, esquema aislado)', () => {
         'comanda',
         'comanda_linia',
         'incidencia_comanda',
+        'categoria_producte',
       ]),
     );
   });
@@ -73,9 +75,9 @@ describe('runner de migraciones (Postgres real, esquema aislado)', () => {
     expect(aplicadas).toEqual([]);
   });
 
-  it('status muestra las 5 migraciones aplicadas y el hash en verde', async () => {
+  it('status muestra las 6 migraciones aplicadas y el hash en verde', async () => {
     const estado = await obtenerEstado(client);
-    expect(estado).toHaveLength(5);
+    expect(estado).toHaveLength(6);
     expect(estado.every((e) => e.aplicada)).toBe(true);
     expect(estado.every((e) => e.hashCoincide)).toBe(true);
     expect(estado.every((e) => e.aplicadaEn !== null)).toBe(true);

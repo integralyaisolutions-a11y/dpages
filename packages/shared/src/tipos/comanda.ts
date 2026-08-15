@@ -78,7 +78,15 @@ export interface ComandaLinia {
   // confirmación explícita aunque coincidan con lo pedido.
   unitatsLliurades: number;
   kgLliurats: string;
-  confirmatEmpaquetat: boolean;
+  /**
+   * Null = todavía no se confirmó. No es un booleano a propósito: la
+   * diferencia entre lo pedido y lo entregado determina si se emite un
+   * abono o se cobra de más, y hace falta saber CUÁNDO se confirmó cada
+   * línea, no sólo que alguien lo hizo. Mismo patrón que `congelatA`.
+   */
+  confirmatA: string | null;
+  /** Quién confirmó (uid de Firebase Auth). Nullable: la tabla de usuarios llega en una capa posterior. */
+  confirmatPer: string | null;
 
   /** Borrado lógico (ADR-006): la línea ya no viene de WooCommerce, pero nunca se elimina físicamente. */
   esborrat: boolean;

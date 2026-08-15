@@ -60,11 +60,21 @@ describe('transformarCataleg (Postgres real, esquema aislado)', () => {
     const resultado = await transformarCataleg(poolTest);
     expect(resultado.articlesCreats).toBe(1);
     expect(resultado.aliasCreats).toBe(2);
+    expect(resultado.categoriesCreades).toBe(1); // Fresc/Fresco -> UNA categoría
 
-    const productes = await poolTest.query<{ id: string }>(
-      `SELECT id FROM producte WHERE codi = 'LLF01'`,
+    const productes = await poolTest.query<{ id: string; categoria_id: string | null }>(
+      `SELECT id, categoria_id FROM producte WHERE codi = 'LLF01'`,
     );
     expect(productes.rowCount).toBe(1);
+    expect(productes.rows[0]?.categoria_id).not.toBeNull();
+
+    const categoria = await poolTest.query<{ nom: string }>(
+      `SELECT nom FROM categoria_producte WHERE id = $1`,
+      [productes.rows[0]?.categoria_id],
+    );
+    // El fixture ca trae "Fresc", el es trae "Fresco" — el nombre canónico
+    // guardado es siempre el catalán, sin importar cuál se procesó primero.
+    expect(categoria.rows[0]?.nom).toBe('Fresc');
 
     // woo_product_id es BIGINT: pg lo devuelve como string, no como number.
     const alias = await poolTest.query<{ idioma: string; woo_product_id: string }>(
@@ -81,6 +91,7 @@ describe('transformarCataleg (Postgres real, esquema aislado)', () => {
     const resultado = await transformarCataleg(poolTest);
     expect(resultado.articlesCreats).toBe(0);
     expect(resultado.aliasCreats).toBe(0);
+    expect(resultado.categoriesCreades).toBe(0);
   });
 
   it('un artículo sin código crea el producte con codi null, sin romper', async () => {
