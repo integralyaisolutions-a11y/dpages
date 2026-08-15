@@ -1,0 +1,25 @@
+{
+  "name": "@dpages/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tipos TypeScript compartidos entre @dpages/backend y @dpages/frontend. Se consume compilado (ADR-010), nunca como código fuente.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rimraf dist *.tsbuildinfo"
+  }
+}

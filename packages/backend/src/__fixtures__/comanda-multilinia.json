@@ -1,0 +1,55 @@
+{
+  "id": 90002,
+  "status": "processing",
+  "currency": "EUR",
+  "date_created_gmt": "2026-06-03T10:40:00",
+  "date_modified_gmt": "2026-06-03T11:10:00",
+  "customer_id": 0,
+  "created_via": "checkout",
+  "total": "42.15",
+  "line_items": [
+    {
+      "id": 502001,
+      "name": "Llom",
+      "product_id": 6245,
+      "variation_id": 0,
+      "sku": "LLF01",
+      "quantity": 2,
+      "price": 8.0,
+      "meta_data": []
+    },
+    {
+      "id": 502002,
+      "name": "Lomo",
+      "product_id": 6335,
+      "variation_id": 0,
+      "sku": "LLF01",
+      "quantity": 1,
+      "price": 8.0,
+      "meta_data": []
+    },
+    {
+      "id": 502003,
+      "name": "Botifarra – 4 unitats",
+      "product_id": 6410,
+      "variation_id": 6415,
+      "sku": "BOT01",
+      "quantity": 3,
+      "price": 5.5,
+      "meta_data": [{ "id": 701101, "key": "pa_presentacio", "value": "4 unitats" }]
+    }
+  ],
+  "shipping_lines": [
+    {
+      "id": 601002,
+      "method_title": "Enviament a domicili peninsula",
+      "method_id": "flexible_shipping_single",
+      "total": "4.50"
+    }
+  ],
+  "coupon_lines": [{ "id": 601102, "code": "nestorblanca", "discount": "4.00" }],
+  "meta_data": [
+    { "id": 701103, "key": "_billing_myfield5", "value": "[redactat]" },
+    { "id": 701104, "key": "is_vat_exempt", "value": "no" }
+  ]
+}

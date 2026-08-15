@@ -1,0 +1,40 @@
+{
+  "name": "dpages",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Sistema propio de gestión de pedidos de dPagès. Monorepo con tipos compartidos entre backend y frontend.",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "scripts": {
+    "build:shared": "npm run build -w @dpages/shared",
+    "build:backend": "npm run build -w @dpages/backend",
+    "build": "npm run build:shared && npm run build:backend",
+    "dev": "npm run build:shared && npm run dev -w @dpages/backend",
+    "typecheck": "npm run build:shared && npm run typecheck -w @dpages/backend",
+    "test": "npm run build:shared && npm run test -w @dpages/backend",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "migrate": "npm run migrate -w @dpages/backend",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.5.0",
+    "@commitlint/config-conventional": "^19.5.0",
+    "@eslint/js": "^9.15.0",
+    "eslint": "^9.15.0",
+    "eslint-config-prettier": "^9.1.0",
+    "husky": "^9.1.0",
+    "lint-staged": "^15.2.0",
+    "prettier": "^3.3.0",
+    "rimraf": "^6.0.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.15.0"
+  }
+}

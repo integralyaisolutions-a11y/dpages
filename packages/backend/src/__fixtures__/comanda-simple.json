@@ -1,0 +1,35 @@
+{
+  "id": 90001,
+  "status": "completed",
+  "currency": "EUR",
+  "date_created_gmt": "2026-05-12T08:15:00",
+  "date_modified_gmt": "2026-05-12T09:02:00",
+  "customer_id": 4821,
+  "created_via": "checkout",
+  "total": "8.80",
+  "line_items": [
+    {
+      "id": 501001,
+      "name": "Llom",
+      "product_id": 6245,
+      "variation_id": 0,
+      "sku": "LLF01",
+      "quantity": 1,
+      "price": 8.0,
+      "meta_data": []
+    }
+  ],
+  "shipping_lines": [
+    {
+      "id": 601001,
+      "method_title": "Recollida a la botiga",
+      "method_id": "local_pickup",
+      "total": "0.00"
+    }
+  ],
+  "coupon_lines": [],
+  "meta_data": [
+    { "id": 701001, "key": "nif", "value": "[redactat]" },
+    { "id": 701002, "key": "_wc_order_attribution_source_type", "value": "organic" }
+  ]
+}

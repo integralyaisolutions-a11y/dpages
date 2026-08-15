@@ -1,0 +1,12 @@
+{
+  "id": 6512,
+  "name": "Botifarra blanca",
+  "sku": "",
+  "type": "simple",
+  "status": "publish",
+  "weight": "",
+  "date_modified_gmt": "2026-03-20T07:00:00",
+  "categories": [{ "id": 14, "name": "Elaborat", "slug": "elaborat" }],
+  "attributes": [],
+  "meta_data": []
+}

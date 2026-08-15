@@ -1,0 +1,12 @@
+{
+  "id": 6335,
+  "name": "Lomo",
+  "sku": "LLF01",
+  "type": "simple",
+  "status": "publish",
+  "weight": "",
+  "date_modified_gmt": "2026-04-01T07:00:00",
+  "categories": [{ "id": 13, "name": "Fresco", "slug": "fresco" }],
+  "attributes": [],
+  "meta_data": [{ "id": 801002, "key": "_yoast_wpseo_primary_product_cat", "value": "13" }]
+}
