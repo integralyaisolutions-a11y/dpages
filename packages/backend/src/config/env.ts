@@ -1,6 +1,23 @@
 import { z } from 'zod';
 
 /**
+ * Fuera de producción, WC_BASE_URL sólo puede apuntar a un host de prueba —
+ * nunca a dpages.cat real. Esto no es una preferencia de estilo: hubo dos
+ * pruebas manuales que casi (y una vez sí) pegaron contra el WooCommerce real
+ * del cliente con credenciales de prueba. La guarda vive acá, en el arranque
+ * del proceso, para que el error sea imposible de cometer (el proceso ni
+ * arranca) en vez de sólo improbable (acordarse de revisar la variable a
+ * mano cada vez).
+ */
+const SUFIJOS_HOST_DE_PRUEBA = ['.invalid', '.test'];
+
+function esHostDePrueba(hostname: string): boolean {
+  return (
+    hostname === 'localhost' || SUFIJOS_HOST_DE_PRUEBA.some((sufijo) => hostname.endsWith(sufijo))
+  );
+}
+
+/**
  * DATABASE_URL tiene que aceptar tanto la cadena de Docker local
  * (postgres://usuario:pass@localhost:5433/dpages) como la de Cloud SQL, que
  * usa un socket unix vía query string y no siempre trae host entre "@" y "/"
@@ -8,49 +25,74 @@ import { z } from 'zod';
  * Por eso se valida como cadena con el prefijo correcto, no con z.string().url()
  * (el parser WHATWG de URL rechaza la forma de Cloud SQL por tener host vacío).
  */
-const esquemaEnv = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().positive().default(8080),
-  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
-  DATABASE_URL: z
-    .string({ required_error: 'falta esta variable de entorno' })
-    .min(1, 'no puede estar vacía')
-    .regex(/^postgres(ql)?:\/\//, 'debe empezar con postgres:// o postgresql://'),
-  // Cloud Run escala instancias y cada una abre su propio pool; Cloud SQL en
-  // instancias chicas tiene pocas conexiones disponibles. Techo bajo a propósito.
-  DB_POOL_MAX: z.coerce.number().int().positive().max(20).default(5),
+const esquemaEnv = z
+  .object({
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    PORT: z.coerce.number().int().positive().default(8080),
+    LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+    DATABASE_URL: z
+      .string({ required_error: 'falta esta variable de entorno' })
+      .min(1, 'no puede estar vacía')
+      .regex(/^postgres(ql)?:\/\//, 'debe empezar con postgres:// o postgresql://'),
+    // Cloud Run escala instancias y cada una abre su propio pool; Cloud SQL en
+    // instancias chicas tiene pocas conexiones disponibles. Techo bajo a propósito.
+    DB_POOL_MAX: z.coerce.number().int().positive().max(20).default(5),
 
-  // API REST v3 de WooCommerce (ADR-001) — /wp-json/wc/v3/, nunca la legacy.
-  // Credencial de SÓLO LECTURA (ver docs/hallazgos-woocommerce.md).
-  WC_BASE_URL: z
-    .string({ required_error: 'falta esta variable de entorno' })
-    .url('debe ser una URL válida, ej. https://dpages.cat'),
-  WC_CONSUMER_KEY: z
-    .string({ required_error: 'falta esta variable de entorno' })
-    .min(1, 'no puede estar vacía'),
-  WC_CONSUMER_SECRET: z
-    .string({ required_error: 'falta esta variable de entorno' })
-    .min(1, 'no puede estar vacía'),
+    // API REST v3 de WooCommerce (ADR-001) — /wp-json/wc/v3/, nunca la legacy.
+    // Credencial de SÓLO LECTURA (ver docs/hallazgos-woocommerce.md).
+    WC_BASE_URL: z
+      .string({ required_error: 'falta esta variable de entorno' })
+      .url('debe ser una URL válida, ej. https://dpages.cat'),
+    WC_CONSUMER_KEY: z
+      .string({ required_error: 'falta esta variable de entorno' })
+      .min(1, 'no puede estar vacía'),
+    WC_CONSUMER_SECRET: z
+      .string({ required_error: 'falta esta variable de entorno' })
+      .min(1, 'no puede estar vacía'),
 
-  // Secreto del webhook de WooCommerce (WooCommerce → Ajustes → Avanzado →
-  // Webhooks). Firma HMAC-SHA256 sobre el cuerpo crudo, ver ADR-009/016.
-  WEBHOOK_SECRET: z
-    .string({ required_error: 'falta esta variable de entorno' })
-    .min(1, 'no puede estar vacía'),
+    // Secreto del webhook de WooCommerce (WooCommerce → Ajustes → Avanzado →
+    // Webhooks). Firma HMAC-SHA256 sobre el cuerpo crudo, ver ADR-009/016.
+    WEBHOOK_SECRET: z
+      .string({ required_error: 'falta esta variable de entorno' })
+      .min(1, 'no puede estar vacía'),
 
-  // Endpoint de tareas (ADR-009): secreto compartido para autenticar en
-  // local/desarrollo. En producción se valida OIDC de Cloud Scheduler en su
-  // lugar (ver TASQUES_OIDC_AUDIENCE) — este secreto igual tiene que existir
-  // porque es el único mecanismo hasta que haya una revisión de Cloud Run.
-  TASQUES_SECRET: z
-    .string({ required_error: 'falta esta variable de entorno' })
-    .min(1, 'no puede estar vacía'),
-  // Audiencia esperada del token OIDC que manda Cloud Scheduler — típicamente
-  // la URL del propio endpoint en Cloud Run. Opcional: todavía no hay URL de
-  // producción definitiva (ver infra/gcp/README.md). Sin esto configurado,
-  // el entorno de producción rechaza toda tarea en vez de aceptar sin validar.
-  TASQUES_OIDC_AUDIENCE: z.string().url('debe ser una URL válida').optional(),
-});
+    // Endpoint de tareas (ADR-009): secreto compartido para autenticar en
+    // local/desarrollo. En producción se valida OIDC de Cloud Scheduler en su
+    // lugar (ver TASQUES_OIDC_AUDIENCE) — este secreto igual tiene que existir
+    // porque es el único mecanismo hasta que haya una revisión de Cloud Run.
+    TASQUES_SECRET: z
+      .string({ required_error: 'falta esta variable de entorno' })
+      .min(1, 'no puede estar vacía'),
+    // Audiencia esperada del token OIDC que manda Cloud Scheduler — típicamente
+    // la URL del propio endpoint en Cloud Run. Opcional: todavía no hay URL de
+    // producción definitiva (ver infra/gcp/README.md). Sin esto configurado,
+    // el entorno de producción rechaza toda tarea en vez de aceptar sin validar.
+    TASQUES_OIDC_AUDIENCE: z.string().url('debe ser una URL válida').optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.NODE_ENV === 'production') return;
+
+    // Si WC_BASE_URL ya venía mal formada, ese error lo reporta el `.url()`
+    // de más arriba — acá simplemente no hay nada más que chequear.
+    let hostname: string;
+    try {
+      hostname = new URL(data.WC_BASE_URL).hostname;
+    } catch {
+      return;
+    }
+
+    if (!esHostDePrueba(hostname)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['WC_BASE_URL'],
+        message:
+          `fuera de NODE_ENV=production sólo se permite un host de prueba ` +
+          `(localhost, *.invalid, *.test) — recibido "${hostname}". No es una ` +
+          `URL real de WooCommerce, aunque lo sea: esta guarda existe para que ` +
+          `una prueba manual no pueda pegarle por accidente a dpages.cat.`,
+      });
+    }
+  });
 
 export type Env = z.infer<typeof esquemaEnv>;
 

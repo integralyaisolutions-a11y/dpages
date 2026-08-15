@@ -3,7 +3,7 @@ import { ErrorConfiguracion, parsearEnv } from './env.js';
 
 const entornoValido = {
   DATABASE_URL: 'postgres://dpages:dpages@localhost:5433/dpages',
-  WC_BASE_URL: 'https://dpages.cat',
+  WC_BASE_URL: 'https://woocommerce-test.invalid',
   WC_CONSUMER_KEY: 'ck_test',
   WC_CONSUMER_SECRET: 'cs_test',
   WEBHOOK_SECRET: 'wh_test',
@@ -86,5 +86,39 @@ describe('parsearEnv', () => {
     expect(conAudiencia.TASQUES_OIDC_AUDIENCE).toBe(
       'https://backend-xyz.run.app/tasques/sync-comandes',
     );
+  });
+
+  describe('guarda de host de prueba en WC_BASE_URL (fuera de producción)', () => {
+    it('rechaza un host real fuera de producción, aunque sea una URL válida', () => {
+      expect(() =>
+        parsearEnv({
+          ...entornoValido,
+          NODE_ENV: 'development',
+          WC_BASE_URL: 'https://dpages.cat',
+        }),
+      ).toThrow(/WC_BASE_URL/);
+
+      expect(() =>
+        parsearEnv({ ...entornoValido, NODE_ENV: 'test', WC_BASE_URL: 'https://dpages.cat' }),
+      ).toThrow(/WC_BASE_URL/);
+    });
+
+    it('acepta localhost, *.invalid y *.test fuera de producción', () => {
+      for (const url of [
+        'http://localhost:8080',
+        'https://woocommerce-test.invalid',
+        'https://api.example.test',
+      ]) {
+        expect(() =>
+          parsearEnv({ ...entornoValido, NODE_ENV: 'development', WC_BASE_URL: url }),
+        ).not.toThrow();
+      }
+    });
+
+    it('permite un host real cuando NODE_ENV es production', () => {
+      expect(() =>
+        parsearEnv({ ...entornoValido, NODE_ENV: 'production', WC_BASE_URL: 'https://dpages.cat' }),
+      ).not.toThrow();
+    });
   });
 });
