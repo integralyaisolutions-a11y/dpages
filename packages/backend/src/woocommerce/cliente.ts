@@ -180,6 +180,14 @@ async function listarTodo<T>(recurso: string, params: Record<string, string>): P
     const { datos, totalPaginas } = await obtenerPagina<T>(recurso, params, pagina);
     todo.push(...datos);
 
+    // Log de progreso EN CADA página, no sólo al final: una carga inicial
+    // sin acotar puede traer miles de registros y tardar varios minutos —
+    // sin esto no hay forma de distinguir "está trabajando" de "se colgó".
+    logger.info(
+      { recurso, pagina, totalPaginas, itemsAcumulados: todo.length },
+      'Progreso de paginación de WooCommerce',
+    );
+
     if (datos.length === 0) break;
     if (totalPaginas !== null) {
       if (pagina >= totalPaginas) break;

@@ -1,17 +1,45 @@
 import { describe, expect, it } from 'vitest';
-import { calcularFinestraConsulta, calcularNouCursor, SOLAPAMENT_MS_DEFECTE } from './cursor.js';
+import {
+  calcularFinestraConsulta,
+  calcularNouCursor,
+  DIES_ENRERE_CARGA_INICIAL_DEFECTE,
+  SOLAPAMENT_MS_DEFECTE,
+} from './cursor.js';
 
 describe('calcularFinestraConsulta', () => {
-  it('sin cursor previo, pide carga completa (sin modified_after)', () => {
+  it('sin cursor previo, ACOTA la primera carga a los días por defecto (ADR-017) — no trae el histórico', () => {
+    const antes = Date.now() - DIES_ENRERE_CARGA_INICIAL_DEFECTE * 24 * 60 * 60 * 1000;
     const finestra = calcularFinestraConsulta(null);
+
+    expect(finestra.esPrimeraCarrega).toBe(true);
+    expect(finestra.esCarregaCompleta).toBe(false);
+    expect(finestra.modifiedAfter).not.toBeUndefined();
+
+    const modifiedAfterMs = new Date(`${finestra.modifiedAfter}Z`).getTime();
+    expect(Math.abs(modifiedAfterMs - antes)).toBeLessThan(5000); // tolerancia por el tiempo del test
+  });
+
+  it('sin cursor previo, acepta una cantidad de días distinta a la del default', () => {
+    const antes = Date.now() - 10 * 24 * 60 * 60 * 1000;
+    const finestra = calcularFinestraConsulta(null, undefined, 10);
+
+    const modifiedAfterMs = new Date(`${finestra.modifiedAfter}Z`).getTime();
+    expect(Math.abs(modifiedAfterMs - antes)).toBeLessThan(5000);
+  });
+
+  it('sin cursor previo, con diesEnrereCargaInicial = null trae el histórico completo (caso deliberado)', () => {
+    const finestra = calcularFinestraConsulta(null, undefined, null);
+
+    expect(finestra.esPrimeraCarrega).toBe(true);
     expect(finestra.esCarregaCompleta).toBe(true);
     expect(finestra.modifiedAfter).toBeUndefined();
   });
 
-  it('con cursor previo, resta el solapamiento por defecto (5 minutos)', () => {
+  it('con cursor previo, resta el solapamiento por defecto (5 minutos) — diesEnrereCargaInicial no aplica', () => {
     const cursor = new Date(Date.UTC(2026, 7, 15, 12, 0, 0));
     const finestra = calcularFinestraConsulta(cursor);
 
+    expect(finestra.esPrimeraCarrega).toBe(false);
     expect(finestra.esCarregaCompleta).toBe(false);
     // 12:00:00 - 5min = 11:55:00 UTC, formateado como WooCommerce
     expect(finestra.modifiedAfter).toBe('2026-08-15T11:55:00');
@@ -26,6 +54,10 @@ describe('calcularFinestraConsulta', () => {
 
   it('SOLAPAMENT_MS_DEFECTE son exactamente 5 minutos', () => {
     expect(SOLAPAMENT_MS_DEFECTE).toBe(5 * 60 * 1000);
+  });
+
+  it('DIES_ENRERE_CARGA_INICIAL_DEFECTE son 30 días', () => {
+    expect(DIES_ENRERE_CARGA_INICIAL_DEFECTE).toBe(30);
   });
 });
 

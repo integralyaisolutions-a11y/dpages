@@ -94,18 +94,86 @@ describe('transformarCataleg (Postgres real, esquema aislado)', () => {
     expect(resultado.categoriesCreades).toBe(0);
   });
 
-  it('un artículo sin código crea el producte con codi null, sin romper', async () => {
+  it('un artículo sin código NO crea producte — se registra como incidencia de catálogo (ADR-018)', async () => {
     await aterrizar(producteSenseSku);
 
     const resultado = await transformarCataleg(poolTest);
-    expect(resultado.articlesCreats).toBe(1);
+    expect(resultado.articlesCreats).toBe(0);
+    expect(resultado.aliasCreats).toBe(0);
+    expect(resultado.productesSenseSku).toBe(1);
 
-    const producte = await poolTest.query<{ codi: string | null }>(
-      `SELECT p.codi FROM producte p
-       JOIN alias_producte a ON a.producte_id = p.id
-       WHERE a.woo_product_id = $1`,
+    const alias = await poolTest.query(`SELECT 1 FROM alias_producte WHERE woo_product_id = $1`, [
+      producteSenseSku.id,
+    ]);
+    expect(alias.rowCount).toBe(0);
+
+    const incidencia = await poolTest.query<{ tipus: string; resolta: boolean }>(
+      `SELECT tipus, resolta FROM incidencia_cataleg WHERE woo_product_id = $1`,
       [producteSenseSku.id],
     );
-    expect(producte.rows[0]?.codi).toBeNull();
+    expect(incidencia.rows[0]?.tipus).toBe('article_sense_sku');
+    expect(incidencia.rows[0]?.resolta).toBe(false);
+  });
+
+  it('correr de nuevo un producto sin SKU no acumula una incidencia nueva por corrida', async () => {
+    const resultado = await transformarCataleg(poolTest);
+    expect(resultado.productesSenseSku).toBe(0); // ya tenía incidencia sin resolver — se saltea
+
+    const incidencias = await poolTest.query(
+      `SELECT id FROM incidencia_cataleg WHERE woo_product_id = $1`,
+      [producteSenseSku.id],
+    );
+    expect(incidencias.rowCount).toBe(1);
+  });
+
+  it('DOS productos distintos sin SKU: ningún producte con codi vacío, ambos quedan como incidencia', async () => {
+    const esquema2 = `test_cataleg_dos_sense_sku_${randomUUID().replaceAll('-', '_')}`;
+    const setup = new Client({ connectionString: env.DATABASE_URL });
+    await setup.connect();
+    await setup.query(`CREATE SCHEMA "${esquema2}"`);
+    await setup.query(`SET search_path TO "${esquema2}"`);
+    await migrarArriba(setup);
+    await setup.end();
+
+    const poolTest2 = new Pool({
+      connectionString: env.DATABASE_URL,
+      options: `-c search_path=${esquema2}`,
+    });
+
+    try {
+      const productoB: WooProduct = { ...producteSenseSku, id: producteSenseSku.id + 1, sku: '' };
+
+      await poolTest2.query(
+        `INSERT INTO aterratge_woocommerce (recurs, woo_id, payload) VALUES ('products', $1, $2)`,
+        [producteSenseSku.id, JSON.stringify(producteSenseSku)],
+      );
+      await poolTest2.query(
+        `INSERT INTO aterratge_woocommerce (recurs, woo_id, payload) VALUES ('products', $1, $2)`,
+        [productoB.id, JSON.stringify(productoB)],
+      );
+
+      const resultado = await transformarCataleg(poolTest2);
+      expect(resultado.articlesCreats).toBe(0);
+      expect(resultado.aliasCreats).toBe(0);
+      expect(resultado.productesSenseSku).toBe(2);
+
+      const productesConCodiNulo = await poolTest2.query(
+        `SELECT id FROM producte WHERE codi IS NULL OR codi = ''`,
+      );
+      expect(productesConCodiNulo.rowCount).toBe(0);
+
+      const incidencias = await poolTest2.query<{ woo_product_id: string }>(
+        `SELECT woo_product_id FROM incidencia_cataleg WHERE NOT resolta ORDER BY woo_product_id`,
+      );
+      expect(incidencias.rows.map((r) => Number(r.woo_product_id))).toEqual(
+        [producteSenseSku.id, productoB.id].sort((a, b) => a - b),
+      );
+    } finally {
+      await poolTest2.end();
+      const cleanup = new Client({ connectionString: env.DATABASE_URL });
+      await cleanup.connect();
+      await cleanup.query(`DROP SCHEMA IF EXISTS "${esquema2}" CASCADE`);
+      await cleanup.end();
+    }
   });
 });

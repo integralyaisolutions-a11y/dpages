@@ -498,3 +498,133 @@ agregó `req.remoteAddress` y `req.headers["x-forwarded-for"]` a la lista de
 vez de desactivar el logging de peticiones: perder el método/ruta/status/
 tiempo de respuesta de cada petición sería peor para operar el servicio que
 mantenerlo sin la IP.
+
+---
+
+## ADR-017 — La primera ingesta de un recurso se acota a 30 días, no trae el histórico completo
+
+**Estado**: Aceptado.
+
+**Contexto**: Probando la capa 5/7 en vivo contra el WooCommerce real, la
+primera ingesta de `orders` (sin `cursor_sincronitzacio` previo para ese
+recurso) trajo el histórico completo de la tienda: 4.250 pedidos, varios
+minutos de ejecución. No estaba trabada — era volumen real — pero sin
+ningún log intermedio durante la paginación dio la impresión de estar
+colgada, y nadie tenía forma de distinguir un caso del otro. Con el
+histórico completo real (más viejo y más grande que lo visto en esta
+prueba) esa espera va a ser todavía mayor en producción.
+
+**Decisión**:
+
+- **La primera carga de un recurso se acota a `INGESTA_DIES_ENRERE_DEFECTE`
+  días hacia atrás (default: 30)**, no al histórico completo. Se implementa
+  calculando `modified_after` como "ahora menos N días" cuando
+  `calcularFinestraConsulta` (`sync/cursor.ts`) recibe `cursorPrevi = null`.
+  Esto **sólo afecta a la primera carga** — en cuanto existe cursor para ese
+  recurso, el incremental normal (`modified_after` por cursor + solapamiento
+  de 5 minutos, sin cambios) sigue exactamente igual.
+- **30 días es un valor operativo, no una decisión de negocio sobre cuánto
+  histórico hace falta**: alcanza para poblar el sistema con pedidos
+  recientes y verificar que la ingesta funciona, sin la espera ni el
+  volumen de traer años de datos por defecto. Si alguna vez se decide
+  migrar el histórico completo de dPagès al sistema nuevo, esa es una
+  decisión de negocio aparte — **ver P-21 del backlog**, pendiente de
+  resolver formalmente con Integraly. Esta ADR no la resuelve, sólo evita
+  que ocurra por accidente.
+- **`INGESTA_HISTORIC_COMPLET=true`** fuerza el histórico completo sin
+  acotar (pasa `diesEnrereCargaInicial = null`). Es el mecanismo para el día
+  que se decida migrar el histórico de verdad — deliberado y explícito
+  (sólo el literal `"true"` lo activa), nunca el comportamiento por
+  defecto, para que haga falta un cambio a propósito antes de volver a
+  traer miles de registros.
+- **Log de progreso en cada página de la paginación** (`woocommerce/cliente.ts`,
+  `listarTodo`), no sólo al finalizar: con `page`, `totalPaginas` (cuando
+  WooCommerce la manda) y `itemsAcumulados`. Antes sólo había un log al
+  terminar todo el recurso — con miles de registros eso significa minutos
+  sin ninguna señal de que el proceso sigue vivo, que es exactamente lo que
+  pasó en la prueba que originó esta ADR.
+
+**Consecuencias**: Una instalación nueva del sistema (o un recurso que
+pierde su cursor por algún motivo) nunca vuelve a traer sorpresivamente
+años de histórico — el volumen de la primera carga es predecible y
+acotado. El costo es que, si en algún momento SÍ hace falta el histórico
+completo (P-21), hay que acordarse de setear
+`INGESTA_HISTORIC_COMPLET=true` a propósito para esa corrida puntual — es
+el trade-off deliberado de esta ADR: hacer el caso común (no soprender con
+volumen) fácil, y el caso raro (migrar histórico) explícito en vez de
+implícito.
+
+---
+
+## ADR-018 — La transformación de catálogo nunca crea un `producte` sin SKU
+
+**Estado**: Aceptado.
+
+**Contexto**: Probando la transformación de catálogo contra los 4.250
+pedidos reales, apareció un bug: `SELECT count(*) FROM producte` daba 144 en
+vez de los ~111 esperados. Los 33 de más tenían `codi IS NULL` (el
+diagnóstico inicial creyó que era `codi = ''`, pero `length(codi)` confirmó
+NULL — la diferencia importa: el índice único de `codi` es parcial (`WHERE
+codi IS NOT NULL`, ver ADR-008/0002), así que NULL nunca colisiona consigo
+mismo, no hay ningún problema de UNIQUE de por medio).
+
+Causa raíz, en `transform/cataleg.ts`, función `obtenirOCrearArticle`: la
+búsqueda de un `producte` ya existente por `codi` sólo se intentaba **si
+`sku !== null`**. Para un producto de WooCommerce sin SKU, esa búsqueda se
+saltaba enteramente y el código caía directo al `INSERT INTO producte`, sin
+condición — cada producto sin SKU terminaba con su propio `producte`
+fantasma. Esto contradice el criterio ya acordado en la capa 6 (y ya
+implementado correctamente en `resolucio-article.ts` para líneas de
+pedido): un producto/línea sin SKU **nunca crea un registro nuevo**, se
+registra como incidencia y queda sin resolver. La transformación de
+catálogo nunca había implementado esa misma regla para sí misma — de hecho
+un test de esa época (`cataleg.test.ts`) afirmaba explícitamente "un
+artículo sin código crea el producte con codi null, sin romper", validando
+el comportamiento incorrecto en vez de detectarlo.
+
+El impacto real fue mayor de lo que sugería el conteo de `producte`: 2.534
+líneas de 2.053 pedidos (de 4.250, casi la mitad) habían "resuelto" su
+artículo contra uno de estos fantasmas, vía `alias_producte` — porque el
+alias sí existía (se creaba igual, apuntando al fantasma), y la resolución
+de línea (paso 1, alias exacto) encontraba ese alias sin saber que el
+`producte` del otro lado era ilegítimo.
+
+**Decisión**:
+
+- `obtenirOCrearArticle` devuelve `null` cuando el producto no tiene SKU,
+  **antes** de tocar categoría o de intentar ningún INSERT. El llamador
+  (`transformarCataleg`) no crea `producte` ni `alias_producte` en ese
+  caso — registra una incidencia y sigue con el próximo producto.
+- Nueva tabla `incidencia_cataleg` (migración 0007), mismo patrón que
+  `incidencia_comanda` pero sin `comanda_id`: la referencia es al
+  `woo_product_id`, porque justamente no hay ningún `producte` propio que
+  referenciar. Índice único parcial `(woo_product_id) WHERE NOT resolta`
+  para que correr `transformarCataleg` en cada ciclo de sync no acumule una
+  incidencia nueva por corrida mientras el producto siga sin SKU — mismo
+  criterio de "como máximo una incidencia abierta" que ya regía en la
+  columna `codi` de `producte`.
+- **Migración de limpieza** (0007, mismo archivo que crea la tabla): por
+  cada `producte` con `codi IS NULL` — que después de este fix nunca puede
+  ser un estado legítimo, así que la condición sola identifica exactamente
+  el conjunto afectado por el bug, acá y en cualquier otro entorno donde
+  haya llegado a correr — se registra la incidencia de catálogo
+  correspondiente, se marcan como `amb_incidencia` los pedidos con líneas
+  que habían "resuelto" contra ese fantasma (con su propia
+  `incidencia_comanda`, tipo `article_no_resolt`, el mismo tipo que usa
+  `transformarComanda`), esas líneas vuelven a `producte_id`/
+  `alias_producte_id` NULL (sin tocar la traza cruda de WooCommerce en la
+  línea), y recién ahí se borran los `alias_producte` huérfanos y los
+  `producte` fantasma.
+
+**Consecuencias**: `transformarCataleg` ahora es fiel al mismo criterio que
+ya regía en el resto del sistema — nunca crea un registro para representar
+"no sé qué es esto", siempre dice explícitamente "no se pudo resolver".
+Los ~2.053 pedidos que quedaron `amb_incidencia` por la migración necesitan
+revisión de oficina para volver a resolver sus artículos (algunos de esos
+productos no tienen SKU de verdad en WooCommerce — 14 artículos publicados
+sin código, según `docs/hallazgos-woocommerce.md` — así que parte de este
+trabajo es de negocio, no técnico: decidir si se les asigna código o se
+vive con la incidencia). Test de regresión en `cataleg.test.ts` cubre
+específicamente el escenario de dos productos DISTINTOS sin SKU, para que
+esta clase de bug (colisión o ausencia de colisión en una columna nullable)
+no vuelva a pasar desapercibida.

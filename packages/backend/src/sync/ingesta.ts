@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
 import type { WooOrder, WooProduct } from '@dpages/shared';
+import { env } from '../config/env.js';
 import { pool as poolPerDefecte } from '../db/pool.js';
 import { logger } from '../lib/logger.js';
 import { listarPedidos, listarProductos } from '../woocommerce/cliente.js';
@@ -90,18 +91,35 @@ async function ingerirRecurs<T>(
   const cursorPrevi = await obtenirCursor(pool, config.recurs);
   const finestra =
     opcions.modifiedAfterForcat !== undefined
-      ? { esCarregaCompleta: false as const, modifiedAfter: opcions.modifiedAfterForcat }
-      : calcularFinestraConsulta(cursorPrevi);
+      ? {
+          esPrimeraCarrega: false as const,
+          esCarregaCompleta: false as const,
+          modifiedAfter: opcions.modifiedAfterForcat,
+        }
+      : calcularFinestraConsulta(
+          cursorPrevi,
+          undefined,
+          env.INGESTA_HISTORIC_COMPLET ? null : env.INGESTA_DIES_ENRERE_DEFECTE,
+        );
 
   if (opcions.modifiedAfterForcat !== undefined) {
     logger.info(
       { recurs: config.recurs, modifiedAfter: finestra.modifiedAfter },
       'Reconciliación: ventana forzada, se ignora el cursor guardado',
     );
-  } else if (finestra.esCarregaCompleta) {
+  } else if (finestra.esPrimeraCarrega && finestra.esCarregaCompleta) {
     logger.info(
       { recurs: config.recurs },
-      'Sin cursor previo — carga completa (no es un delta incremental)',
+      'Sin cursor previo — carga del histórico completo (INGESTA_HISTORIC_COMPLET activo, no es el comportamiento por defecto)',
+    );
+  } else if (finestra.esPrimeraCarrega) {
+    logger.info(
+      {
+        recurs: config.recurs,
+        modifiedAfter: finestra.modifiedAfter,
+        diesEnrere: env.INGESTA_DIES_ENRERE_DEFECTE,
+      },
+      `Sin cursor previo — carga inicial acotada a los últimos ${env.INGESTA_DIES_ENRERE_DEFECTE} días (no es el histórico completo)`,
     );
   } else {
     logger.info(

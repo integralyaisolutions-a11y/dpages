@@ -68,6 +68,21 @@ const esquemaEnv = z
     // producción definitiva (ver infra/gcp/README.md). Sin esto configurado,
     // el entorno de producción rechaza toda tarea en vez de aceptar sin validar.
     TASQUES_OIDC_AUDIENCE: z.string().url('debe ser una URL válida').optional(),
+
+    // ADR-017: la primera ingesta de un recurso (sin cursor_sincronitzacio
+    // previo) se acota a estos días hacia atrás en vez de traer el histórico
+    // completo — evita una carga de miles de registros sin que nadie la
+    // pidiera. Sólo afecta a la carga inicial; el incremental normal
+    // (modified_after por cursor) no usa esta variable para nada.
+    INGESTA_DIES_ENRERE_DEFECTE: z.coerce.number().int().positive().default(30),
+    // Caso deliberado y poco frecuente: migrar el histórico completo de
+    // verdad (ver P-21 del backlog). "true" explícito, cualquier otro valor
+    // (incluido no definirla) es "false" — para que haga falta un cambio a
+    // propósito, no un olvido, antes de traer miles de registros de nuevo.
+    INGESTA_HISTORIC_COMPLET: z
+      .string()
+      .optional()
+      .transform((valor) => valor === 'true'),
   })
   .superRefine((data, ctx) => {
     if (data.NODE_ENV === 'production') return;

@@ -74,16 +74,19 @@ describe('servicio de ingesta (Postgres real, esquema aislado; fetch interceptad
     await cleanup.end();
   });
 
-  it('primera ejecución sin cursor previo: carga completa (sin modified_after)', async () => {
+  it('primera ejecución sin cursor previo: ACOTADA a los últimos 30 días por defecto, no el histórico (ADR-017)', async () => {
     fetchMock.mockResolvedValueOnce(respuestaPagina([producteCa], 1));
 
+    const antes = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const resultado = await ingerirCataleg(poolTest);
 
-    expect(resultado.esCarregaCompleta).toBe(true);
+    expect(resultado.esCarregaCompleta).toBe(false);
     expect(resultado.itemsProcessats).toBe(1);
 
     const url = fetchMock.mock.calls[0]?.[0] as URL;
-    expect(url.searchParams.has('modified_after')).toBe(false);
+    const modifiedAfter = url.searchParams.get('modified_after');
+    expect(modifiedAfter).not.toBeNull();
+    expect(Math.abs(new Date(`${modifiedAfter}Z`).getTime() - antes)).toBeLessThan(5000);
 
     const cursor = await poolTest.query<{
       cursor_en: Date | null;

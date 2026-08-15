@@ -121,4 +121,32 @@ describe('parsearEnv', () => {
       ).not.toThrow();
     });
   });
+
+  describe('ADR-017 — ventana de la primera carga sin cursor', () => {
+    it('INGESTA_DIES_ENRERE_DEFECTE por defecto son 30 días', () => {
+      expect(parsearEnv(entornoValido).INGESTA_DIES_ENRERE_DEFECTE).toBe(30);
+    });
+
+    it('acepta un valor distinto, coaccionado a número', () => {
+      expect(
+        parsearEnv({ ...entornoValido, INGESTA_DIES_ENRERE_DEFECTE: '7' })
+          .INGESTA_DIES_ENRERE_DEFECTE,
+      ).toBe(7);
+    });
+
+    it('INGESTA_HISTORIC_COMPLET es false por defecto, y sólo "true" literal lo activa', () => {
+      expect(parsearEnv(entornoValido).INGESTA_HISTORIC_COMPLET).toBe(false);
+      expect(
+        parsearEnv({ ...entornoValido, INGESTA_HISTORIC_COMPLET: 'false' })
+          .INGESTA_HISTORIC_COMPLET,
+      ).toBe(false);
+      expect(
+        parsearEnv({ ...entornoValido, INGESTA_HISTORIC_COMPLET: 'cualquier-cosa' })
+          .INGESTA_HISTORIC_COMPLET,
+      ).toBe(false);
+      expect(
+        parsearEnv({ ...entornoValido, INGESTA_HISTORIC_COMPLET: 'true' }).INGESTA_HISTORIC_COMPLET,
+      ).toBe(true);
+    });
+  });
 });

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { WooOrder, WooProduct } from '@dpages/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { logger } from '../lib/logger.js';
 import { ErrorWooCommerce, listarPedidos, listarProductos, obtenerPedido } from './cliente.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -109,6 +110,33 @@ describe('paginación', () => {
 
     expect(productos).toEqual([]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('loguea progreso en CADA página, no sólo al final — para no parecer colgado en una carga larga', async () => {
+    const espia = vi.spyOn(logger, 'info');
+    fetchMock
+      .mockResolvedValueOnce(respuestaPagina([producteCa], 3))
+      .mockResolvedValueOnce(respuestaPagina([producteCa], 3))
+      .mockResolvedValueOnce(respuestaPagina([producteCa], 3));
+
+    await listarProductos();
+
+    const logsDeProgreso = espia.mock.calls.filter(
+      (llamada) => llamada[1] === 'Progreso de paginación de WooCommerce',
+    );
+    expect(logsDeProgreso).toHaveLength(3);
+    expect(logsDeProgreso[0]?.[0]).toMatchObject({
+      pagina: 1,
+      totalPaginas: 3,
+      itemsAcumulados: 1,
+    });
+    expect(logsDeProgreso[2]?.[0]).toMatchObject({
+      pagina: 3,
+      totalPaginas: 3,
+      itemsAcumulados: 3,
+    });
+
+    espia.mockRestore();
   });
 });
 
