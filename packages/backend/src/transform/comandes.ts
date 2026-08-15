@@ -220,6 +220,13 @@ export async function transformarComanda(
   client: PoolClient,
   wooOrder: WooOrder,
 ): Promise<ResultatComanda> {
+  // Lock de concurrencia (decisión ya tomada, ver docs/decisiones-arquitectura.md):
+  // el webhook (capa de servidor) y el polling por lote pueden llegar a
+  // transformar el MISMO pedido casi al mismo tiempo. pg_advisory_xact_lock
+  // serializa por woo_order_id — se libera solo al terminar la transacción
+  // del llamador (BEGIN/COMMIT/ROLLBACK), nunca hay que liberarlo a mano.
+  await client.query('SELECT pg_advisory_xact_lock($1)', [wooOrder.id]);
+
   const existent = await obtenirComandaExistent(client, wooOrder.id);
 
   if (existent && existent.congelat_a !== null) {

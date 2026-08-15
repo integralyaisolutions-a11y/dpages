@@ -436,3 +436,65 @@ decisión de nuevo cuando Node 24 pase a Mantenimiento (**octubre de
 después del go-live. No adoptar Node 25/27/... (versiones impares, "Current"
 sin garantía de LTS) en ningún entorno: son de vida corta y no están
 pensadas para producción.
+
+## ADR-016 — Servidor HTTP: webhook fire-and-forget, tareas síncronas, lock por pedido
+
+**Estado**: Aceptado.
+
+**Contexto**: La capa 7 conecta la ingesta/transformación (ya existentes)
+con dos entradas externas que pueden disparar el mismo trabajo por el mismo
+pedido casi al mismo tiempo: el webhook de WooCommerce (evento en tiempo
+real) y el polling por lote (`ingerirComandes`/`transformarComandes`, capas
+5-6, disparado por el endpoint de tareas de Cloud Scheduler, ver ADR-009).
+Sin coordinación, ambos caminos pueden llamar a `transformarComanda` para el
+mismo `woo_order_id` en transacciones concurrentes.
+
+**Decisión**:
+
+- **Lock de concurrencia por pedido**: `transformarComanda` toma
+  `pg_advisory_xact_lock($woo_order_id)` como primer paso. Serializa por
+  pedido, no bloquea pedidos distintos entre sí, y se libera solo al
+  terminar la transacción del llamador (`COMMIT`/`ROLLBACK`) — nunca hace
+  falta liberarlo a mano. Esto ya estaba previsto en el diseño original de
+  la ingesta (capas 5-6) pero no se había implementado hasta cablear el
+  webhook, que es el primer caller que de verdad puede pisarse con el poll.
+
+- **El webhook responde rápido y sigue en segundo plano**: `POST
+/webhooks/woocommerce` valida la firma, registra el evento y responde 200
+  de inmediato; el `GET /orders/{id}` + transformación corren después, sin
+  bloquear la respuesta. Motivo: WooCommerce deshabilita un webhook después
+  de fallos/timeouts repetidos, y un cold start de Cloud Run puede tardar
+  más de lo que WooCommerce espera. Si el trabajo de fondo falla, el evento
+  queda marcado con el error — no hay reintento automático del lado del
+  servidor, pero el próximo polling (`/tasques/sync-comandes` o
+  `/tasques/reconciliar`) va a traer igual el pedido por versión.
+
+- **Las tareas de Cloud Scheduler son síncronas**: `/tasques/sync-comandes`,
+  `/tasques/sync-cataleg` y `/tasques/reconciliar` esperan a que termine la
+  ingesta y la transformación antes de responder, y devuelven los contadores
+  reales en el cuerpo. A diferencia del webhook, Cloud Scheduler no
+  deshabilita nada por una respuesta lenta, y tener el resultado real en la
+  respuesta (en vez de "recibido, ver logs") es lo que permite verificar
+  desde el propio Scheduler o desde monitoreo si una corrida trajo 0 items o
+  falló.
+
+**Consecuencias**: El webhook y el polling pueden convivir sin condición de
+carrera sobre un mismo pedido, verificado con un test de Postgres real que
+llama a las dos rutas (`webhook.test.ts`, `tasques.test.ts`). El costo es
+que una tarea de Cloud Scheduler con un lote grande puede tardar — si
+`transformarComandes` llega a ser lento en producción con volumen real, hay
+que revisar si Cloud Run soporta el timeout de esa ruta antes de considerar
+hacerla asíncrona también.
+
+### Nota RGPD encontrada durante la revisión de seguridad de esta capa
+
+El logging automático de peticiones de Fastify (activado por default al no
+pasar `disableRequestLogging: true`) vuelca `req.remoteAddress` — la IP del
+llamador — en cada línea de "incoming request"/"request completed". No es
+un descuido de código de aplicación, es el comportamiento por defecto del
+framework en cuanto se cableó el primer servidor HTTP del proyecto. Se
+agregó `req.remoteAddress` y `req.headers["x-forwarded-for"]` a la lista de
+`redact` de `lib/logger.ts` (con test de regresión en `logger.test.ts`) en
+vez de desactivar el logging de peticiones: perder el método/ruta/status/
+tiempo de respuesta de cada petición sería peor para operar el servicio que
+mantenerlo sin la IP.

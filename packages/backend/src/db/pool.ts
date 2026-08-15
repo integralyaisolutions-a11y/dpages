@@ -22,25 +22,17 @@ pool.on('error', (err) => {
 
 let cerrando: Promise<void> | null = null;
 
-/** Idempotente: llamarla más de una vez no reintenta cerrar un pool ya cerrado. */
+/**
+ * Idempotente: llamarla más de una vez no reintenta cerrar un pool ya
+ * cerrado.
+ *
+ * NO registra su propio handler de SIGTERM: eso vive en `src/index.ts`,
+ * como el ÚLTIMO paso de la secuencia de apagado del servidor —
+ * `fastify.close()` (deja de aceptar conexiones nuevas y drena las que
+ * están en curso) antes de llamar acá. Cerrar el pool primero cortaría
+ * peticiones en curso a mitad de una consulta.
+ */
 export function cerrarPool(): Promise<void> {
   cerrando ??= pool.end();
   return cerrando;
 }
-
-/**
- * Cierre ordenado provisorio para esta capa (Docker y base de datos). Cuando
- * exista el servidor Fastify (capa "servidor HTTP"), este handler se
- * reemplaza por un paso dentro de SU secuencia de apagado: dejar de aceptar
- * conexiones → drenar las peticiones en curso → recién ahí cerrar el pool.
- * Hasta entonces, ante SIGTERM el pool se cierra directo.
- */
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM recibido, cerrando el pool de Postgres...');
-  cerrarPool()
-    .then(() => process.exit(0))
-    .catch((err: unknown) => {
-      logger.error({ err }, 'Error cerrando el pool de Postgres');
-      process.exit(1);
-    });
-});

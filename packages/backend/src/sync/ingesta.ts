@@ -13,6 +13,22 @@ export interface ResultatIngesta {
   cursorNou: string | null;
 }
 
+export interface OpcionsIngesta {
+  /**
+   * Ignora el cursor guardado y usa esta fecha como modified_after — para
+   * la reconciliación (ADR-009: ventana amplia de 7 días). El cursor SÍ se
+   * actualiza al final como en cualquier corrida exitosa; una ventana más
+   * amplia sólo trae de vuelta registros que ya se habían visto, así que no
+   * hay riesgo de que el cursor retroceda.
+   */
+  modifiedAfterForcat?: string;
+}
+
+/** Ventana de reconciliación: N días atrás desde ahora, en el mismo formato que usa WooCommerce. */
+export function finestraReconciliacio(diesEnrere = 7): string {
+  return formatearFechaGmt(new Date(Date.now() - diesEnrere * 24 * 60 * 60 * 1000));
+}
+
 interface ConfigIngesta<T> {
   /** Identifica el recurso tanto en cursor_sincronitzacio como en aterratge_woocommerce.recurs. */
   recurs: string;
@@ -66,11 +82,23 @@ async function registrarFallo(pool: Pool, recurs: string, mensaje: string): Prom
   );
 }
 
-async function ingerirRecurs<T>(config: ConfigIngesta<T>, pool: Pool): Promise<ResultatIngesta> {
+async function ingerirRecurs<T>(
+  config: ConfigIngesta<T>,
+  pool: Pool,
+  opcions: OpcionsIngesta = {},
+): Promise<ResultatIngesta> {
   const cursorPrevi = await obtenirCursor(pool, config.recurs);
-  const finestra = calcularFinestraConsulta(cursorPrevi);
+  const finestra =
+    opcions.modifiedAfterForcat !== undefined
+      ? { esCarregaCompleta: false as const, modifiedAfter: opcions.modifiedAfterForcat }
+      : calcularFinestraConsulta(cursorPrevi);
 
-  if (finestra.esCarregaCompleta) {
+  if (opcions.modifiedAfterForcat !== undefined) {
+    logger.info(
+      { recurs: config.recurs, modifiedAfter: finestra.modifiedAfter },
+      'Reconciliación: ventana forzada, se ignora el cursor guardado',
+    );
+  } else if (finestra.esCarregaCompleta) {
     logger.info(
       { recurs: config.recurs },
       'Sin cursor previo — carga completa (no es un delta incremental)',
@@ -141,7 +169,10 @@ async function ingerirRecurs<T>(config: ConfigIngesta<T>, pool: Pool): Promise<R
   };
 }
 
-export async function ingerirComandes(pool: Pool = poolPerDefecte): Promise<ResultatIngesta> {
+export async function ingerirComandes(
+  pool: Pool = poolPerDefecte,
+  opcions?: OpcionsIngesta,
+): Promise<ResultatIngesta> {
   return ingerirRecurs<WooOrder>(
     {
       recurs: 'orders',
@@ -150,10 +181,14 @@ export async function ingerirComandes(pool: Pool = poolPerDefecte): Promise<Resu
       dataModificacioGmtDe: (pedido) => pedido.date_modified_gmt,
     },
     pool,
+    opcions,
   );
 }
 
-export async function ingerirCataleg(pool: Pool = poolPerDefecte): Promise<ResultatIngesta> {
+export async function ingerirCataleg(
+  pool: Pool = poolPerDefecte,
+  opcions?: OpcionsIngesta,
+): Promise<ResultatIngesta> {
   return ingerirRecurs<WooProduct>(
     {
       recurs: 'products',
@@ -162,5 +197,6 @@ export async function ingerirCataleg(pool: Pool = poolPerDefecte): Promise<Resul
       dataModificacioGmtDe: (producte) => producte.date_modified_gmt,
     },
     pool,
+    opcions,
   );
 }

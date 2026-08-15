@@ -6,6 +6,8 @@ const entornoValido = {
   WC_BASE_URL: 'https://dpages.cat',
   WC_CONSUMER_KEY: 'ck_test',
   WC_CONSUMER_SECRET: 'cs_test',
+  WEBHOOK_SECRET: 'wh_test',
+  TASQUES_SECRET: 'tasques_test',
 };
 
 describe('parsearEnv', () => {
@@ -58,6 +60,31 @@ describe('parsearEnv', () => {
   it('falla si WC_BASE_URL no es una URL válida', () => {
     expect(() => parsearEnv({ ...entornoValido, WC_BASE_URL: 'dpages.cat' })).toThrow(
       /WC_BASE_URL/,
+    );
+  });
+
+  it('falla si falta WEBHOOK_SECRET o TASQUES_SECRET', () => {
+    const { WEBHOOK_SECRET: _a, ...sinWebhookSecret } = entornoValido;
+    expect(() => parsearEnv(sinWebhookSecret)).toThrow(/WEBHOOK_SECRET/);
+
+    const { TASQUES_SECRET: _b, ...sinTasquesSecret } = entornoValido;
+    expect(() => parsearEnv(sinTasquesSecret)).toThrow(/TASQUES_SECRET/);
+  });
+
+  it('TASQUES_OIDC_AUDIENCE es opcional, pero tiene que ser una URL válida si viene', () => {
+    const sinAudiencia = parsearEnv(entornoValido);
+    expect(sinAudiencia.TASQUES_OIDC_AUDIENCE).toBeUndefined();
+
+    expect(() => parsearEnv({ ...entornoValido, TASQUES_OIDC_AUDIENCE: 'no-es-url' })).toThrow(
+      /TASQUES_OIDC_AUDIENCE/,
+    );
+
+    const conAudiencia = parsearEnv({
+      ...entornoValido,
+      TASQUES_OIDC_AUDIENCE: 'https://backend-xyz.run.app/tasques/sync-comandes',
+    });
+    expect(conAudiencia.TASQUES_OIDC_AUDIENCE).toBe(
+      'https://backend-xyz.run.app/tasques/sync-comandes',
     );
   });
 });

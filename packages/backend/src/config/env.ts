@@ -31,6 +31,25 @@ const esquemaEnv = z.object({
   WC_CONSUMER_SECRET: z
     .string({ required_error: 'falta esta variable de entorno' })
     .min(1, 'no puede estar vacía'),
+
+  // Secreto del webhook de WooCommerce (WooCommerce → Ajustes → Avanzado →
+  // Webhooks). Firma HMAC-SHA256 sobre el cuerpo crudo, ver ADR-009/016.
+  WEBHOOK_SECRET: z
+    .string({ required_error: 'falta esta variable de entorno' })
+    .min(1, 'no puede estar vacía'),
+
+  // Endpoint de tareas (ADR-009): secreto compartido para autenticar en
+  // local/desarrollo. En producción se valida OIDC de Cloud Scheduler en su
+  // lugar (ver TASQUES_OIDC_AUDIENCE) — este secreto igual tiene que existir
+  // porque es el único mecanismo hasta que haya una revisión de Cloud Run.
+  TASQUES_SECRET: z
+    .string({ required_error: 'falta esta variable de entorno' })
+    .min(1, 'no puede estar vacía'),
+  // Audiencia esperada del token OIDC que manda Cloud Scheduler — típicamente
+  // la URL del propio endpoint en Cloud Run. Opcional: todavía no hay URL de
+  // producción definitiva (ver infra/gcp/README.md). Sin esto configurado,
+  // el entorno de producción rechaza toda tarea en vez de aceptar sin validar.
+  TASQUES_OIDC_AUDIENCE: z.string().url('debe ser una URL válida').optional(),
 });
 
 export type Env = z.infer<typeof esquemaEnv>;

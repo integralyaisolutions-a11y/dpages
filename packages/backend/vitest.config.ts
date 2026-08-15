@@ -12,6 +12,10 @@ export default defineConfig({
     // si no está levantada (`docker compose up -d postgres-test`), fallan
     // con un error de conexión claro, no en silencio.
     env: {
+      // Explícito, no confiar en el default de Vitest: autenticacio-tasques.ts
+      // sólo toma el camino de secreto compartido (nunca el de OIDC/red real)
+      // cuando NODE_ENV !== 'production'.
+      NODE_ENV: 'test',
       DATABASE_URL: 'postgres://dpages:dpages@localhost:5434/dpages_test',
       // Dummies: los tests del cliente de WooCommerce interceptan fetch, así
       // que nunca salen a la red de verdad con estos valores (ver requisito
@@ -21,6 +25,8 @@ export default defineConfig({
       WC_BASE_URL: 'https://woocommerce-test.invalid',
       WC_CONSUMER_KEY: 'ck_test',
       WC_CONSUMER_SECRET: 'cs_test',
+      WEBHOOK_SECRET: 'webhook_secret_test',
+      TASQUES_SECRET: 'tasques_secret_test',
     },
   },
 });

@@ -7,7 +7,7 @@ import { Client, Pool } from 'pg';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { env } from '../config/env.js';
 import { migrarArriba } from '../db/migrate.js';
-import { ingerirCataleg, ingerirComandes } from './ingesta.js';
+import { finestraReconciliacio, ingerirCataleg, ingerirComandes } from './ingesta.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -152,5 +152,22 @@ describe('servicio de ingesta (Postgres real, esquema aislado; fetch interceptad
     expect(despues.rows[0]?.cursor_en?.getTime()).toBe(cursorPrevio?.getTime());
     expect(despues.rows[0]?.ultim_error).toBeTruthy();
     expect(despues.rows[0]?.intents_fallits_consecutius).toBe(1);
+  });
+});
+
+describe('finestraReconciliacio', () => {
+  it('devuelve una fecha ~7 días atrás por defecto, en formato WooCommerce', () => {
+    const antes = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const resultado = finestraReconciliacio();
+    const resultadoMs = new Date(`${resultado}Z`).getTime();
+
+    expect(resultado).not.toMatch(/[Z]|\.\d{3}/); // sin "Z" ni milisegundos, igual que WooCommerce
+    expect(Math.abs(resultadoMs - antes)).toBeLessThan(5000); // tolerancia por el tiempo que tarda el test
+  });
+
+  it('acepta una cantidad de días distinta', () => {
+    const antes = Date.now() - 1 * 24 * 60 * 60 * 1000;
+    const resultadoMs = new Date(`${finestraReconciliacio(1)}Z`).getTime();
+    expect(Math.abs(resultadoMs - antes)).toBeLessThan(5000);
   });
 });
