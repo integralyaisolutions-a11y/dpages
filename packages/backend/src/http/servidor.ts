@@ -58,16 +58,25 @@ export function construirServidor(): FastifyInstance {
   // Contrato de API (docs/contrato-api.md): CUALQUIER error, incluidos los
   // no manejados por una ruta, tiene que salir con la forma
   // { error: { codi, missatge, detalls? } } — nunca la forma por defecto de
-  // Fastify. El mensaje que ve el cliente es genérico: el detalle real
-  // (stack incluido) ya quedó en el log de Fastify, no hace falta
-  // exponerlo en la respuesta.
-  fastify.setErrorHandler((err: FastifyError, _req, reply) => {
+  // Fastify. El mensaje que ve el cliente es genérico a propósito (no
+  // filtrar detalle interno) — pero SÍ hay que loguear el error completo
+  // del lado del servidor. Registrar un `setErrorHandler` propio reemplaza
+  // el logging automático de Fastify entero, no sólo la respuesta: sin este
+  // `logger.error` acá, un 500 real queda invisible en los logs — sólo se
+  // ve "request completed" con el código, nunca el motivo (bug real,
+  // encontrado en vivo: ver ADR correspondiente).
+  fastify.setErrorHandler((err: FastifyError, req, reply) => {
     const status =
       err.statusCode !== undefined && err.statusCode >= 400 && err.statusCode < 500
         ? err.statusCode
         : 500;
     const codi = status === 500 ? 'ERROR_INTERN' : 'VALIDACIO';
     const missatge = status === 500 ? 'Error intern del servidor' : err.message;
+
+    if (status === 500) {
+      logger.error({ err, reqId: req.id }, 'Error intern no gestionat en una ruta');
+    }
+
     reply.code(status).send(cosError(codi, missatge));
   });
 

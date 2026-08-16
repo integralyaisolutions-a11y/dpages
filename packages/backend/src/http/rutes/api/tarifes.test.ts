@@ -85,4 +85,28 @@ describe('API negoci — /tarifes (Postgres real, esquema aislado)', () => {
 
     await fastify.close();
   });
+
+  it('GET /tarifes/matriu: una tarifa vieja sin codi (NULL) no rompe la matriz ni desaparece del listado', async () => {
+    // Reproduce el caso real: tarifas creadas antes de la migración 0010
+    // (o cargadas a mano sin codi) conviven con las que sí lo tienen.
+    const tarifaSinCodi = await entorn.poolTest.query<{ id_seq: string }>(
+      `INSERT INTO tarifa (nom) VALUES ('Tarifa Antiga Sense Codi') RETURNING id_seq`,
+    );
+    const tarifaSinCodiId = Number(tarifaSinCodi.rows[0]!.id_seq);
+
+    const fastify = construirServidor();
+    const res = await fastify.inject({ method: 'GET', url: '/api/v1/tarifes/matriu' });
+
+    expect(res.statusCode).toBe(200);
+    const cuerpo = cuerpoJson<MatriuTarifesApi>(res);
+    expect(cuerpo.tarifes).toContainEqual({
+      id: tarifaSinCodiId,
+      codi: null,
+      nom: 'Tarifa Antiga Sense Codi',
+    });
+    // La tarifa con codi (del beforeAll) sigue apareciendo igual, sin verse afectada.
+    expect(cuerpo.tarifes).toContainEqual({ id: tarifaId, codi: 'GEN', nom: 'General' });
+
+    await fastify.close();
+  });
 });
