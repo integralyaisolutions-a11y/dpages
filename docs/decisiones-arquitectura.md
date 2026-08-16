@@ -939,3 +939,92 @@ lee) más allá de quedar disponible para cuando el frontend decida el panel
 por defecto y para auditoría; si el cliente cambia de criterio y pide
 restringir por rol más adelante, el punto de enganche ya existe
 (`req.usuari.rol` en cada handler) y no hace falta tocar el middleware.
+
+---
+
+## ADR-022 — CI necesita su propio Postgres efímero, con el mismo puerto que espera `vitest.config.ts`
+
+**Estado**: Aceptado.
+
+**Contexto**: **todos** los runs de CI fallaron desde el primer commit del
+repositorio (`gh run list` lo confirma: 10/10 runs en rojo, capa 1 en
+adelante) con la misma firma — `Error: Connection terminated unexpectedly`
+en `pg`, `TypeError: Cannot read properties of undefined (reading 'end')`
+al intentar cerrar una conexión que nunca llegó a abrirse, y
+`salut.test.ts` recibiendo `503` en vez de `200` (exactamente la respuesta
+correcta de `/salut` cuando `pool.query('SELECT 1')` falla — ver
+`salut.ts`). Los tres síntomas apuntan a lo mismo: ningún test pudo hablar
+con Postgres.
+
+**El diagnóstico inicial ("CI nunca declaró un servicio de Postgres") no
+era correcto** — `ci.yml` tiene un `services.postgres` con healthcheck
+desde la capa 1 (`136baa0`), antes de que existiera un solo test que
+tocara base de datos. La causa real, confirmada leyendo `vitest.config.ts`
+junto con `ci.yml`, es más específica y más interesante:
+
+- `vitest.config.ts` (`test.env`) fija `DATABASE_URL` a
+  `postgres://dpages:dpages@localhost:5434/dpages_test` — puerto **5434**,
+  el mismo que usa `postgres-test` en `docker-compose.yml` (efímero,
+  tmpfs, para no correr tests contra los datos de desarrollo). Este bloque
+  se aplica SIEMPRE que corre `vitest run`, sin importar el entorno.
+- El `services.postgres` de `ci.yml` mapeaba el contenedor al puerto de
+  host **5432** (el default de Postgres, no el 5434 que espera
+  `vitest.config.ts`).
+- `ci.yml` además declaraba su propio `env.DATABASE_URL` a nivel de job,
+  también apuntando al 5432 — una **segunda copia** del mismo dato,
+  redundante con la de `vitest.config.ts` y nunca leída por
+  `vitest run` (el `test.env` de Vitest siempre gana sobre el `env` del
+  proceso que lo invoca).
+
+Ninguna de las dos copias estaba "mal" en el sentido de tener un error de
+sintaxis — simplemente **dejaron de coincidir**, y nada detectaba esa
+divergencia porque el job-level `env.DATABASE_URL` de CI resultaba
+inerte: ninguno de los cinco pasos del workflow (`npm ci`, lint,
+typecheck, test, build) ejecuta código que lea `config/env.ts` en tiempo
+de ejecución excepto `npm run test`, y ese paso ignora por completo el
+`env` del job en favor del suyo propio.
+
+**Decisión**:
+
+1. **El puerto de host del servicio de Postgres de CI pasa a ser 5434**
+   (`ports: ["5434:5432"]`, el contenedor sigue escuchando en el 5432
+   interno de siempre) — para coincidir con lo único que
+   `vitest.config.ts` realmente usa, en cualquier entorno donde corra.
+2. **Se elimina el `env.DATABASE_URL`/`NODE_ENV` a nivel de job en
+   `ci.yml`.** No se "corrige" el valor a 5434 y se deja — se borra,
+   porque mantener una segunda copia de un dato que ya tiene una única
+   fuente de verdad (`vitest.config.ts`) es precisamente el patrón que
+   causó este incidente: nada obliga a que las dos copias avancen juntas.
+   Ningún paso del workflow necesita esa variable.
+3. **No hace falta un paso explícito de "aplicar migraciones antes de los
+   tests".** Cada archivo de test que toca base crea su propio esquema
+   descartable y corre `migrarArriba` sobre él (mismo patrón en
+   `webhook.test.ts`, `tasques.test.ts`, `test-suport.ts` de
+   `rutes/api/`, y el propio `db/migrate.test.ts`, que testea el runner de
+   migraciones directamente). No existe ningún test que dependa de un
+   esquema `public` pre-migrado — agregar ese paso sería trabajo sin
+   ningún test que lo necesite.
+4. **`actions/checkout` y `actions/setup-node` se actualizan a `v7`**
+   (desde `v4`) para dejar de correr sobre una versión de Node.js que
+   GitHub ya marca deprecada para sus propias actions — sin relación con
+   el bug de Postgres, pero mismo commit por ser otro ítem de
+   mantenimiento de bajo riesgo en el mismo archivo.
+
+**Por qué CI necesita su Postgres propio, separado del de desarrollo y el
+de test locales** (aunque esto no era la causa del bug, vale dejarlo
+explícito porque `ci.yml` lo asume sin decirlo): un service container de
+GitHub Actions vive y muere con el job — no hay estado que sobreviva entre
+runs, ni riesgo de que un run deje datos que contaminen el siguiente. Es
+un tercer Postgres, ni el de desarrollo (`docker-compose`, puerto 5433)
+ni el de test local (`postgres-test`, puerto 5434, aunque casualmente
+comparte puerto por la razón de arriba) — nunca hay que sincronizar su
+estado con nada, cada run empieza de cero.
+
+**Consecuencias**: si `vitest.config.ts` alguna vez cambia el puerto o la
+forma de `DATABASE_URL`, `ci.yml` deja de funcionar de la misma manera
+silenciosa en que dejó de funcionar acá — pero ahora hay un único lugar
+(`vitest.config.ts`) que hay que mirar, no dos que puedan desalinearse sin
+que nada avise. Verificado: la corrección se empujó como commit aparte
+después de este ADR y el run correspondiente en la pestaña Actions del
+repositorio quedó en verde (ver el commit de este cambio para el enlace
+al run).

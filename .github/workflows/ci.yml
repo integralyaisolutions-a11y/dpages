@@ -12,6 +12,20 @@ jobs:
     # El runner de migraciones y los transformadores corren tests de
     # integración reales contra este Postgres (esquemas aislados y
     # descartables por corrida, ver los *.test.ts de db/ y transform/).
+    # Cada archivo de test crea su propio esquema descartable y corre las
+    # migraciones sobre él (`migrarArriba`, ver test-suport.ts) — no hace
+    # falta ningún paso previo de "aplicar migraciones" en este workflow.
+    #
+    # El puerto de host 5434 (no el 5432 por defecto de Postgres) NO es
+    # arbitrario: tiene que coincidir con el DATABASE_URL que hardcodea
+    # vitest.config.ts (mismo puerto que usa el "postgres-test" de
+    # docker-compose en local). `vitest run` nunca lee el DATABASE_URL de
+    # este job — su propio bloque `test.env` gana siempre — así que no hay
+    # ninguna variable de entorno de este job que valga la pena declarar acá
+    # para el paso de test; declarar una copia (como pasaba antes, apuntando
+    # al 5432) es exactamente lo que causó "Connection terminated
+    # unexpectedly" en todos los runs desde el primer commit: dos fuentes de
+    # verdad para el mismo dato, que se desalinearon. Ver ADR-022.
     services:
       postgres:
         image: postgres:16
@@ -20,21 +34,17 @@ jobs:
           POSTGRES_PASSWORD: dpages
           POSTGRES_DB: dpages_test
         ports:
-          - 5432:5432
+          - 5434:5432
         options: >-
           --health-cmd "pg_isready -U dpages"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
 
-    env:
-      DATABASE_URL: postgres://dpages:dpages@localhost:5432/dpages_test
-      NODE_ENV: test
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: 'npm'

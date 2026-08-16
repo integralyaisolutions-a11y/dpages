@@ -127,10 +127,12 @@ describe('rutas fuera del scope de /api/v1: no pasan por este middleware', () =>
     const fastify = construirServidor();
     const res = await fastify.inject({ method: 'GET', url: '/salut' });
 
-    // No hay Authorization: si este endpoint pasara por el middleware de
-    // negocio, respondería 401 en vez de resolver el chequeo de salud.
-    expect(res.statusCode).not.toBe(401);
-    expect(res.json()).toMatchObject({ versio: '0.1.0' });
+    // 200 estricto, no sólo "no 401": un 503 por base de datos inalcanzable
+    // (bug real de CI, ver ADR-022) pasaría el chequeo débil igual de
+    // silencioso que pasó al middleware — acá se exige la base alcanzable
+    // Y sin token, las dos cosas.
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ versio: '0.1.0', baseDades: 'ok' });
 
     await fastify.close();
   });
