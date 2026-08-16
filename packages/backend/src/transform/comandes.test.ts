@@ -320,4 +320,61 @@ describe('transformarComanda (Postgres real, esquema aislado)', () => {
     expect(liniasV2.rows).toHaveLength(2);
     expect(liniasV2.rows[1]?.esborrat).toBe(true);
   });
+
+  it('crea el cliente y vincula comanda.client_id (ADR-020)', async () => {
+    const resultado = await conClient((client) => transformarComanda(client, comandaSimple));
+
+    const comanda = await poolTest.query<{ client_id: string | null }>(
+      `SELECT client_id FROM comanda WHERE id = $1`,
+      [resultado.comandaId],
+    );
+    expect(comanda.rows[0]?.client_id).not.toBeNull();
+
+    const clients = await poolTest.query<{ nif: string | null }>(
+      `SELECT nif FROM client WHERE id = $1`,
+      [comanda.rows[0]!.client_id],
+    );
+    expect(clients.rows[0]?.nif).toBe('[redactat]');
+
+    const total = await poolTest.query<{ count: string }>(
+      `SELECT count(*) FROM client WHERE nif = '[redactat]'`,
+    );
+    expect(total.rows[0]?.count).toBe('1'); // exactamente un registro nuevo con ese NIF
+  });
+
+  it('sin NIF ni email resoluble: client_id queda null y se registra incidencia "sense_dades_client" (ADR-020) — no se duplica al reprocesar', async () => {
+    const wooOrderId = 777003;
+    const sinDatosCliente: WooOrder = {
+      ...comandaSimple,
+      id: wooOrderId,
+      meta_data: [],
+      billing: { ...comandaSimple.billing, email: '' },
+    };
+
+    const primeraVez = await conClient((client) => transformarComanda(client, sinDatosCliente));
+
+    const comanda = await poolTest.query<{ client_id: string | null; estat: string }>(
+      `SELECT client_id, estat FROM comanda WHERE id = $1`,
+      [primeraVez.comandaId],
+    );
+    expect(comanda.rows[0]?.client_id).toBeNull();
+    expect(comanda.rows[0]?.estat).toBe('amb_incidencia');
+
+    const incidencies = await poolTest.query<{ tipus: string }>(
+      `SELECT tipus FROM incidencia_comanda WHERE comanda_id = $1 AND tipus = 'sense_dades_client'`,
+      [primeraVez.comandaId],
+    );
+    expect(incidencies.rows).toHaveLength(1);
+
+    // Reprocesar el mismo pedido sin cambios (guardián de versión lo
+    // descarta, pero la resolución de cliente igual se reintenta) no debe
+    // acumular una segunda incidencia.
+    await conClient((client) => transformarComanda(client, sinDatosCliente));
+
+    const incidenciesDespues = await poolTest.query<{ count: string }>(
+      `SELECT count(*) FROM incidencia_comanda WHERE comanda_id = $1 AND tipus = 'sense_dades_client'`,
+      [primeraVez.comandaId],
+    );
+    expect(incidenciesDespues.rows[0]?.count).toBe('1');
+  });
 });

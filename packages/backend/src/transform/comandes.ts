@@ -5,6 +5,7 @@ import { logger } from '../lib/logger.js';
 import { parsearFechaGmt } from '../sync/fechas.js';
 import { calcularPesLinia } from './pes.js';
 import { resolverArticle } from './resolucio-article.js';
+import { resolverOCrearClient } from './resolucio-client.js';
 
 export interface ResultatComanda {
   comandaId: string;
@@ -59,10 +60,42 @@ async function registrarIncidencia(
   await client.query(`UPDATE comanda SET estat = 'amb_incidencia' WHERE id = $1`, [comandaId]);
 }
 
-async function crearComanda(client: PoolClient, wooOrder: WooOrder): Promise<string> {
+/**
+ * ADR-020: sin NIF ni email resoluble no hay cliente que vincular — no es
+ * un error, pero tampoco puede quedar invisible para siempre. Se registra
+ * como incidencia (mismo patrón que `incidencia_cataleg` para "sin SKU")
+ * para que oficina lo encuentre y lo complete a mano. La comprobación
+ * previa evita acumular una fila nueva en cada corrida mientras el pedido
+ * siga sin datos de cliente — `resolverOCrearClient` se reintenta en TODA
+ * transformación (no está detrás del guardián de versión), así que sin
+ * este chequeo se repetiría en cada ciclo de sync.
+ */
+async function registrarIncidenciaSenseDadesClientSiFalta(
+  client: PoolClient,
+  comandaId: string,
+): Promise<void> {
+  const existent = await client.query(
+    `SELECT 1 FROM incidencia_comanda WHERE comanda_id = $1 AND tipus = 'sense_dades_client' AND NOT resolta`,
+    [comandaId],
+  );
+  if ((existent.rowCount ?? 0) > 0) return;
+
+  await registrarIncidencia(
+    client,
+    comandaId,
+    'sense_dades_client',
+    'El pedido no trae NIF (meta_data) ni email (billing.email) resoluble — no se pudo vincular ningún client.',
+  );
+}
+
+async function crearComanda(
+  client: PoolClient,
+  wooOrder: WooOrder,
+  clientId: string | null,
+): Promise<string> {
   const res = await client.query<{ id: string }>(
-    `INSERT INTO comanda (woo_order_id, origen, estat, estat_web, poblacio_desti, total, data_modificacio_woo)
-     VALUES ($1, 'web', 'oberta', $2, $3, $4, $5)
+    `INSERT INTO comanda (woo_order_id, origen, estat, estat_web, poblacio_desti, total, data_modificacio_woo, client_id)
+     VALUES ($1, 'web', 'oberta', $2, $3, $4, $5, $6)
      RETURNING id`,
     [
       wooOrder.id,
@@ -70,9 +103,30 @@ async function crearComanda(client: PoolClient, wooOrder: WooOrder): Promise<str
       wooOrder.shipping.city,
       wooOrder.total,
       parsearFechaGmt(wooOrder.date_modified_gmt),
+      clientId,
     ],
   );
   return res.rows[0]!.id;
+}
+
+/**
+ * Vincula el cliente a una comanda ya existente que todavía no lo tiene —
+ * A PROPÓSITO no pasa por el guardián de versión (ADR-004): resolver y
+ * vincular el cliente no es un dato "de versión" que deba esperar una
+ * actualización más nueva de WooCommerce, es un backfill idempotente que
+ * tiene que poder correr incluso cuando la cabecera ya está al día. Nunca
+ * pisa un client_id ya asignado.
+ */
+async function vincularClientSiFalta(
+  client: PoolClient,
+  comandaId: string,
+  clientId: string | null,
+): Promise<void> {
+  if (clientId === null) return;
+  await client.query(`UPDATE comanda SET client_id = $2 WHERE id = $1 AND client_id IS NULL`, [
+    comandaId,
+    clientId,
+  ]);
 }
 
 /**
@@ -247,12 +301,29 @@ export async function transformarComanda(
     return { comandaId: existent.id, congelada: true, actualitzada: false, liniesNoResoltes: 0 };
   }
 
+  // Se resuelve/crea ANTES de la rama de guardián de versión: vincular el
+  // cliente no depende de que esta corrida traiga una versión más nueva
+  // del pedido (ver vincularClientSiFalta).
+  const clientId = await resolverOCrearClient(client, wooOrder);
+
   let comandaId: string;
 
   if (!existent) {
-    comandaId = await crearComanda(client, wooOrder);
+    comandaId = await crearComanda(client, wooOrder, clientId);
   } else {
     comandaId = existent.id;
+    await vincularClientSiFalta(client, comandaId, clientId);
+  }
+
+  if (clientId === null) {
+    await registrarIncidenciaSenseDadesClientSiFalta(client, comandaId);
+    logger.warn(
+      { wooOrderId: wooOrder.id, comandaId },
+      'Pedido sin NIF ni email resoluble — se registró como incidencia',
+    );
+  }
+
+  if (existent) {
     const actualizada = await actualitzarCapcaleraSiCorrespon(client, comandaId, wooOrder);
     if (!actualizada) {
       logger.info(

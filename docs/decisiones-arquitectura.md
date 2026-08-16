@@ -729,3 +729,141 @@ directamente, pero es el precio de que la API hable en los mismos enteros
 que ya usa el contrato. Verificado end-to-end contra la base de desarrollo
 real: el filtro `?estat=amb_incidencia` sobre `GET /comandes` devuelve
 exactamente los 2.216 pedidos marcados por la migración 0007/ADR-018.
+
+---
+
+## ADR-020 — Resolución de cliente: NIF primero, email después (supuesto por defecto, no cerrado)
+
+**Estado**: Aceptado como supuesto por defecto — **no confirmado por
+Integraly**. Ver P-11 del backlog. Reversible: es una función aislada
+(`transform/resolucio-client.ts`) y dos índices de base, no algo entretejido
+en el resto del sistema — cambiar el criterio el día que Integraly lo
+confirme o lo corrija no debería tocar nada más.
+
+**Contexto**: Probando la capa 8 en vivo con Postman apareció otro hallazgo
+real: `GET /clients` devolvía `total: 0`. Verificado contra la base real:
+`client` tenía 0 filas y ninguno de los 4.250 pedidos transformados tenía
+`comanda.client_id`. Causa raíz, confirmada con dos búsquedas de git
+(`git log --all -p -S"resolverClient"` y `-S"client_id"` sobre
+`transform/comandes.ts`, cero resultados en toda la historia): la función de
+resolución de cliente **nunca se había escrito**, no es una regresión ni un
+`try/catch` que traga el error. Consistente con CLAUDE.md, que desde el
+arranque del proyecto lista "criterio final de identificación de cliente"
+como pendiente de definición con el cliente — la brecha estaba documentada
+desde el principio, sólo que sin una función que la materializara.
+
+**Decisión**: Se implementa un criterio por defecto — **NIF primero, si no
+hay, email** — para no dejar la capa 8 sin datos de cliente mientras se
+espera una confirmación formal. No es la decisión final; es exactamente el
+mismo tratamiento que el resto de los puntos "pendientes de definición con
+el cliente" del proyecto: se documenta como supuesto, se implementa de forma
+aislada y reversible, y se corrige cuando llegue la confirmación real.
+
+Detalle técnico (`transform/resolucio-client.ts`):
+
+- El NIF llega por `meta_data`, bajo **dos** claves que representan lo
+  mismo: `nif` (2.331 de 4.250 pedidos con valor) y `_billing_myfield5`
+  (812 con valor — la clave está en casi todos los pedidos, pero vacía la
+  mayoría de las veces). `hallazgos-woocommerce.md` sólo documentaba estas
+  dos; no hay una tercera clave con volumen relevante. De los 419 pedidos
+  donde ambas claves traen valor, 85 difieren entre sí — se prioriza `nif`
+  por tener un nombre explícito (heurística, no confirmada, mismo criterio
+  que `inferirIdiomaHeuristic`).
+- El email **no** viene en `meta_data`: vive en `billing.email`, un campo
+  estándar de WooCommerce que el tipo `WooOrder` nunca había declarado
+  (se agrega `WooBilling` a `@dpages/shared`). Cobertura verificada: **100%
+  de los 4.250 pedidos reales** — mucho más confiable que el NIF (64%).
+- Resolución con upsert atómico (`INSERT ... ON CONFLICT`), no
+  "`SELECT` y después `INSERT`": el lock de concurrencia de
+  `transformarComanda` (`pg_advisory_xact_lock`) es por `woo_order_id`, no
+  por cliente, así que dos pedidos del MISMO cliente nuevo procesados casi
+  al mismo tiempo (webhook + polling) no quedan serializados entre sí sin
+  esto. Requiere subir `idx_client_nif`/`idx_client_email` a únicos de
+  verdad (migración 0009 — antes eran índices simples desde la capa 3).
+- El `UPDATE` del upsert nunca pisa un dato ya cargado
+  (`COALESCE(client.columna, EXCLUDED.columna)`, sólo completa huecos) —
+  ni el que puso el propio sync en un pedido anterior, ni el que oficina
+  cargó a mano vía `PATCH /clients/:id`.
+- `transform/comandes.ts` vincula el cliente **antes** de la rama del
+  guardián de versión (ADR-004), a propósito: vincular cliente no es un
+  dato "de versión" que deba esperar una actualización más nueva de
+  WooCommerce — es un backfill idempotente. Esto es lo que permite que
+  volver a correr `transformarComandes` sobre los pedidos ya aterrizados
+  (sin re-ingestar desde WooCommerce) rellene `client_id` en los 4.250
+  pedidos existentes, sin necesitar un script aparte.
+
+**Casos límite verificados con Postgres real, no sólo razonados**:
+
+- Mismo NIF en dos pedidos → mismo cliente, no duplica, conserva el email
+  del primero que lo creó (no lo pisa el segundo).
+- NIF nuevo cuyo _email_ coincide con el de otro cliente ya existente → el
+  `ON CONFLICT` declarado es sobre `nif`, así que el conflicto real cae en
+  el índice único de `email` (no es el target declarado) y Postgres lo
+  **rechaza con un error real**, no lo resuelve solo ni crea un duplicado.
+  Ese pedido puntual queda como error aislado (contado en
+  `ResultatTransformacioComandes.errors`, logueado), el resto del lote
+  sigue — mismo patrón de aislamiento por pedido que ya existía.
+- `client.woo_customer_id` tiene un índice único desde la capa 3
+  (`idx_client_woo_customer_id`) que el criterio NIF→email no declara como
+  target de conflicto — si el NIF/email resuelto para un pedido no calza
+  con lo ya registrado para ese mismo `woo_customer_id`, la inserción
+  falla por esa restricción en vez de por NIF/email. Mismo tipo de fallo
+  aislado y no silencioso que el caso anterior. **Se predijo "raro en la
+  práctica" y la predicción fue incorrecta — ver el hallazgo de calidad de
+  dato más abajo, con los números reales.** Queda sin resolver a propósito
+  en esta ADR, pendiente de decidir junto con el resto de P-11.
+- Pedido sin NIF ni email resoluble: no crea cliente, `comanda.client_id`
+  queda `NULL`, y se registra incidencia `sense_dades_client` (una por
+  pedido, no se acumula en corridas repetidas) para que no quede invisible
+  para oficina. En los 4.250 pedidos reales esto no ocurrió ni una vez — el
+  email tiene 100% de cobertura real, confirmado, no sólo esperado.
+
+### Hallazgo de calidad de dato: el NIF/email de un mismo cliente varía entre sus propios pedidos
+
+**Esto es un hallazgo sobre los datos de WooCommerce, no un detalle de
+implementación del upsert** — vale la pena escalarlo a Integraly con
+números concretos (P-11), más allá de si el criterio de resolución termina
+siendo NIF→email o cualquier otro.
+
+Al aplicar la migración 0009 y reprocesar los 4.250 pedidos ya aterrizados
+(sin volver a consultar la API de WooCommerce), **444 pedidos (10,4% del
+total) fallaron por una contradicción de identidad**, no por falta de
+dato:
+
+- **228 pedidos**: el NIF/email resuelto no coincide con el ya registrado
+  para el mismo `woo_customer_id` (la misma cuenta logueada de
+  WooCommerce).
+- **216 pedidos**: el NIF resuelto es nuevo, pero el email coincide con el
+  de un cliente ya existente que tiene un NIF distinto.
+
+Es decir: **el mismo cliente (misma cuenta, o mismo email) trae un NIF
+distinto en pedidos distintos**, en más de 1 de cada 10 pedidos. Esto es
+consistente con — y probablemente la misma causa raíz que — el hallazgo ya
+documentado de que `nif` y `_billing_myfield5` (las dos claves de
+`meta_data` que representan el NIF) difieren entre sí en 85 de los 419
+pedidos donde ambas traen valor: el dato de NIF que carga el cliente en el
+checkout de WooCommerce es inconsistente pedido a pedido, no sólo entre
+las dos claves de un mismo pedido.
+
+Estos 444 pedidos se marcaron con incidencia `conflicte_identitat_client`
+(migración de datos puntual, sin volver a tocar `client_id` ni reprocesar
+nada — el `detall` de cada incidencia dice cuál de los dos índices chocó,
+para que oficina sepa por dónde investigar sin adivinar). Quedan
+`amb_incidencia`, visibles, no perdidos — pero **no resueltos**: alguien
+tiene que decidir, para cada uno, cuál de los dos NIF (o si ambos) es el
+correcto, y eso es exactamente el tipo de decisión que depende del
+criterio final de identificación de cliente que todavía no confirmó
+Integraly.
+
+**Consecuencias**: `GET /clients` deja de estar vacío. De los 4.250
+pedidos: **3.806 (89,5%) quedaron con `client_id` resuelto**, **444
+(10,4%)** con incidencia `conflicte_identitat_client` (dato contradictorio
+entre pedidos del mismo cliente, sin resolver a propósito), y **0** con
+`sense_dades_client` (nunca faltó el dato — cuando falló, fue por
+contradicción, no por ausencia). El costo es que el criterio de matching
+(NIF→email, sin considerar `woo_customer_id` como tercera vía) es una
+decisión nuestra, no del cliente, y los números de arriba son evidencia
+real de que la calidad del dato de NIF en WooCommerce no alcanza para
+resolverlo sólo con código — si Integraly confirma otro criterio o aporta
+un dato más confiable (P-11), esta ADR se marca `Superseded` y se corrige
+`resolucio-client.ts`, no el resto del sistema.

@@ -45,6 +45,21 @@ export interface WooShippingAddress {
   city: string;
 }
 
+/**
+ * A diferencia de `WooShippingAddress`, acá SÍ hace falta el dato personal:
+ * es la fuente real para resolver el cliente (ADR-020) — email con 100% de
+ * cobertura en los 4.250 pedidos reales, nombre y teléfono para no crear
+ * fichas de cliente vacías. El NIF NO viene acá: llega en `meta_data`, ver
+ * `transform/resolucio-client.ts`.
+ */
+export interface WooBilling {
+  email: string;
+  first_name: string;
+  last_name: string;
+  phone: string;
+  city: string;
+}
+
 export interface WooOrder {
   id: number;
   status: string;
@@ -56,6 +71,7 @@ export interface WooOrder {
   /** Con IVA. Los precios de línea (WooLineItem.price) llegan sin IVA. */
   total: string;
   shipping: WooShippingAddress;
+  billing: WooBilling;
   line_items: WooLineItem[];
   shipping_lines: WooShippingLine[];
   coupon_lines: WooCouponLine[];

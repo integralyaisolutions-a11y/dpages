@@ -8,6 +8,13 @@
   "created_via": "checkout",
   "total": "8.80",
   "shipping": { "city": "Manresa" },
+  "billing": {
+    "email": "restaurant.example@example.com",
+    "first_name": "Restaurant",
+    "last_name": "Example",
+    "phone": "600000000",
+    "city": "Manresa"
+  },
   "line_items": [
     {
       "id": 501001,

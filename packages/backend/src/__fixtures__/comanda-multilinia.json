@@ -8,6 +8,13 @@
   "created_via": "checkout",
   "total": "42.15",
   "shipping": { "city": "Igualada" },
+  "billing": {
+    "email": "convidat.example@example.com",
+    "first_name": "Convidat",
+    "last_name": "Exemple",
+    "phone": "",
+    "city": "Igualada"
+  },
   "line_items": [
     {
       "id": 502001,
@@ -50,7 +57,7 @@
   ],
   "coupon_lines": [{ "id": 601102, "code": "nestorblanca", "discount": "4.00" }],
   "meta_data": [
-    { "id": 701103, "key": "_billing_myfield5", "value": "[redactat]" },
+    { "id": 701103, "key": "_billing_myfield5", "value": "[redactat-convidat]" },
     { "id": 701104, "key": "is_vat_exempt", "value": "no" }
   ]
 }
