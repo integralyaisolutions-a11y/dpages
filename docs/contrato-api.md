@@ -79,6 +79,17 @@ mostrarlos, formatealos; para operar con ellos, convertí explícitamente. Si el
 backend enviara `12.5` como número de JavaScript, sumar cien líneas daría un
 total con centavos fantasma.
 
+### Sobre los identificadores
+
+El campo `id` que devuelve la API es un número entero secuencial por tabla,
+no la clave interna real de la base de datos (que es UUID). Es una capa de
+simplificación deliberada: el contrato se mantiene legible con ids chicos,
+y la clave interna nunca se expone hacia afuera. Para el frontend esto es
+transparente — usá el id tal como viene en cada respuesta, en cualquier
+endpoint que lo pida de vuelta.
+
+Documentado en ADR-019.
+
 ### Paginación
 
 Parámetros de consulta:
