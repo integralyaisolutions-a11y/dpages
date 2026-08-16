@@ -277,4 +277,67 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
 
     await fastify.close();
   });
+
+  describe('capa 11 — adrecaLliurament (comanda) y dataProduccio por línia (comanda_linia)', () => {
+    it('adrecaLliurament: null por defecto, editable vía PATCH, separado de poblacioDesti', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'telefon',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      expect(comandaCreada.adrecaLliurament).toBeNull();
+
+      const patch = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { adrecaLliurament: 'Carrer Major, 12, 3r 2a', poblacioDesti: 'Vic' },
+      });
+      expect(patch.statusCode).toBe(200);
+      const cuerpo = cuerpoJson<ComandaDetallApi>(patch);
+      expect(cuerpo.adrecaLliurament).toBe('Carrer Major, 12, 3r 2a');
+      expect(cuerpo.poblacioDesti).toBe('Vic'); // sigue siendo un campo distinto
+
+      // También visible en el listado (ComandaResumApi).
+      const llistat = cuerpoJson<RespostaPaginada<ComandaResumApi>>(
+        await fastify.inject({ method: 'GET', url: '/api/v1/comandes' }),
+      );
+      const resum = llistat.dades.find((c) => c.id === comandaCreada.id);
+      expect(resum?.adrecaLliurament).toBe('Carrer Major, 12, 3r 2a');
+
+      await fastify.close();
+    });
+
+    it('dataProduccio por línea: null por defecto, GET /comandes/:id la refleja cuando está cargada', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'telefon',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      expect(comandaCreada.linies[0]?.dataProduccio).toBeNull();
+
+      // Sin endpoint de escritura todavía (no pedido en esta capa) — se
+      // carga directo, como ya se hace con obs_produccio en este mismo nivel.
+      await entorn.poolTest.query(
+        `UPDATE comanda_linia SET data_produccio = '2026-08-20T07:00:00Z' WHERE id_seq = $1`,
+        [comandaCreada.linies[0]!.id],
+      );
+
+      const detall = cuerpoJson<ComandaDetallApi>(
+        await fastify.inject({ method: 'GET', url: `/api/v1/comandes/${comandaCreada.id}` }),
+      );
+      expect(detall.linies[0]?.dataProduccio).toBe('2026-08-20T07:00:00Z');
+
+      await fastify.close();
+    });
+  });
 });

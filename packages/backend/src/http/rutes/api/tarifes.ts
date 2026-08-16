@@ -1,4 +1,4 @@
-import type { FilaMatriuTarifesApi, ReferenciaApi } from '@dpages/shared';
+import type { FilaMatriuTarifesApi, TarifaResumApi } from '@dpages/shared';
 import type { FastifyInstance } from 'fastify';
 import { pool } from '../../../db/pool.js';
 import {
@@ -37,11 +37,12 @@ export function registrarRutesTarifes(fastify: FastifyInstance): void {
     }
     const where = condicions.length > 0 ? `WHERE ${condicions.join(' AND ')}` : '';
 
-    const tarifes = await pool.query<{ id_seq: string; nom: string }>(
-      'SELECT id_seq, nom FROM tarifa ORDER BY nom ASC',
+    const tarifes = await pool.query<{ id_seq: string; codi: string | null; nom: string }>(
+      'SELECT id_seq, codi, nom FROM tarifa ORDER BY nom ASC',
     );
-    const tarifesApi: ReferenciaApi[] = tarifes.rows.map((t) => ({
+    const tarifesApi: TarifaResumApi[] = tarifes.rows.map((t) => ({
       id: Number(t.id_seq),
+      codi: t.codi,
       nom: t.nom,
     }));
 

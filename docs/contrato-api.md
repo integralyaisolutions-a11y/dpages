@@ -304,9 +304,9 @@ Filtros: `?categoriaId=1&cerca=llom`
 ```json
 {
   "tarifes": [
-    { "id": 1, "nom": "General" },
-    { "id": 2, "nom": "Restaurants" },
-    { "id": 3, "nom": "Botigues" }
+    { "id": 1, "codi": "GEN", "nom": "General" },
+    { "id": 2, "codi": "REST", "nom": "Restaurants" },
+    { "id": 3, "codi": null, "nom": "Botigues" }
   ],
   "dades": [
     {
@@ -328,6 +328,11 @@ Filtros: `?categoriaId=1&cerca=llom`
 
 Las claves de `preus` son los identificadores de tarifa en texto. `null` significa
 que ese artículo no tiene precio en esa tarifa.
+
+> `tarifes[].codi` puede ser `null` en tarifas que todavía no tienen código
+> cargado (el prototipo lo pide como campo separado de `nom` al crear una
+> tarifa, pero hoy no hay endpoint de alta de tarifas — se completa a mano
+> en base mientras tanto).
 
 **`PATCH /tarifes/:tarifaId/preus/:producteId`**
 
@@ -374,6 +379,43 @@ Filtros: `?cerca=nom&tarifaId=2&actiu=true`
 
 **`PATCH /clients/:id`** — para asignar tarifa o transportista.
 
+**`POST /clients`** — alta manual. Es el camino de los pedidos por teléfono y
+WhatsApp, que no traen ningún cliente de WooCommerce que resolver.
+
+```json
+{
+  "codi": "CLI200",
+  "nom": "Forn del Barri",
+  "poblacio": "Vic",
+  "tarifaId": 2,
+  "email": "forn@example.com",
+  "telefon": "600222333",
+  "nif": "B87654321"
+}
+```
+
+`codi`, `nom` y `poblacio` son obligatorios (los campos mínimos del
+prototipo). `tarifaId`, `email`, `telefon` y `nif` son opcionales —
+`email`/`telefon`/`nif` no aparecen en el modal del prototipo, pero hacen
+falta como dato de contacto en los pedidos que no vienen de la web.
+
+Respuesta `201`, misma forma que una fila de `GET /clients`:
+
+```json
+{
+  "id": 200,
+  "codi": "CLI200",
+  "nom": "Forn del Barri",
+  "nif": "B87654321",
+  "email": "forn@example.com",
+  "telefon": "600222333",
+  "poblacio": "Vic",
+  "tarifa": { "id": 2, "nom": "Restaurants" },
+  "transportistaDefecte": null,
+  "actiu": true
+}
+```
+
 **`GET /transportistes`**
 
 ```json
@@ -405,6 +447,7 @@ Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-
       "tarifa": { "id": 2, "nom": "Restaurants" },
       "transportista": { "id": 1, "nom": "DHL" },
       "poblacioDesti": "Manresa",
+      "adrecaLliurament": "Carrer Major, 12, 3r 2a",
       "dataComanda": "2026-08-14T09:12:00Z",
       "dataProduccio": "2026-08-16T00:00:00Z",
       "dataExpedicio": "2026-08-17T00:00:00Z",
@@ -443,6 +486,7 @@ Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-
   "tarifa": { "id": 2, "nom": "Restaurants" },
   "transportista": { "id": 1, "nom": "DHL" },
   "poblacioDesti": "Manresa",
+  "adrecaLliurament": "Carrer Major, 12, 3r 2a",
   "dataComanda": "2026-08-14T09:12:00Z",
   "dataProduccio": "2026-08-16T00:00:00Z",
   "dataExpedicio": "2026-08-17T00:00:00Z",
@@ -467,6 +511,7 @@ Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-
       "confirmatA": null,
       "preuUnitari": "9.86",
       "totalLinia": "98.60",
+      "dataProduccio": "2026-08-16T06:00:00Z",
       "obsProduccio": "Tallar fi",
       "esborrat": false
     },
@@ -482,6 +527,7 @@ Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-
       "confirmatA": null,
       "preuUnitari": "7.60",
       "totalLinia": "30.40",
+      "dataProduccio": null,
       "obsProduccio": null,
       "esborrat": false
     }
@@ -503,6 +549,15 @@ Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-
 > entienda el problema sin tener que investigar en la base. Ordenado del más
 > antiguo al más nuevo — si hay más de una, la primera suele ser la causa
 > original.
+
+> **`adrecaLliurament`** es la dirección de entrega en texto libre — distinta
+> de `poblacioDesti`, que es sólo la población/ciudad. Editable vía
+> `PATCH /comandes/:id`, igual que `poblacioDesti`.
+>
+> **`linies[].dataProduccio`** es la fecha de producción de ESA línea en
+> particular, distinta de `dataProduccio` a nivel de cabecera (la de arriba,
+> que es del pedido completo). El prototipo muestra ambas como editables por
+> separado.
 
 **`POST /comandes`** — alta manual. Es el camino de los pedidos por teléfono,
 correo y WhatsApp, que son la mayoría del volumen real.

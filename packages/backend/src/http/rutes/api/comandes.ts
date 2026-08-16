@@ -34,6 +34,7 @@ interface FilaComandaResum {
   transportista_id_seq: string | null;
   transportista_nom: string | null;
   poblacio_desti: string | null;
+  adreca_lliurament: string | null;
   data_comanda: Date;
   data_produccio: Date | null;
   data_expedicio: Date | null;
@@ -68,6 +69,7 @@ function aApiResum(fila: FilaComandaResum): ComandaResumApi {
         ? { id: Number(fila.transportista_id_seq), nom: fila.transportista_nom }
         : null,
     poblacioDesti: fila.poblacio_desti,
+    adrecaLliurament: fila.adreca_lliurament,
     dataComanda: formatearDataApi(fila.data_comanda)!,
     dataProduccio: formatearDataApi(fila.data_produccio),
     dataExpedicio: formatearDataApi(fila.data_expedicio),
@@ -95,7 +97,7 @@ const SELECT_COMANDA_RESUM = `
          cl.id_seq AS client_id_seq, cl.nom AS client_nom, cl.poblacio AS client_poblacio,
          t.id_seq AS tarifa_id_seq, t.nom AS tarifa_nom,
          tr.id_seq AS transportista_id_seq, tr.nom AS transportista_nom,
-         c.poblacio_desti, c.creat_en AS data_comanda, c.data_produccio, c.data_expedicio,
+         c.poblacio_desti, c.adreca_lliurament, c.creat_en AS data_comanda, c.data_produccio, c.data_expedicio,
          c.data_lliurament, c.bultos, c.congelat_a, c.obs_produccio, c.obs_lliurament,
          COALESCE(agg.total_linies, 0) AS total_linies,
          COALESCE(agg.total_kg, 0)::numeric(14,3) AS total_kg,
@@ -132,6 +134,7 @@ interface FilaComandaLinia {
   confirmat_a: Date | null;
   preu_unitari: string;
   total_linia: string;
+  data_produccio: Date | null;
   obs_produccio: string | null;
   esborrat: boolean;
 }
@@ -156,6 +159,7 @@ function aApiLinia(fila: FilaComandaLinia): ComandaLiniaApi {
     confirmatA: formatearDataApi(fila.confirmat_a),
     preuUnitari: fila.preu_unitari,
     totalLinia: fila.total_linia,
+    dataProduccio: formatearDataApi(fila.data_produccio),
     obsProduccio: fila.obs_produccio,
     esborrat: fila.esborrat,
   };
@@ -166,7 +170,7 @@ const SELECT_COMANDA_LINIA = `
          p.descripcio AS producte_descripcio, cl.unitats_demanades, cl.pes_calculat_kg AS kg_demanats,
          cl.pes_editable, cl.unitats_lliurades, cl.kg_lliurats, cl.confirmat_a, cl.preu_unitari,
          (cl.unitats_demanades * cl.preu_unitari)::numeric(14,2) AS total_linia,
-         cl.obs_produccio, cl.esborrat
+         cl.data_produccio, cl.obs_produccio, cl.esborrat
   FROM comanda_linia cl
   LEFT JOIN producte p ON p.id = cl.producte_id
   WHERE cl.comanda_id = $1
@@ -475,6 +479,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       obsProduccio: string | null;
       obsLliurament: string | null;
       poblacioDesti: string | null;
+      adrecaLliurament: string | null;
     }>;
 
     let clientUuid: string | null | undefined;
@@ -519,7 +524,8 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
          bultos = CASE WHEN $14 THEN $15 ELSE bultos END,
          obs_produccio = CASE WHEN $16 THEN $17 ELSE obs_produccio END,
          obs_lliurament = CASE WHEN $18 THEN $19 ELSE obs_lliurament END,
-         poblacio_desti = CASE WHEN $20 THEN $21 ELSE poblacio_desti END
+         poblacio_desti = CASE WHEN $20 THEN $21 ELSE poblacio_desti END,
+         adreca_lliurament = CASE WHEN $22 THEN $23 ELSE adreca_lliurament END
        WHERE id = $1`,
       [
         comandaUuid,
@@ -543,6 +549,8 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
         cos.obsLliurament ?? null,
         cos.poblacioDesti !== undefined,
         cos.poblacioDesti ?? null,
+        cos.adrecaLliurament !== undefined,
+        cos.adrecaLliurament ?? null,
       ],
     );
 

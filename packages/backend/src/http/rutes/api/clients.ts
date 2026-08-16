@@ -98,6 +98,70 @@ export function registrarRutesClients(fastify: FastifyInstance): void {
     };
   });
 
+  /**
+   * Alta manual (prototipo /pedidos/nuevo): los pedidos por WhatsApp/teléfono
+   * no traen ningún cliente de WooCommerce que resolver — oficina lo carga a
+   * mano. codi/nom/poblacio son los campos mínimos confirmados por el
+   * prototipo; email/telefon/nif no aparecen en ese modal pero van a hacer
+   * falta para tener un dato de contacto en esos pedidos.
+   */
+  fastify.post('/clients', async (req, reply) => {
+    const cos = req.body as Partial<{
+      codi: string;
+      nom: string;
+      poblacio: string;
+      tarifaId: number;
+      email: string;
+      telefon: string;
+      nif: string;
+    }>;
+
+    const detalls: { camp: string; missatge: string }[] = [];
+    if (!cos.codi || cos.codi.trim() === '') {
+      detalls.push({ camp: 'codi', missatge: 'és obligatori' });
+    }
+    if (!cos.nom || cos.nom.trim() === '') {
+      detalls.push({ camp: 'nom', missatge: 'és obligatori' });
+    }
+    if (!cos.poblacio || cos.poblacio.trim() === '') {
+      detalls.push({ camp: 'poblacio', missatge: 'és obligatòria' });
+    }
+    if (detalls.length > 0) {
+      return enviarValidacio(reply, 'Falten dades obligatòries', detalls);
+    }
+
+    let tarifaUuid: string | null = null;
+    if (cos.tarifaId !== undefined) {
+      tarifaUuid = await resolverTarifaUuid(pool, cos.tarifaId);
+      if (tarifaUuid === null) {
+        return enviarValidacio(reply, 'La tarifa indicada no existeix', [
+          { camp: 'tarifaId', missatge: 'no existeix' },
+        ]);
+      }
+    }
+
+    const insertat = await pool.query<{ id_seq: string }>(
+      `INSERT INTO client (codi, nom, poblacio, tarifa_id, email, telefon, nif)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id_seq`,
+      [
+        cos.codi!.trim(),
+        cos.nom!.trim(),
+        cos.poblacio!.trim(),
+        tarifaUuid,
+        cos.email ?? null,
+        cos.telefon ?? null,
+        cos.nif ?? null,
+      ],
+    );
+
+    const creat = await pool.query<FilaClient>(`${SELECT_CLIENT} WHERE cl.id_seq = $1`, [
+      insertat.rows[0]!.id_seq,
+    ]);
+    reply.code(201);
+    return aApi(creat.rows[0]!);
+  });
+
   fastify.patch('/clients/:id', async (req, reply) => {
     const idPublic = parsearIdPublic((req.params as { id: string }).id);
     if (idPublic === null) return enviarNoTrobat(reply);

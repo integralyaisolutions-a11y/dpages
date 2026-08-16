@@ -88,8 +88,15 @@ export interface FilaMatriuTarifesApi {
   preus: Record<string, string | null>;
 }
 
+/** A diferencia de ReferenciaApi: esto es el listado propio de tarifa, así que trae su codi. */
+export interface TarifaResumApi {
+  id: number;
+  codi: string | null;
+  nom: string;
+}
+
 export interface MatriuTarifesApi {
-  tarifes: ReferenciaApi[];
+  tarifes: TarifaResumApi[];
   dades: FilaMatriuTarifesApi[];
   paginacio: Paginacio;
 }
@@ -109,6 +116,17 @@ export interface ClientApi {
   actiu: boolean;
 }
 
+/** `POST /clients` — alta manual (teléfono/WhatsApp no traen cliente de WooCommerce que resolver). */
+export interface ClientCreacioApi {
+  codi: string;
+  nom: string;
+  poblacio: string;
+  tarifaId?: number;
+  email?: string;
+  telefon?: string;
+  nif?: string;
+}
+
 export interface TransportistaApi {
   id: number;
   nom: string;
@@ -126,6 +144,8 @@ export interface ComandaResumApi {
   tarifa: ReferenciaApi | null;
   transportista: ReferenciaApi | null;
   poblacioDesti: string | null;
+  /** Dirección de entrega en texto libre — distinta de poblacioDesti (sólo población/ciudad). */
+  adrecaLliurament: string | null;
   dataComanda: string;
   dataProduccio: string | null;
   dataExpedicio: string | null;
@@ -153,6 +173,8 @@ export interface ComandaLiniaApi {
   confirmatA: string | null;
   preuUnitari: string;
   totalLinia: string;
+  /** Editable por línea (prototipo /pedidos), distinta de comanda.dataProduccio (cabecera). */
+  dataProduccio: string | null;
   obsProduccio: string | null;
   esborrat: boolean;
 }
@@ -173,6 +195,7 @@ export interface ComandaDetallApi {
   tarifa: ReferenciaApi | null;
   transportista: ReferenciaApi | null;
   poblacioDesti: string | null;
+  adrecaLliurament: string | null;
   dataComanda: string;
   dataProduccio: string | null;
   dataExpedicio: string | null;

@@ -23,7 +23,7 @@ describe('API negoci — /tarifes (Postgres real, esquema aislado)', () => {
     );
     producteId = Number(producte.rows[0]!.id_seq);
     const tarifa = await entorn.poolTest.query<{ id_seq: string }>(
-      `INSERT INTO tarifa (nom) VALUES ('General') RETURNING id_seq`,
+      `INSERT INTO tarifa (codi, nom) VALUES ('GEN', 'General') RETURNING id_seq`,
     );
     tarifaId = Number(tarifa.rows[0]!.id_seq);
   });
@@ -36,7 +36,7 @@ describe('API negoci — /tarifes (Postgres real, esquema aislado)', () => {
 
     expect(res.statusCode).toBe(200);
     const cuerpo = cuerpoJson<MatriuTarifesApi>(res);
-    expect(cuerpo.tarifes).toEqual([{ id: tarifaId, nom: 'General' }]);
+    expect(cuerpo.tarifes).toEqual([{ id: tarifaId, codi: 'GEN', nom: 'General' }]);
     expect(cuerpo.dades[0]?.preus).toEqual({ [String(tarifaId)]: null });
 
     await fastify.close();
