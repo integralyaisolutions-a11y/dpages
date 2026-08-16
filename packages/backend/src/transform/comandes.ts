@@ -5,7 +5,8 @@ import { logger } from '../lib/logger.js';
 import { parsearFechaGmt } from '../sync/fechas.js';
 import { calcularPesLinia } from './pes.js';
 import { resolverArticle } from './resolucio-article.js';
-import { resolverOCrearClient } from './resolucio-client.js';
+import { ConflicteIdentitatClient, resolverOCrearClient } from './resolucio-client.js';
+import type { IndexConflicteClient } from './resolucio-client.js';
 
 export interface ResultatComanda {
   comandaId: string;
@@ -85,6 +86,34 @@ async function registrarIncidenciaSenseDadesClientSiFalta(
     comandaId,
     'sense_dades_client',
     'El pedido no trae NIF (meta_data) ni email (billing.email) resoluble — no se pudo vincular ningún client.',
+  );
+}
+
+/**
+ * ADR-023: hasta esta versión, un conflicto de identidad (`resolverOCrearClient`
+ * lanzando `ConflicteIdentitatClient`) hacía ROLLBACK del pedido entero —
+ * con ~10% de los pedidos reales golpeando esto, se estaban perdiendo en
+ * silencio. Mismo patrón que `sense_dades_client`: se registra la
+ * incidencia y el pedido sigue existiendo con `client_id` en null, en vez
+ * de desaparecer. El chequeo de idempotencia evita acumular una fila nueva
+ * en cada corrida mientras el conflicto siga sin resolverse a mano.
+ */
+async function registrarIncidenciaConflicteIdentitatSiFalta(
+  client: PoolClient,
+  comandaId: string,
+  index: IndexConflicteClient,
+): Promise<void> {
+  const existent = await client.query(
+    `SELECT 1 FROM incidencia_comanda WHERE comanda_id = $1 AND tipus = 'conflicte_identitat_client' AND NOT resolta`,
+    [comandaId],
+  );
+  if ((existent.rowCount ?? 0) > 0) return;
+
+  await registrarIncidencia(
+    client,
+    comandaId,
+    'conflicte_identitat_client',
+    `El NIF/email/woo_customer_id resuelto para este pedido choca con el índice único "${index}" de un cliente distinto ya registrado.`,
   );
 }
 
@@ -304,7 +333,21 @@ export async function transformarComanda(
   // Se resuelve/crea ANTES de la rama de guardián de versión: vincular el
   // cliente no depende de que esta corrida traiga una versión más nueva
   // del pedido (ver vincularClientSiFalta).
-  const clientId = await resolverOCrearClient(client, wooOrder);
+  //
+  // ADR-023: un conflicto de identidad (ConflicteIdentitatClient) NO puede
+  // hacer perder el pedido entero — se captura acá mismo, client_id queda
+  // null y sigue el flujo normal (crear/vincular con null, registrar
+  // incidencia más abajo). Cualquier otro error sigue propagándose sin
+  // capturar, tal como antes.
+  let clientId: string | null;
+  let conflicteIdentitat: IndexConflicteClient | null = null;
+  try {
+    clientId = await resolverOCrearClient(client, wooOrder);
+  } catch (err) {
+    if (!(err instanceof ConflicteIdentitatClient)) throw err;
+    clientId = null;
+    conflicteIdentitat = err.index;
+  }
 
   let comandaId: string;
 
@@ -315,7 +358,13 @@ export async function transformarComanda(
     await vincularClientSiFalta(client, comandaId, clientId);
   }
 
-  if (clientId === null) {
+  if (conflicteIdentitat !== null) {
+    await registrarIncidenciaConflicteIdentitatSiFalta(client, comandaId, conflicteIdentitat);
+    logger.warn(
+      { wooOrderId: wooOrder.id, comandaId, index: conflicteIdentitat },
+      'Conflicto de identidad de cliente al resolver — se registró como incidencia, client_id queda null',
+    );
+  } else if (clientId === null) {
     await registrarIncidenciaSenseDadesClientSiFalta(client, comandaId);
     logger.warn(
       { wooOrderId: wooOrder.id, comandaId },

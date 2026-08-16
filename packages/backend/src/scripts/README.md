@@ -15,7 +15,22 @@
 
 ## Diagnóstico, de un solo uso
 
-No son parte del servicio, no se despliegan a Cloud Run.
+No son parte del servicio, no se despliegan a Cloud Run. Sin script de
+`package.json` — se invocan directo con `tsx`.
+
+- **`netejar-historic-desenvolupament.ts`** — borra de la base de
+  DESARROLLO local los pedidos anteriores a una fecha de corte (por
+  defecto 2026-08-01), y su crudo/incidencias/líneas asociadas. Se escribió
+  para descartar el histórico completo de WooCommerce (4.250 pedidos) que
+  se trajo puntualmente para diagnosticar bugs, una vez que ya cumplió su
+  propósito. Rechaza correr con `NODE_ENV=production`. No borra `producte`,
+  `categoria_producte`, `client` ni `transportista` — sólo reporta cuántos
+  `client` quedarían sin ningún pedido posterior a la fecha de corte, sin
+  borrarlos.
+
+  ```
+  tsx --env-file-if-exists=../../.env src/scripts/netejar-historic-desenvolupament.ts [fecha ISO]
+  ```
 
 Previstas, todavía sin escribir:
 

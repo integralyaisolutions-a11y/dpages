@@ -852,6 +852,13 @@ correcto, y eso es exactamente el tipo de decisión que depende del
 criterio final de identificación de cliente que todavía no confirmó
 Integraly.
 
+> **Actualización (ADR-023):** el "se marcan con incidencia" de arriba
+> describía sólo el script puntual sobre estos 444 históricos — el camino
+> en vivo (`transformarComanda`, el que corre en cada sincronización real)
+> **no** tenía este manejo: dejaba que el mismo conflicto hiciera
+> `ROLLBACK` del pedido entero, perdiéndolo en silencio. Corregido en
+> ADR-023 — ahí está el detalle de la causa y la corrección.
+
 **Consecuencias**: `GET /clients` deja de estar vacío. De los 4.250
 pedidos: **3.806 (89,5%) quedaron con `client_id` resuelto**, **444
 (10,4%)** con incidencia `conflicte_identitat_client` (dato contradictorio
@@ -1028,3 +1035,82 @@ que nada avise. Verificado: la corrección se empujó como commit aparte
 después de este ADR y el run correspondiente en la pestaña Actions del
 repositorio quedó en verde (ver el commit de este cambio para el enlace
 al run).
+
+---
+
+## ADR-023 — Corrección de bug: un conflicto de identidad de cliente perdía el pedido entero en silencio
+
+**Estado**: Aceptado. **Esto es la corrección de un bug de pérdida
+silenciosa de datos, no una mejora ni una decisión de diseño nueva** — el
+comportamiento anterior era incorrecto, no una elección previa que este
+ADR reemplaza por otra.
+
+**Contexto**: ADR-020 documentó que resolver el cliente de un pedido
+(`resolverOCrearClient`) puede chocar contra un índice único de `client`
+distinto del que declara `ON CONFLICT` — el NIF o el email de un pedido
+nuevo a veces ya pertenecen a otro cliente ya registrado, con proporción
+estable de ~10% de los pedidos reales. Para los 4.250 pedidos históricos,
+ese 10% (444 casos) se marcó con incidencia `conflicte_identitat_client`
+mediante un **script SQL puntual, corrido una sola vez** sobre datos ya
+aterrizados — nunca se integró al camino en vivo de `transformarComanda`.
+
+Al limpiar la base de desarrollo (dejar sólo pedidos desde el 1 de agosto)
+y volver a correr la ingesta + transformación real sobre 216 pedidos de
+los últimos 30 días, apareció el mismo ~10% de conflictos (22 de 216) —
+pero esta vez a través del código que corre en producción, no del script
+de ayer. El resultado fue **20 pedidos que nunca llegaron a existir como
+`comanda`, y 2 que ya existían pero quedaron atascados** (cada
+sincronización futura volvía a fallar en el mismo punto, sin poder
+actualizar su cabecera ni vincular cliente) — ninguno de los 22 visible
+para oficina, ninguno con incidencia, sin ningún error en primer plano:
+`transformarComandes` sólo incrementaba un contador `errors` y seguía con
+el resto del lote.
+
+**Causa raíz**: `resolverOCrearClient` dejaba que la excepción de Postgres
+(`unique_violation`, código `23505`) se propagara sin capturar. Como
+`transformarComanda` corre dentro de una única transacción por pedido
+(`BEGIN`/`COMMIT`/`ROLLBACK`), esa excepción hacía `ROLLBACK` de **todo**
+lo que ese pedido llevaba escrito hasta ahí — cabecera, líneas, todo — no
+sólo la resolución de cliente que había fallado.
+
+**Decisión**:
+
+- **`resolverOCrearClient` captura específicamente `23505` cuando el
+  índice que chocó es uno de los tres conocidos** (`idx_client_nif`,
+  `idx_client_email`, `idx_client_woo_customer_id`, ver migraciones 0003 y 0009) y lo traduce a una excepción propia, tipada:
+  `ConflicteIdentitatClient` (con `.index` indicando cuál de los tres). No
+  es un `catch` genérico — cualquier otro error (columna inexistente,
+  conexión caída, lo que sea) se sigue propagando exactamente como antes.
+- **`SAVEPOINT` alrededor del `INSERT` riesgoso**, no sólo un `try/catch`
+  en JavaScript: un `unique_violation` deja TODA la transacción de
+  Postgres en estado `aborted` hasta el próximo `ROLLBACK`, sin importar
+  que el error ya se haya capturado del lado de la aplicación — capturar
+  la excepción en JS no alcanza para seguir usando la misma conexión.
+  `SAVEPOINT resolucio_client` / `ROLLBACK TO SAVEPOINT` acota el daño a
+  ese único `INSERT`, dejando el resto de la transacción del pedido
+  utilizable. Se encontró este problema empíricamente al escribir el test
+  de integración (`current transaction is aborted, commands ignored...`),
+  no se anticipó de entrada.
+- **`transformarComanda` captura `ConflicteIdentitatClient`** en el punto
+  donde antes llamaba a `resolverOCrearClient` sin protección: el pedido
+  se crea/actualiza igual, con `client_id` en `NULL`, y se registra una
+  incidencia `conflicte_identitat_client` con el índice que chocó en el
+  `detall` — mismo patrón exacto que `sense_dades_client` (que sí
+  funcionaba bien en el camino en vivo desde ADR-020; sólo el caso de
+  conflicto, no el de ausencia de datos, se estaba perdiendo). Chequeo de
+  idempotencia igual que las otras incidencias: no acumula una fila nueva
+  en cada corrida mientras el conflicto siga sin resolverse a mano.
+
+**Consecuencias**: verificado end-to-end sobre los 216 pedidos reales de
+los últimos 30 días — antes de la corrección, 20 no existían y 2 estaban
+atascados; después de reprocesar (sin volver a traer nada de WooCommerce),
+`SELECT count(*) FROM comanda` da **216** (los 216 aterrizados, ninguno
+perdido) y `SELECT count(*) FROM incidencia_comanda WHERE tipus =
+'conflicte_identitat_client'` da **22** (exactamente los que antes
+desaparecían o quedaban atascados). Test de integración nuevo en
+`transform/comandes.test.ts` reproduce el escenario a través de
+`transformarComanda` tal como corre en producción (no el script de
+batch), con un conflicto de email y uno de `woo_customer_id`,
+confirmando que ambos pedidos terminan existiendo con su incidencia.
+El costo es el `SAVEPOINT` extra por pedido en el ~10% de los casos que
+chocan — insignificante frente a perder el pedido entero.

@@ -7,7 +7,7 @@ import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { env } from '../config/env.js';
 import { migrarArriba } from '../db/migrate.js';
-import { resolverOCrearClient } from './resolucio-client.js';
+import { ConflicteIdentitatClient, resolverOCrearClient } from './resolucio-client.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -136,8 +136,8 @@ describe('resolverOCrearClient (Postgres real, esquema aislado)', () => {
     expect(clientId).toBeNull();
   });
 
-  describe('conflictos reales de identidad (dos NIF/email que no coinciden entre sí)', () => {
-    it('NIF nuevo cuyo email ya pertenece a OTRO cliente existente: lanza, no duplica ni mezcla silenciosamente', async () => {
+  describe('conflictos reales de identidad (dos NIF/email/woo_customer_id que no coinciden entre sí) — ADR-023', () => {
+    it('NIF nuevo cuyo email ya pertenece a OTRO cliente existente: lanza ConflicteIdentitatClient("email"), no duplica ni mezcla silenciosamente', async () => {
       // Cliente A: nif=NIF-A, email=compartido@example.com, customer_id propio
       // (distinto del de B) para aislar el conflicto en el email, no en woo_customer_id.
       const pedidoA: WooOrder = {
@@ -155,8 +155,8 @@ describe('resolverOCrearClient (Postgres real, esquema aislado)', () => {
       // Pedido B: NIF distinto (nunca visto) y customer_id distinto, pero el
       // MISMO email que A. El upsert declara ON CONFLICT (nif) — el
       // conflicto real ocurre en el índice único de email, que no es el
-      // target declarado, así que Postgres lo rechaza con un error real en
-      // vez de resolverlo solo.
+      // target declarado, así que Postgres lo rechaza con un error real,
+      // que resolverOCrearClient traduce a ConflicteIdentitatClient.
       const pedidoB: WooOrder = {
         ...comandaSimple,
         id: 777102,
@@ -166,12 +166,51 @@ describe('resolverOCrearClient (Postgres real, esquema aislado)', () => {
       };
 
       await client.query('BEGIN');
-      await expect(resolverOCrearClient(client, pedidoB)).rejects.toThrow(/duplicate key|unique/i);
+      const promesa = resolverOCrearClient(client, pedidoB);
+      await expect(promesa).rejects.toBeInstanceOf(ConflicteIdentitatClient);
+      await expect(promesa).rejects.toMatchObject({ index: 'email' });
       await client.query('ROLLBACK');
 
       // No quedó ningún cliente con nif='NIF-B': el intento se revirtió entero.
       const total = await client.query<{ count: string }>(
         `SELECT count(*) FROM client WHERE nif = 'NIF-B'`,
+      );
+      expect(total.rows[0]?.count).toBe('0');
+    });
+
+    it('woo_customer_id ya pertenece a otro cliente con NIF distinto: lanza ConflicteIdentitatClient("woo_customer_id")', async () => {
+      // Cliente C: nif=NIF-C, customer_id=333333.
+      const pedidoC: WooOrder = {
+        ...comandaSimple,
+        id: 777103,
+        customer_id: 333333,
+        meta_data: [{ id: 3, key: 'nif', value: 'NIF-C' }],
+        billing: { ...comandaSimple.billing, email: 'cliente.c@example.com' },
+      };
+      await client.query('BEGIN');
+      const clienteC = await resolverOCrearClient(client, pedidoC);
+      await client.query('COMMIT');
+      expect(clienteC).not.toBeNull();
+
+      // Pedido D: NIF y email nunca vistos (nada que ver con C), pero el
+      // MISMO customer_id — la misma cuenta logueada de WooCommerce trae un
+      // NIF distinto en este pedido (hallazgo de ADR-020).
+      const pedidoD: WooOrder = {
+        ...comandaSimple,
+        id: 777104,
+        customer_id: 333333,
+        meta_data: [{ id: 4, key: 'nif', value: 'NIF-D' }],
+        billing: { ...comandaSimple.billing, email: 'cliente.d@example.com' },
+      };
+
+      await client.query('BEGIN');
+      const promesa = resolverOCrearClient(client, pedidoD);
+      await expect(promesa).rejects.toBeInstanceOf(ConflicteIdentitatClient);
+      await expect(promesa).rejects.toMatchObject({ index: 'woo_customer_id' });
+      await client.query('ROLLBACK');
+
+      const total = await client.query<{ count: string }>(
+        `SELECT count(*) FROM client WHERE nif = 'NIF-D'`,
       );
       expect(total.rows[0]?.count).toBe('0');
     });

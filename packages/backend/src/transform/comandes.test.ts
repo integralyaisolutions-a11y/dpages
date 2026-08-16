@@ -377,4 +377,98 @@ describe('transformarComanda (Postgres real, esquema aislado)', () => {
     );
     expect(incidenciesDespues.rows[0]?.count).toBe('1');
   });
+
+  describe('conflicto de identidad de cliente en el camino EN VIVO (ADR-023, no el script de batch)', () => {
+    it('un conflicto de email y uno de woo_customer_id: AMBOS pedidos quedan como comanda con incidencia, ninguno se pierde', async () => {
+      // Cliente base, creado por un pedido normal: nif=NIF-BASE,
+      // email=base@example.com, customer_id=555555.
+      const pedidoBase: WooOrder = {
+        ...comandaSimple,
+        id: 777201,
+        customer_id: 555555,
+        meta_data: [{ id: 1, key: 'nif', value: 'NIF-BASE' }],
+        billing: { ...comandaSimple.billing, email: 'base@example.com' },
+      };
+      await conClient((client) => transformarComanda(client, pedidoBase));
+
+      // Pedido con conflicto de EMAIL: NIF nuevo (nunca visto) y
+      // customer_id propio (no choca ahí), pero el email ya es del cliente
+      // base — resolverOCrearClient declara ON CONFLICT (nif), así que el
+      // choque real es en idx_client_email.
+      const pedidoConflictoEmail: WooOrder = {
+        ...comandaSimple,
+        id: 777202,
+        customer_id: 666666,
+        meta_data: [{ id: 2, key: 'nif', value: 'NIF-CONFLICTO-EMAIL' }],
+        billing: { ...comandaSimple.billing, email: 'base@example.com' },
+      };
+
+      // Pedido con conflicto de WOO_CUSTOMER_ID: NIF y email nuevos (nunca
+      // vistos), pero el mismo customer_id que el cliente base — la misma
+      // cuenta logueada trae un NIF distinto en este pedido.
+      const pedidoConflictoWooCustomerId: WooOrder = {
+        ...comandaSimple,
+        id: 777203,
+        customer_id: 555555,
+        meta_data: [{ id: 3, key: 'nif', value: 'NIF-CONFLICTO-WOO' }],
+        billing: { ...comandaSimple.billing, email: 'conflicto.woo@example.com' },
+      };
+
+      // Tal como corre en producción: cada pedido en su propia transacción
+      // (BEGIN/COMMIT), no una compartida — mismo patrón que
+      // transformarComandes() en el loop real, no el script de batch de ayer.
+      const resultadoEmail = await conClient((client) =>
+        transformarComanda(client, pedidoConflictoEmail),
+      );
+      const resultadoWoo = await conClient((client) =>
+        transformarComanda(client, pedidoConflictoWooCustomerId),
+      );
+
+      // Ninguno de los dos se perdió: ambos existen como comanda.
+      const comandas = await poolTest.query<{
+        woo_order_id: string;
+        client_id: string | null;
+        estat: string;
+      }>(
+        `SELECT woo_order_id, client_id, estat FROM comanda WHERE woo_order_id IN (777202, 777203)`,
+      );
+      expect(comandas.rows).toHaveLength(2);
+      for (const fila of comandas.rows) {
+        expect(fila.client_id).toBeNull();
+        expect(fila.estat).toBe('amb_incidencia');
+      }
+
+      const incidenciaEmail = await poolTest.query<{ tipus: string; detall: string }>(
+        `SELECT tipus, detall FROM incidencia_comanda WHERE comanda_id = $1`,
+        [resultadoEmail.comandaId],
+      );
+      expect(incidenciaEmail.rows).toHaveLength(1);
+      expect(incidenciaEmail.rows[0]?.tipus).toBe('conflicte_identitat_client');
+      expect(incidenciaEmail.rows[0]?.detall).toContain('email');
+
+      const incidenciaWoo = await poolTest.query<{ tipus: string; detall: string }>(
+        `SELECT tipus, detall FROM incidencia_comanda WHERE comanda_id = $1`,
+        [resultadoWoo.comandaId],
+      );
+      expect(incidenciaWoo.rows).toHaveLength(1);
+      expect(incidenciaWoo.rows[0]?.tipus).toBe('conflicte_identitat_client');
+      expect(incidenciaWoo.rows[0]?.detall).toContain('woo_customer_id');
+
+      // No se creó ningún cliente nuevo con esos NIF — el conflicto los
+      // descartó, exactamente como con sense_dades_client.
+      const clientsConflicto = await poolTest.query<{ count: string }>(
+        `SELECT count(*) FROM client WHERE nif IN ('NIF-CONFLICTO-EMAIL', 'NIF-CONFLICTO-WOO')`,
+      );
+      expect(clientsConflicto.rows[0]?.count).toBe('0');
+
+      // Reprocesar el mismo pedido en conflicto (sin cambios) no acumula una
+      // segunda incidencia — mismo criterio de idempotencia que sense_dades_client.
+      await conClient((client) => transformarComanda(client, pedidoConflictoEmail));
+      const incidenciaEmailDespues = await poolTest.query<{ count: string }>(
+        `SELECT count(*) FROM incidencia_comanda WHERE comanda_id = $1 AND tipus = 'conflicte_identitat_client'`,
+        [resultadoEmail.comandaId],
+      );
+      expect(incidenciaEmailDespues.rows[0]?.count).toBe('1');
+    });
+  });
 });

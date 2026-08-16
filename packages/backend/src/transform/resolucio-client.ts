@@ -1,8 +1,42 @@
+import { DatabaseError } from 'pg';
 import type { Client, Pool, PoolClient } from 'pg';
 import type { WooMetaData, WooOrder } from '@dpages/shared';
 
 /** Sólo hace falta `.query()` — acepta Pool, PoolClient o Client suelto (mismo criterio que resolucio-article.ts). */
 type Consultable = Pool | PoolClient | Client;
+
+/**
+ * Los tres índices únicos reales de `client` (migraciones 0003 y 0009).
+ * `nif` nunca puede aparecer como "el otro índice que chocó": si `nif` no
+ * es null, siempre es el target de `ON CONFLICT` de este mismo upsert (ver
+ * `columnaConflicto` más abajo), así que un choque contra `idx_client_nif`
+ * ya lo resuelve Postgres solo, nunca llega a lanzar.
+ */
+const INDEXS_UNICS_CLIENT: Record<string, 'nif' | 'email' | 'woo_customer_id'> = {
+  idx_client_nif: 'nif',
+  idx_client_email: 'email',
+  idx_client_woo_customer_id: 'woo_customer_id',
+};
+
+export type IndexConflicteClient = (typeof INDEXS_UNICS_CLIENT)[string];
+
+/**
+ * ADR-023: el dato de identidad (NIF/email/woo_customer_id) del mismo
+ * cliente varía entre sus propios pedidos (hallazgo de ADR-020) — el
+ * upsert de abajo puede chocar contra un índice único DISTINTO del que usó
+ * como target de `ON CONFLICT`. No es un error inesperado del sistema, es
+ * un caso de negocio conocido y con proporción estable (~10% de los
+ * pedidos reales): quien llama (`transformarComanda`) lo captura para
+ * registrar una incidencia en vez de perder el pedido entero.
+ */
+export class ConflicteIdentitatClient extends Error {
+  constructor(public readonly index: IndexConflicteClient) {
+    super(
+      `Conflicto de identidad de cliente: el índice "${index}" ya pertenece a otro cliente registrado.`,
+    );
+    this.name = 'ConflicteIdentitatClient';
+  }
+}
 
 function extraerMetaData(metaData: WooMetaData[], clau: string): string | null {
   const entrada = metaData.find((m) => m.key === clau);
@@ -79,18 +113,47 @@ export async function resolverOCrearClient(
   // Sólo dos valores posibles, fijados acá mismo — nunca viene de la
   // petición, así que interpolarlo en el SQL no es una inyección.
   const columnaConflicto = nif !== null ? 'nif' : 'email';
-  const res = await client.query<{ id: string }>(
-    `INSERT INTO client (nif, email, nom, telefon, poblacio, woo_customer_id, es_convidat)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     ON CONFLICT (${columnaConflicto}) WHERE ${columnaConflicto} IS NOT NULL DO UPDATE SET
-       nif = COALESCE(client.nif, EXCLUDED.nif),
-       email = COALESCE(client.email, EXCLUDED.email),
-       nom = COALESCE(client.nom, EXCLUDED.nom),
-       telefon = COALESCE(client.telefon, EXCLUDED.telefon),
-       poblacio = COALESCE(client.poblacio, EXCLUDED.poblacio),
-       woo_customer_id = COALESCE(client.woo_customer_id, EXCLUDED.woo_customer_id)
-     RETURNING id`,
-    valores,
-  );
-  return res.rows[0]!.id;
+
+  // SAVEPOINT antes del INSERT riesgoso: un unique_violation dentro de una
+  // transacción no sólo falla ESA sentencia, deja TODA la transacción en
+  // estado "aborted" hasta el próximo ROLLBACK — capturar el error en JS no
+  // alcanza para seguir usando la misma conexión. El caller (transformarComanda)
+  // sigue escribiendo más filas (comanda, comanda_linia, incidencia_comanda)
+  // en la MISMA transacción después de este conflicto, así que hace falta
+  // acotar el daño a un SAVEPOINT propio y volver a él, no a toda la
+  // transacción entera.
+  await client.query('SAVEPOINT resolucio_client');
+  try {
+    const res = await client.query<{ id: string }>(
+      `INSERT INTO client (nif, email, nom, telefon, poblacio, woo_customer_id, es_convidat)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (${columnaConflicto}) WHERE ${columnaConflicto} IS NOT NULL DO UPDATE SET
+         nif = COALESCE(client.nif, EXCLUDED.nif),
+         email = COALESCE(client.email, EXCLUDED.email),
+         nom = COALESCE(client.nom, EXCLUDED.nom),
+         telefon = COALESCE(client.telefon, EXCLUDED.telefon),
+         poblacio = COALESCE(client.poblacio, EXCLUDED.poblacio),
+         woo_customer_id = COALESCE(client.woo_customer_id, EXCLUDED.woo_customer_id)
+       RETURNING id`,
+      valores,
+    );
+    await client.query('RELEASE SAVEPOINT resolucio_client');
+    return res.rows[0]!.id;
+  } catch (err) {
+    // 23505 = unique_violation. El índice que chocó nunca es el que declara
+    // `ON CONFLICT` (ese lo resuelve Postgres solo) — es SIEMPRE uno de los
+    // otros dos, la firma del hallazgo de ADR-020/023: el NIF o el email
+    // resuelto para este pedido ya pertenece a otro cliente distinto del
+    // que coincide por `columnaConflicto`. Cualquier otro error (columna
+    // que no existe, conexión caída, lo que sea) se relanza tal cual —
+    // sólo estos tres índices conocidos se tratan como caso de negocio.
+    if (err instanceof DatabaseError && err.code === '23505' && err.constraint !== undefined) {
+      const index = INDEXS_UNICS_CLIENT[err.constraint];
+      if (index !== undefined) {
+        await client.query('ROLLBACK TO SAVEPOINT resolucio_client');
+        throw new ConflicteIdentitatClient(index);
+      }
+    }
+    throw err;
+  }
 }
