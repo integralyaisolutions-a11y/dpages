@@ -1,6 +1,14 @@
 import Fastify, { type FastifyBaseLogger, type FastifyError, type FastifyInstance } from 'fastify';
 import { cosError } from './error-api.js';
 import { logger } from '../lib/logger.js';
+import { registrarRutesCategories } from './rutes/api/categories.js';
+import { registrarRutesClients } from './rutes/api/clients.js';
+import { registrarRutesComandes } from './rutes/api/comandes.js';
+import { registrarRutaLliurament } from './rutes/api/lliurament.js';
+import { registrarRutesPanells } from './rutes/api/panells.js';
+import { registrarRutesProductes } from './rutes/api/productes.js';
+import { registrarRutesTarifes } from './rutes/api/tarifes.js';
+import { registrarRutesTransportistes } from './rutes/api/transportistes.js';
 import { registrarRutaSalut } from './rutes/salut.js';
 import { registrarRutesTasques } from './rutes/tasques.js';
 import { registrarRutaWebhook } from './rutes/webhook.js';
@@ -59,6 +67,26 @@ export function construirServidor(): FastifyInstance {
   registrarRutaSalut(fastify);
   registrarRutaWebhook(fastify);
   registrarRutesTasques(fastify);
+
+  // Endpoints de negocio (docs/contrato-api.md, capa 8) bajo /api/v1 — base
+  // URL que el contrato fija en su sección 2. Autenticación: en modo
+  // desarrollo (NODE_ENV !== production) el contrato permite peticiones sin
+  // token de Firebase; Firebase Auth llega en una capa posterior, así que
+  // por ahora estas rutas no validan nada — no confiar en esto en producción.
+  void fastify.register(
+    (api, _opts, done) => {
+      registrarRutesCategories(api);
+      registrarRutesProductes(api);
+      registrarRutesTarifes(api);
+      registrarRutesClients(api);
+      registrarRutesTransportistes(api);
+      registrarRutesComandes(api);
+      registrarRutaLliurament(api);
+      registrarRutesPanells(api);
+      done();
+    },
+    { prefix: '/api/v1' },
+  );
 
   return fastify;
 }

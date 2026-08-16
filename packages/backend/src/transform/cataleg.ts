@@ -18,6 +18,17 @@ function skuNet(producto: Pick<WooProduct, 'sku'>): string | null {
 }
 
 /**
+ * `producte.tipus` sólo admite 'simple'/'variable' (CHECK, ver migración
+ * 0008) — son los dos tipos reales del catálogo de dPagès. WooCommerce
+ * define además 'grouped'/'external' para otros usos que acá no aplican;
+ * si alguna vez apareciera uno, cae a 'simple' en vez de romper la
+ * transformación entera del lote.
+ */
+function tipusNet(producto: Pick<WooProduct, 'type'>): 'simple' | 'variable' {
+  return producto.type === 'variable' ? 'variable' : 'simple';
+}
+
+/**
  * "Se registra como incidencia" (ADR-018), mismo patrón que
  * `incidencia_comanda` pero sin comanda de por medio: la referencia es al
  * producto de WooCommerce (no hay ningún `producte` que referenciar,
@@ -101,8 +112,8 @@ async function obtenirOCrearArticle(
   }
 
   const nuevo = await client.query<{ id: string }>(
-    `INSERT INTO producte (codi, nom, actiu, categoria_id) VALUES ($1, $2, $3, $4) RETURNING id`,
-    [sku, producto.name, producto.status === 'publish', categoriaId],
+    `INSERT INTO producte (codi, descripcio, actiu, categoria_id, tipus) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+    [sku, producto.name, producto.status === 'publish', categoriaId, tipusNet(producto)],
   );
   return { producteId: nuevo.rows[0]!.id, creat: true, categoriaCreada };
 }

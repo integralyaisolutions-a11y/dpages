@@ -19,7 +19,7 @@ describe('resolverArticle (Postgres real, esquema aislado)', () => {
     await migrarArriba(client);
 
     const producte = await client.query<{ id: string }>(
-      `INSERT INTO producte (codi, nom) VALUES ('LLF01', 'Llom') RETURNING id`,
+      `INSERT INTO producte (codi, descripcio) VALUES ('LLF01', 'Llom') RETURNING id`,
     );
     producteId = producte.rows[0]!.id;
 
@@ -31,7 +31,7 @@ describe('resolverArticle (Postgres real, esquema aislado)', () => {
     aliasCaId = aliasCa.rows[0]!.id;
 
     // Alias de una variación concreta de OTRO producto, para el paso 2.
-    await client.query(`INSERT INTO producte (codi, nom) VALUES ('BOT01', 'Botifarra')`);
+    await client.query(`INSERT INTO producte (codi, descripcio) VALUES ('BOT01', 'Botifarra')`);
     await client.query(
       `INSERT INTO alias_producte (producte_id, woo_product_id, woo_variation_id, idioma, codi)
        VALUES ((SELECT id FROM producte WHERE codi = 'BOT01'), 6410, 0, 'ca', 'BOT01')`,

@@ -1,0 +1,246 @@
+import type { ProducteApi } from '@dpages/shared';
+import type { FastifyInstance } from 'fastify';
+import { pool } from '../../../db/pool.js';
+import {
+  construirPaginacio,
+  enviarNoTrobat,
+  enviarValidacio,
+  parsearIdPublic,
+  parsearPaginacio,
+  resolverCategoriaUuid,
+} from './comu.js';
+
+interface FilaProducte {
+  id_seq: string;
+  codi: string | null;
+  descripcio: string;
+  descripcio_venda: string | null;
+  tipus: 'simple' | 'variable';
+  pes_kg: string | null;
+  preu_venda: string | null;
+  actiu: boolean;
+  categoria_id_seq: string | null;
+  categoria_nom: string | null;
+}
+
+function aApi(fila: FilaProducte): ProducteApi {
+  return {
+    id: Number(fila.id_seq),
+    codi: fila.codi,
+    descripcio: fila.descripcio,
+    descripcioVenda: fila.descripcio_venda,
+    tipus: fila.tipus,
+    pesKg: fila.pes_kg,
+    preuVenda: fila.preu_venda,
+    actiu: fila.actiu,
+    categoria:
+      fila.categoria_id_seq !== null && fila.categoria_nom !== null
+        ? { id: Number(fila.categoria_id_seq), nom: fila.categoria_nom }
+        : null,
+  };
+}
+
+const SELECT_PRODUCTE = `
+  SELECT p.id_seq, p.codi, p.descripcio, p.descripcio_venda, p.tipus, p.pes_kg,
+         p.preu_venda, p.actiu, c.id_seq AS categoria_id_seq, c.nom AS categoria_nom
+  FROM producte p
+  LEFT JOIN categoria_producte c ON c.id = p.categoria_id
+`;
+
+export function registrarRutesProductes(fastify: FastifyInstance): void {
+  fastify.get('/productes', async (req, reply) => {
+    const query = req.query as Record<string, unknown>;
+    const { pagina, mida, offset } = parsearPaginacio(query);
+
+    const condicions: string[] = [];
+    const valors: unknown[] = [];
+
+    if (typeof query.categoriaId === 'string') {
+      const categoriaIdPublic = parsearIdPublic(query.categoriaId);
+      if (categoriaIdPublic === null) {
+        return enviarValidacio(reply, 'categoriaId ha de ser un enter');
+      }
+      const categoriaUuid = await resolverCategoriaUuid(pool, categoriaIdPublic);
+      // Categoría inexistente: 0 resultados, no un error — es un filtro válido que no matchea nada.
+      condicions.push(`p.categoria_id = $${valors.length + 1}`);
+      valors.push(categoriaUuid ?? '00000000-0000-0000-0000-000000000000');
+    }
+    if (query.tipus === 'simple' || query.tipus === 'variable') {
+      condicions.push(`p.tipus = $${valors.length + 1}`);
+      valors.push(query.tipus);
+    }
+    if (query.actiu === 'true' || query.actiu === 'false') {
+      condicions.push(`p.actiu = $${valors.length + 1}`);
+      valors.push(query.actiu === 'true');
+    }
+    if (typeof query.cerca === 'string' && query.cerca.trim() !== '') {
+      condicions.push(
+        `(p.descripcio ILIKE $${valors.length + 1} OR p.descripcio_venda ILIKE $${valors.length + 1} OR p.codi ILIKE $${valors.length + 1})`,
+      );
+      valors.push(`%${query.cerca.trim()}%`);
+    }
+
+    const where = condicions.length > 0 ? `WHERE ${condicions.join(' AND ')}` : '';
+
+    const total = await pool.query<{ count: string }>(
+      `SELECT count(*) FROM producte p ${where}`,
+      valors,
+    );
+    const files = await pool.query<FilaProducte>(
+      `${SELECT_PRODUCTE} ${where} ORDER BY p.descripcio ASC LIMIT $${valors.length + 1} OFFSET $${valors.length + 2}`,
+      [...valors, mida, offset],
+    );
+
+    return {
+      dades: files.rows.map(aApi),
+      paginacio: construirPaginacio(pagina, mida, Number(total.rows[0]?.count ?? 0)),
+    };
+  });
+
+  fastify.get('/productes/:id', async (req, reply) => {
+    const idPublic = parsearIdPublic((req.params as { id: string }).id);
+    if (idPublic === null) return enviarNoTrobat(reply);
+
+    const resultat = await pool.query<FilaProducte>(`${SELECT_PRODUCTE} WHERE p.id_seq = $1`, [
+      idPublic,
+    ]);
+    if (!resultat.rows[0]) return enviarNoTrobat(reply, 'Producte no trobat');
+    return aApi(resultat.rows[0]);
+  });
+
+  fastify.post('/productes', async (req, reply) => {
+    const cos = req.body as Partial<{
+      codi: string | null;
+      descripcio: string;
+      descripcioVenda: string | null;
+      tipus: 'simple' | 'variable';
+      pesKg: string | null;
+      preuVenda: string | null;
+      actiu: boolean;
+      categoriaId: number | null;
+    }>;
+
+    if (!cos.descripcio || cos.descripcio.trim() === '') {
+      return enviarValidacio(reply, 'La descripció és obligatòria', [
+        { camp: 'descripcio', missatge: 'és obligatòria' },
+      ]);
+    }
+    if (cos.tipus !== undefined && cos.tipus !== 'simple' && cos.tipus !== 'variable') {
+      return enviarValidacio(reply, 'tipus ha de ser "simple" o "variable"', [
+        { camp: 'tipus', missatge: 'ha de ser "simple" o "variable"' },
+      ]);
+    }
+
+    let categoriaUuid: string | null = null;
+    if (cos.categoriaId !== undefined && cos.categoriaId !== null) {
+      categoriaUuid = await resolverCategoriaUuid(pool, cos.categoriaId);
+      if (categoriaUuid === null) {
+        return enviarValidacio(reply, 'La categoria indicada no existeix', [
+          { camp: 'categoriaId', missatge: 'no existeix' },
+        ]);
+      }
+    }
+
+    const insertat = await pool.query<FilaProducte>(
+      `WITH nou AS (
+         INSERT INTO producte (codi, descripcio, descripcio_venda, tipus, pes_kg, preu_venda, actiu, categoria_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING *
+       )
+       SELECT nou.id_seq, nou.codi, nou.descripcio, nou.descripcio_venda, nou.tipus, nou.pes_kg,
+              nou.preu_venda, nou.actiu, c.id_seq AS categoria_id_seq, c.nom AS categoria_nom
+       FROM nou LEFT JOIN categoria_producte c ON c.id = nou.categoria_id`,
+      [
+        cos.codi ?? null,
+        cos.descripcio.trim(),
+        cos.descripcioVenda ?? null,
+        cos.tipus ?? 'simple',
+        cos.pesKg ?? null,
+        cos.preuVenda ?? null,
+        cos.actiu ?? true,
+        categoriaUuid,
+      ],
+    );
+
+    reply.code(201);
+    return aApi(insertat.rows[0]!);
+  });
+
+  fastify.patch('/productes/:id', async (req, reply) => {
+    const idPublic = parsearIdPublic((req.params as { id: string }).id);
+    if (idPublic === null) return enviarNoTrobat(reply);
+
+    const cos = req.body as Partial<{
+      codi: string | null;
+      descripcio: string;
+      descripcioVenda: string | null;
+      tipus: 'simple' | 'variable';
+      pesKg: string | null;
+      preuVenda: string | null;
+      actiu: boolean;
+      categoriaId: number | null;
+    }>;
+
+    if (cos.descripcio !== undefined && cos.descripcio.trim() === '') {
+      return enviarValidacio(reply, 'La descripció no pot estar buida', [
+        { camp: 'descripcio', missatge: 'no pot estar buida' },
+      ]);
+    }
+    if (cos.tipus !== undefined && cos.tipus !== 'simple' && cos.tipus !== 'variable') {
+      return enviarValidacio(reply, 'tipus ha de ser "simple" o "variable"', [
+        { camp: 'tipus', missatge: 'ha de ser "simple" o "variable"' },
+      ]);
+    }
+
+    let categoriaUuid: string | null | undefined;
+    if (cos.categoriaId !== undefined) {
+      if (cos.categoriaId === null) {
+        categoriaUuid = null;
+      } else {
+        categoriaUuid = await resolverCategoriaUuid(pool, cos.categoriaId);
+        if (categoriaUuid === null) {
+          return enviarValidacio(reply, 'La categoria indicada no existeix', [
+            { camp: 'categoriaId', missatge: 'no existeix' },
+          ]);
+        }
+      }
+    }
+
+    const resultat = await pool.query<{ id: string }>(
+      `UPDATE producte SET
+         codi = CASE WHEN $2 THEN $3 ELSE codi END,
+         descripcio = COALESCE($4, descripcio),
+         descripcio_venda = CASE WHEN $5 THEN $6 ELSE descripcio_venda END,
+         tipus = COALESCE($7, tipus),
+         pes_kg = CASE WHEN $8 THEN $9 ELSE pes_kg END,
+         preu_venda = CASE WHEN $10 THEN $11 ELSE preu_venda END,
+         actiu = COALESCE($12, actiu),
+         categoria_id = CASE WHEN $13 THEN $14 ELSE categoria_id END
+       WHERE id_seq = $1
+       RETURNING id`,
+      [
+        idPublic,
+        cos.codi !== undefined,
+        cos.codi ?? null,
+        cos.descripcio?.trim() ?? null,
+        cos.descripcioVenda !== undefined,
+        cos.descripcioVenda ?? null,
+        cos.tipus ?? null,
+        cos.pesKg !== undefined,
+        cos.pesKg ?? null,
+        cos.preuVenda !== undefined,
+        cos.preuVenda ?? null,
+        cos.actiu ?? null,
+        categoriaUuid !== undefined,
+        categoriaUuid ?? null,
+      ],
+    );
+
+    if (!resultat.rows[0]) return enviarNoTrobat(reply, 'Producte no trobat');
+
+    const actualitzat = await pool.query<FilaProducte>(`${SELECT_PRODUCTE} WHERE p.id_seq = $1`, [
+      idPublic,
+    ]);
+    return aApi(actualitzat.rows[0]!);
+  });
+}

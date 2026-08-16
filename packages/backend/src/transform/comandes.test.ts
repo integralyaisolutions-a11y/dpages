@@ -34,7 +34,7 @@ describe('transformarComanda (Postgres real, esquema aislado)', () => {
     // Artículo con peso de ficha, y su alias — para que la línea LLF01 resuelva
     // con kgDemanats calculado (peso conocido, no "a medida").
     const producte = await setup.query<{ id: string }>(
-      `INSERT INTO producte (codi, nom, pes_kg) VALUES ('LLF01', 'Llom', '1.250') RETURNING id`,
+      `INSERT INTO producte (codi, descripcio, pes_kg) VALUES ('LLF01', 'Llom', '1.250') RETURNING id`,
     );
     producteLlomId = producte.rows[0]!.id;
     await setup.query(
@@ -162,7 +162,7 @@ describe('transformarComanda (Postgres real, esquema aislado)', () => {
     const comanda = await poolTest.query<{ id: string }>(
       `INSERT INTO comanda (
          woo_order_id, origen, estat, estat_web, poblacio_desti, total, data_modificacio_woo,
-         data_produccio, data_expedicio, data_entrega, transportista_id, observacions
+         data_produccio, data_expedicio, data_lliurament, transportista_id, obs_produccio
        ) VALUES (
          777001, 'web', 'en_proces', 'processing', 'Manresa', '10.00', '2026-01-01T00:00:00Z',
          '2026-01-05T00:00:00Z', '2026-01-06T00:00:00Z', '2026-01-07T00:00:00Z', $1, 'Tallar més gruixut'
@@ -196,20 +196,20 @@ describe('transformarComanda (Postgres real, esquema aislado)', () => {
       estat_web: string | null;
       data_produccio: Date | null;
       data_expedicio: Date | null;
-      data_entrega: Date | null;
+      data_lliurament: Date | null;
       transportista_id: string | null;
-      observacions: string | null;
+      obs_produccio: string | null;
     }>(
-      `SELECT estat_web, data_produccio, data_expedicio, data_entrega, transportista_id, observacions
+      `SELECT estat_web, data_produccio, data_expedicio, data_lliurament, transportista_id, obs_produccio
        FROM comanda WHERE id = $1`,
       [comandaId],
     );
     expect(comandaDespues.rows[0]?.estat_web).toBe('completed'); // sync-owned: sí cambió
     expect(comandaDespues.rows[0]?.data_produccio?.toISOString()).toBe('2026-01-05T00:00:00.000Z');
     expect(comandaDespues.rows[0]?.data_expedicio?.toISOString()).toBe('2026-01-06T00:00:00.000Z');
-    expect(comandaDespues.rows[0]?.data_entrega?.toISOString()).toBe('2026-01-07T00:00:00.000Z');
+    expect(comandaDespues.rows[0]?.data_lliurament?.toISOString()).toBe('2026-01-07T00:00:00.000Z');
     expect(comandaDespues.rows[0]?.transportista_id).toBe(transportista.rows[0]?.id);
-    expect(comandaDespues.rows[0]?.observacions).toBe('Tallar més gruixut');
+    expect(comandaDespues.rows[0]?.obs_produccio).toBe('Tallar més gruixut');
 
     const liniaDespues = await poolTest.query<{
       unitats_lliurades: number;

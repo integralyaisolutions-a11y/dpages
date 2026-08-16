@@ -628,3 +628,104 @@ vive con la incidencia). Test de regresión en `cataleg.test.ts` cubre
 específicamente el escenario de dos productos DISTINTOS sin SKU, para que
 esta clase de bug (colisión o ausencia de colisión en una columna nullable)
 no vuelva a pasar desapercibida.
+
+---
+
+## ADR-019 — Capa 8: endpoints de negocio del contrato de API
+
+**Estado**: Aceptado.
+
+**Contexto**: `docs/contrato-api.md` (v1.0, acordado con Michel) especifica
+la forma exacta de cada endpoint de negocio — categorías, catálogo,
+tarifas, clientes, transportistas, pedidos y los tres paneles. Construir
+esta capa exigió varias decisiones que el contrato no fija explícitamente
+(porque describe la forma JSON, no el esquema de base subyacente) y que se
+documentan acá para que no queden implícitas.
+
+**Decisiones**:
+
+- **Identificadores públicos secuenciales, separados del UUID interno.**
+  El contrato usa enteros pequeños en cada ejemplo (`"id": 12`, `"id": 142`,
+  `"id": 981`...) — son literalmente lo que Michel copia a sus mocks mañana.
+  Las claves primarias siguen siendo UUID (nada del sync ni de las FK
+  cambia), pero cada tabla expuesta por API suma una columna `id_seq BIGINT
+GENERATED ALWAYS AS IDENTITY` de sólo lectura para el mundo externo
+  (migración 0008). Las rutas resuelven `id_seq → UUID` en cada
+  petición (`resolverProducteUuid` y equivalentes en `comu.ts`) — nunca
+  exponen el UUID, nunca aceptan un UUID como `:id` de la URL.
+- **Los decimales llegan como string prácticamente gratis.** `pg` ya
+  devuelve columnas `NUMERIC` como string de JavaScript (nunca como
+  `number`, justamente para no perder precisión) y Postgres respeta la
+  escala declarada del tipo (`NUMERIC(10,2)` imprime `"9.50"`, no `"9.5"`).
+  Para los valores calculados (sumas de `totalKg`/`totalEur` en listados y
+  paneles) alcanza con castear el resultado a `numeric(14,2)`/`numeric(14,3)`
+  explícitamente — no hace falta ningún formateador manual en JS. Las
+  fechas si necesitan un paso propio: `pg` las devuelve como `Date`, y
+  `formatearDataApi` (en `comu.ts`) las lleva a ISO-8601 con `Z` sin
+  milisegundos, tal como pide el contrato.
+- **`producte.nom` pasa a llamarse `descripcio`**, y se agregan
+  `descripcio_venda`, `preu_venda` y `tipus` (nuevas, sin origen en
+  WooCommerce salvo `tipus`, que sí viene de `payload.type` y se
+  backfillea para los 111 artículos existentes desde el crudo ya
+  aterrizado). `categoria_producte` suma `elaborat_porc` (arranca en
+  `false`, es clasificación de negocio que hay que revisar a mano — no se
+  puede inferir) y `agrupacio_rendiment` (siempre `null`, contrato sección 7).
+- **Tabla nueva `tarifa_preu`** (tarifa × producte): no existía ninguna
+  estructura para la matriz de precios — `tarifa` sólo tenía un `import`
+  genérico sin usar. `PATCH /tarifes/:tarifaId/preus/:producteId` hace un
+  upsert de una sola celda, tal como pide el contrato ("edición en línea
+  sin ventana emergente").
+- **`client`/`transportista` suman las columnas que el contrato necesita**
+  (`codi`, `nom`, `telefon`, `poblacio`, `tarifa_id`,
+  `transportista_defecte_id`, `actiu`) sin tocar el sync: la ingesta de
+  clientes desde WooCommerce no existe todavía (criterio de identificación
+  de cliente sin confirmar, ver CLAUDE.md) — estas columnas quedan
+  disponibles para cuando se construya, y mientras tanto se completan a
+  mano vía `PATCH /clients/:id`.
+- **`comanda.num`** ("2026-0142") se genera con un contador global
+  (`num_seq BIGINT GENERATED ALWAYS AS IDENTITY`) que **no se reinicia por
+  año** — es más simple y no tiene condiciones de carrera comparado con un
+  contador que arranque de nuevo cada enero. El cálculo (`to_char` sobre
+  `creat_en`) no puede ser una columna `GENERATED ... STORED`: Postgres
+  considera `to_char()`/`EXTRACT()` sobre `TIMESTAMPTZ` como `STABLE`, no
+  `IMMUTABLE` (dependen del huso horario de la sesión), así que se resuelve
+  con un trigger `BEFORE INSERT` — el patrón estándar de Postgres para
+  este caso. Si el cliente pide numeración que reinicie cada año, es un
+  cambio de trigger, no de esquema.
+- **`comanda.observacions` se separa en `obs_produccio` (renombrada) y
+  `obs_lliurament` (nueva)**, y `comanda_linia` suma su propio
+  `obs_produccio` — el contrato distingue observaciones de producción de
+  observaciones de entrega, y antes había una sola columna genérica.
+  `comanda.data_entrega` se renombra a `data_lliurament` (mismo campo,
+  nombre del contrato).
+- **`PATCH .../lliurament` rechaza con `409 CONFLICTE` si la comanda está
+  congelada** — pedido explícito, aplicado literalmente aunque a primera
+  vista genere tensión con que el empaquetado ocurre lógicamente después
+  de que el pedido "entra en producción": la regla de negocio real que
+  resuelve esa tensión no está definida todavía, así que acá se implementa
+  el criterio que se pidió, no una interpretación propia.
+- **`confirmatPer` es un valor fijo, no un usuario real** (`{ id: 0, nom:
+"Desenvolupament (sense autenticació)" }` en la respuesta del
+  endpoint de empaquetado; la columna `comanda_linia.confirmat_per` guarda
+  un marcador de texto fijo, no un uid de Firebase). Firebase Auth llega en
+  una capa posterior — mientras tanto no hay ningún operario identificable,
+  y este placeholder deja rastro de que la confirmación pasó por acá sin
+  inventar una identidad que no existe.
+- **Ningún endpoint de negocio valida autenticación todavía** (contrato,
+  sección 2: "mientras Firebase no esté configurado, el backend en modo
+  desarrollo acepta peticiones sin token"). A diferencia del endpoint de
+  tareas (ADR-009), que sí tiene un secreto compartido como paso
+  intermedio, acá no hay ningún mecanismo — es la brecha de seguridad
+  esperada de esta capa, que se cierra cuando llegue Firebase Auth, no
+  antes.
+
+**Consecuencias**: Michel puede construir el frontend contra esta API real
+desde ahora — la forma exacta coincide con el contrato, incluidos los
+casos que más suelen romper interfaces cuando aparecen tarde (`pesKg`
+null, `congelada: true`, error `400 VALIDACIO` con `detalls`). El costo
+principal es la resolución `id_seq ↔ UUID` en cada ruta que toca una FK
+(filtros, cuerpos de POST/PATCH) — más verboso que usar el UUID
+directamente, pero es el precio de que la API hable en los mismos enteros
+que ya usa el contrato. Verificado end-to-end contra la base de desarrollo
+real: el filtro `?estat=amb_incidencia` sobre `GET /comandes` devuelve
+exactamente los 2.216 pedidos marcados por la migración 0007/ADR-018.
