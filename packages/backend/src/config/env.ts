@@ -93,6 +93,12 @@ const esquemaEnv = z
       .string()
       .optional()
       .transform((valor) => valor === 'true'),
+
+    // Origen permitido de CORS en producción (ver http/cors.ts) — fuera de
+    // producción se usa un valor fijo de desarrollo, esta variable no aplica.
+    // Opcional a propósito: si falta en producción, CORS queda cerrado
+    // (ninguna petición cross-origin pasa), no abierto a cualquiera.
+    CORS_ORIGIN: z.string().url('debe ser una URL válida, ej. https://app.dpages.cat').optional(),
   })
   .superRefine((data, ctx) => {
     if (data.NODE_ENV === 'production') {

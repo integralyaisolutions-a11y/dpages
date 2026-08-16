@@ -191,4 +191,90 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
 
     await fastify.close();
   });
+
+  it('GET /comandes/:id trae el detalle de incidencies; el listado sólo trae el resumen liviano (capa 10)', async () => {
+    const fastify = construirServidor();
+
+    const creada = await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/comandes',
+      payload: {
+        origen: 'telefon',
+        linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+      },
+    });
+    const comandaId = cuerpoJson<ComandaDetallApi>(creada).id;
+    const comandaUuid = await entorn.poolTest.query<{ id: string }>(
+      `SELECT id FROM comanda WHERE id_seq = $1`,
+      [comandaId],
+    );
+
+    // Dos tipos reales del sistema (ver ADR-020): mismo caso que los 2.216
+    // pedidos reales marcados amb_incidencia, con dos motivos distintos.
+    await entorn.poolTest.query(
+      `INSERT INTO incidencia_comanda (comanda_id, tipus, detall, creat_en) VALUES
+         ($1, 'article_no_resolt', 'Línia 1: SKU sense alias', now() - interval '1 hour'),
+         ($1, 'conflicte_identitat_client', 'woo_customer_id xocat amb client existent', now())`,
+      [comandaUuid.rows[0]!.id],
+    );
+    await entorn.poolTest.query(`UPDATE comanda SET estat = 'amb_incidencia' WHERE id_seq = $1`, [
+      comandaId,
+    ]);
+
+    const detall = cuerpoJson<ComandaDetallApi>(
+      await fastify.inject({ method: 'GET', url: `/api/v1/comandes/${comandaId}` }),
+    );
+    expect(detall.incidencies).toHaveLength(2);
+    // Ordenado del más antiguo al más nuevo.
+    expect(detall.incidencies[0]).toMatchObject({
+      tipus: 'article_no_resolt',
+      detall: 'Línia 1: SKU sense alias',
+    });
+    expect(detall.incidencies[1]?.tipus).toBe('conflicte_identitat_client');
+    expect(detall.incidencies[0]?.creatA).toMatch(/Z$/);
+
+    const llistat = cuerpoJson<RespostaPaginada<ComandaResumApi>>(
+      await fastify.inject({ method: 'GET', url: '/api/v1/comandes' }),
+    );
+    const resum = llistat.dades.find((c) => c.id === comandaId);
+    // Dos tipos distintos: el resumen no puede elegir uno solo, queda null
+    // — el detalle completo está en GET /comandes/:id, no acá.
+    expect(resum?.totalIncidencies).toBe(2);
+    expect(resum?.tipusIncidencia).toBeNull();
+
+    await fastify.close();
+  });
+
+  it('resumen de incidencies: cuando todas comparten el mismo tipus, tipusIncidencia lo trae (no queda null)', async () => {
+    const fastify = construirServidor();
+
+    const creada = await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/comandes',
+      payload: {
+        origen: 'telefon',
+        linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+      },
+    });
+    const comandaId = cuerpoJson<ComandaDetallApi>(creada).id;
+    const comandaUuid = await entorn.poolTest.query<{ id: string }>(
+      `SELECT id FROM comanda WHERE id_seq = $1`,
+      [comandaId],
+    );
+    await entorn.poolTest.query(
+      `INSERT INTO incidencia_comanda (comanda_id, tipus, detall) VALUES
+         ($1, 'article_no_resolt', 'Línia 1'),
+         ($1, 'article_no_resolt', 'Línia 2')`,
+      [comandaUuid.rows[0]!.id],
+    );
+
+    const llistat = cuerpoJson<RespostaPaginada<ComandaResumApi>>(
+      await fastify.inject({ method: 'GET', url: '/api/v1/comandes' }),
+    );
+    const resum = llistat.dades.find((c) => c.id === comandaId);
+    expect(resum?.totalIncidencies).toBe(2);
+    expect(resum?.tipusIncidencia).toBe('article_no_resolt');
+
+    await fastify.close();
+  });
 });

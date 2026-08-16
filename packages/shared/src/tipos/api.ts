@@ -135,6 +135,10 @@ export interface ComandaResumApi {
   totalKg: string;
   totalEur: string;
   congelada: boolean;
+  /** 0 si no tiene ninguna incidencia. Pensado para una tabla con cientos de filas — el detalle completo está en ComandaDetallApi.incidencies. */
+  totalIncidencies: number;
+  /** El `tipus` cuando todas las incidencias comparten el mismo; `null` si no hay ninguna o si hay de más de un tipo. */
+  tipusIncidencia: string | null;
 }
 
 export interface ComandaLiniaApi {
@@ -151,6 +155,13 @@ export interface ComandaLiniaApi {
   totalLinia: string;
   obsProduccio: string | null;
   esborrat: boolean;
+}
+
+/** Una fila de `incidencia_comanda` — el motivo detrás de `estat: "amb_incidencia"`. */
+export interface IncidenciaComandaApi {
+  tipus: string;
+  detall: string;
+  creatA: string;
 }
 
 export interface ComandaDetallApi {
@@ -174,6 +185,8 @@ export interface ComandaDetallApi {
   congelada: boolean;
   congelatA: string | null;
   linies: ComandaLiniaApi[];
+  /** Vacío si `estat` no es `"amb_incidencia"`. Ordenado del más antiguo al más nuevo. */
+  incidencies: IncidenciaComandaApi[];
 }
 
 export interface LiniaCreacioApi {
@@ -238,6 +251,9 @@ export interface FilaPanellOficinaApi {
   totalEur: string;
   obsProduccio: string | null;
   obsLliurament: string | null;
+  /** Mismo criterio que ComandaResumApi — resumen liviano, no el detalle completo. */
+  totalIncidencies: number;
+  tipusIncidencia: string | null;
 }
 
 export interface PanellOficinaApi {

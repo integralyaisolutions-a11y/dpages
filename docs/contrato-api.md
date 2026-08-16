@@ -40,14 +40,30 @@ en el código.
 
 ### Autenticación
 
-Todas las rutas excepto `/salut` requieren el token de Firebase Auth:
+Todas las rutas de negocio (todo lo de la sección 4) requieren el token de
+Firebase Auth. `/salut`, el webhook de WooCommerce y `/tasques/*` quedan
+afuera — tienen su propio mecanismo, no te conciernen desde el frontend.
 
 ```
 Authorization: Bearer <Firebase ID token>
 ```
 
-Mientras Firebase no esté configurado, el backend en modo desarrollo acepta
-peticiones sin token. No dependas de eso para producción.
+Sin token o con uno inválido: `401 NO_AUTENTICAT`. El backend valida el token
+de verdad (no hay ningún modo "sin autenticación" salvo en desarrollo local
+del propio backend, con una variable de entorno que vos no controlás) — no lo
+des por opcional en ningún ambiente donde pruebes contra el backend real.
+
+Ningún endpoint restringe por rol: cualquier usuario autenticado puede llamar
+cualquier ruta. El rol (custom claim de Firebase) sólo decide en qué panel lo
+ubicás por defecto al entrar — ver `decisiones-arquitectura.md`, ADR-021.
+
+### CORS
+
+En desarrollo, el backend sólo acepta peticiones cross-origin desde
+`http://localhost:3000` — si tu servidor de desarrollo corre en otro puerto,
+avisame para agregarlo. En producción el origen permitido es explícito por
+variable de entorno; si tu dominio de producción no está configurado ahí, el
+navegador va a bloquear la petición aunque el token sea válido.
 
 ### Idioma
 
@@ -166,6 +182,20 @@ Etiquetas para mostrar (el backend no las envía, van en el frontend):
 | `en_proces`      | En procés      | En proceso     |
 | `tancada`        | Tancada        | Cerrada        |
 | `amb_incidencia` | Amb incidència | Con incidencia |
+
+`incidencies[].tipus` (de `GET /comandes/:id`, ver sección 4.5) **no** es un
+enum cerrado en el backend — es texto libre en base, para no exigir una
+migración cada vez que aparece un motivo nuevo. Los valores que existen hoy
+en datos reales:
+
+| Valor                        | Significado                                                              |
+| ---------------------------- | ------------------------------------------------------------------------ |
+| `article_no_resolt`          | Una línea del pedido no pudo resolverse a ningún artículo del catálogo.  |
+| `conflicte_identitat_client` | El NIF/email resuelto contradice el ya registrado para ese cliente.      |
+| `sense_dades_client`         | El pedido no trae ni NIF ni email utilizable — no se pudo crear cliente. |
+
+No lo trates como un enum fijo en el frontend: mostrá `tipus` tal cual si no
+lo reconocés, en vez de asumir que la lista de arriba es exhaustiva.
 
 ---
 
@@ -383,12 +413,23 @@ Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-
       "totalLinies": 8,
       "totalKg": "24.500",
       "totalEur": "312.40",
-      "congelada": false
+      "congelada": false,
+      "totalIncidencies": 0,
+      "tipusIncidencia": null
     }
   ],
   "paginacio": { "pagina": 1, "mida": 50, "total": 411, "totalPagines": 9 }
 }
 ```
+
+> **`totalIncidencies`/`tipusIncidencia`** son el resumen liviano para no pedir
+> el detalle completo por cada fila de una tabla con cientos de resultados.
+> `tipusIncidencia` sólo trae un valor cuando **todas** las incidencias de esa
+> comanda son del mismo tipo — si hay mezcla (por ejemplo un
+> `article_no_resolt` y un `conflicte_identitat_client` en la misma comanda),
+> queda `null` y hay que abrir el detalle (`GET /comandes/:id`) para ver de
+> qué se trata. El detalle completo de motivos está en `incidencies` de esa
+> misma respuesta — ver abajo.
 
 **`GET /comandes/:id`** — incluye las líneas:
 
@@ -444,9 +485,24 @@ Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-
       "obsProduccio": null,
       "esborrat": false
     }
+  ],
+  "incidencies": [
+    {
+      "tipus": "article_no_resolt",
+      "detall": "Línia 2: SKU sense alias a AliasProducte",
+      "creatA": "2026-08-14T09:12:05Z"
+    }
   ]
 }
 ```
+
+> **`incidencies`** es el motivo detrás de `"estat": "amb_incidencia"` — vacío
+> si el pedido no tiene ninguna. `tipus` es uno de los valores documentados en
+> la sección 3 (por ejemplo `article_no_resolt`, `conflicte_identitat_client`,
+> `sense_dades_client`); `detall` es texto libre pensado para que oficina
+> entienda el problema sin tener que investigar en la base. Ordenado del más
+> antiguo al más nuevo — si hay más de una, la primera suele ser la causa
+> original.
 
 **`POST /comandes`** — alta manual. Es el camino de los pedidos por teléfono,
 correo y WhatsApp, que son la mayoría del volumen real.
@@ -515,7 +571,9 @@ Filtros: `?dataExpedicioDes=&dataExpedicioFins=&transportistaId=&estat=&clientId
       "totalKg": "24.500",
       "totalEur": "312.40",
       "obsProduccio": "Tallar més gruixut",
-      "obsLliurament": "Entregar pels matins"
+      "obsLliurament": "Entregar pels matins",
+      "totalIncidencies": 0,
+      "tipusIncidencia": null
     }
   ],
   "paginacio": { "pagina": 1, "mida": 50, "total": 12, "totalPagines": 1 }
@@ -524,6 +582,10 @@ Filtros: `?dataExpedicioDes=&dataExpedicioFins=&transportistaId=&estat=&clientId
 
 > `totals` corresponde a **todo lo filtrado**, no sólo a la página visible. Es
 > el bloque de subtotales que va arriba de la tabla.
+>
+> `totalIncidencies`/`tipusIncidencia`: mismo criterio que en `GET /comandes`
+> (sección 4.5) — resumen liviano, el detalle completo está en
+> `GET /comandes/:id`.
 
 ---
 

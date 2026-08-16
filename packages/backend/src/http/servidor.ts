@@ -1,5 +1,7 @@
+import cors from '@fastify/cors';
 import Fastify, { type FastifyBaseLogger, type FastifyError, type FastifyInstance } from 'fastify';
 import { crearMiddlewareAuth } from './auth-firebase.js';
+import { opcionsCors } from './cors.js';
 import { cosError } from './error-api.js';
 import { logger } from '../lib/logger.js';
 import { registrarRutesCategories } from './rutes/api/categories.js';
@@ -24,6 +26,14 @@ export function construirServidor(): FastifyInstance {
     // estándar (info/warn/error/...), que Pino cumple de sobra.
     loggerInstance: logger as unknown as FastifyBaseLogger,
   });
+
+  // Registrado en la instancia externa, global a TODAS las rutas (incluida
+  // /salut — por si algún día un panel la consulta directo desde el
+  // navegador). El plugin resuelve el preflight OPTIONS en su propio hook
+  // `onRequest`, que Fastify siempre corre antes que `preHandler` sin
+  // importar el orden de registro — no colisiona con el middleware de
+  // autenticación (ADR-021) aunque ambos vivieran en el mismo scope.
+  void fastify.register(cors, opcionsCors());
 
   // Captura el cuerpo CRUDO antes de que exista un JSON parseado — la firma
   // del webhook (ADR-002/016) se valida contra estos bytes exactos, nunca

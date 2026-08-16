@@ -84,6 +84,11 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
                SUM(unitats_demanades * preu_unitari) AS total_eur
         FROM comanda_linia WHERE comanda_id = c.id AND NOT esborrat
       ) agg ON true
+      LEFT JOIN LATERAL (
+        SELECT count(*) AS total_incidencies,
+               CASE WHEN count(DISTINCT tipus) = 1 THEN min(tipus) END AS tipus_incidencia
+        FROM incidencia_comanda WHERE comanda_id = c.id
+      ) inc ON true
       ${where}
     `;
 
@@ -116,13 +121,16 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       total_eur: string;
       obs_produccio: string | null;
       obs_lliurament: string | null;
+      total_incidencies: string;
+      tipus_incidencia: string | null;
     }>(
       `SELECT c.id_seq, c.num, cl.nom AS client_nom, c.poblacio_desti, t.nom AS tarifa_nom,
               tr.nom AS transportista_nom, c.estat, c.creat_en AS data_comanda, c.data_expedicio,
               c.data_lliurament, COALESCE(agg.linies, 0) AS linies,
               COALESCE(agg.total_kg, 0)::numeric(14,3) AS total_kg,
               COALESCE(agg.total_eur, 0)::numeric(14,2) AS total_eur,
-              c.obs_produccio, c.obs_lliurament
+              c.obs_produccio, c.obs_lliurament,
+              COALESCE(inc.total_incidencies, 0) AS total_incidencies, inc.tipus_incidencia
        ${base}
        ORDER BY c.data_expedicio ASC NULLS LAST, c.creat_en ASC
        LIMIT $${valors.length + 1} OFFSET $${valors.length + 2}`,
@@ -145,6 +153,8 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       totalEur: f.total_eur,
       obsProduccio: f.obs_produccio,
       obsLliurament: f.obs_lliurament,
+      totalIncidencies: Number(f.total_incidencies),
+      tipusIncidencia: f.tipus_incidencia,
     }));
 
     return {

@@ -1,4 +1,9 @@
-import type { ComandaDetallApi, ComandaLiniaApi, ComandaResumApi } from '@dpages/shared';
+import type {
+  ComandaDetallApi,
+  ComandaLiniaApi,
+  ComandaResumApi,
+  IncidenciaComandaApi,
+} from '@dpages/shared';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { Pool } from 'pg';
 import { pool } from '../../../db/pool.js';
@@ -40,6 +45,8 @@ interface FilaComandaResum {
   total_linies: string;
   total_kg: string;
   total_eur: string;
+  total_incidencies: string;
+  tipus_incidencia: string | null;
 }
 
 function aApiResum(fila: FilaComandaResum): ComandaResumApi {
@@ -70,6 +77,8 @@ function aApiResum(fila: FilaComandaResum): ComandaResumApi {
     totalKg: fila.total_kg,
     totalEur: fila.total_eur,
     congelada: fila.congelat_a !== null,
+    totalIncidencies: Number(fila.total_incidencies),
+    tipusIncidencia: fila.tipus_incidencia,
   };
 }
 
@@ -77,6 +86,10 @@ function aApiResum(fila: FilaComandaResum): ComandaResumApi {
 // prácticamente el momento real del pedido (sync casi en tiempo real); para los
 // capturados a mano (email/WhatsApp/teléfono) es exactamente ese momento. No hay
 // ninguna otra columna que represente mejor "cuándo se hizo el pedido".
+// tipus_incidencia: sólo se completa cuando TODAS las incidencias de la
+// comanda comparten el mismo tipus (min() de un conjunto de un solo valor
+// distinto); si hay más de un tipo mezclado, queda null — "resumen liviano",
+// el detalle completo por tipo está en GET /comandes/:id (incidencies[]).
 const SELECT_COMANDA_RESUM = `
   SELECT c.id_seq, c.num, c.origen, c.estat,
          cl.id_seq AS client_id_seq, cl.nom AS client_nom, cl.poblacio AS client_poblacio,
@@ -86,7 +99,9 @@ const SELECT_COMANDA_RESUM = `
          c.data_lliurament, c.bultos, c.congelat_a, c.obs_produccio, c.obs_lliurament,
          COALESCE(agg.total_linies, 0) AS total_linies,
          COALESCE(agg.total_kg, 0)::numeric(14,3) AS total_kg,
-         COALESCE(agg.total_eur, 0)::numeric(14,2) AS total_eur
+         COALESCE(agg.total_eur, 0)::numeric(14,2) AS total_eur,
+         COALESCE(inc.total_incidencies, 0) AS total_incidencies,
+         inc.tipus_incidencia
   FROM comanda c
   LEFT JOIN client cl ON cl.id = c.client_id
   LEFT JOIN tarifa t ON t.id = c.tarifa_id
@@ -96,6 +111,11 @@ const SELECT_COMANDA_RESUM = `
            SUM(unitats_demanades * preu_unitari) AS total_eur
     FROM comanda_linia WHERE comanda_id = c.id AND NOT esborrat
   ) agg ON true
+  LEFT JOIN LATERAL (
+    SELECT count(*) AS total_incidencies,
+           CASE WHEN count(DISTINCT tipus) = 1 THEN min(tipus) END AS tipus_incidencia
+    FROM incidencia_comanda WHERE comanda_id = c.id
+  ) inc ON true
 `;
 
 interface FilaComandaLinia {
@@ -153,20 +173,45 @@ const SELECT_COMANDA_LINIA = `
   ORDER BY cl.ordinal ASC
 `;
 
-/** Detalle completo (cabecera + líneas) por UUID interno — usado por GET/POST/PATCH para no repetir la misma consulta tres veces. */
+interface FilaIncidenciaComanda {
+  tipus: string;
+  detall: string;
+  creat_en: Date;
+}
+
+function aApiIncidencia(fila: FilaIncidenciaComanda): IncidenciaComandaApi {
+  return { tipus: fila.tipus, detall: fila.detall, creatA: formatearDataApi(fila.creat_en)! };
+}
+
+const SELECT_COMANDA_INCIDENCIES = `
+  SELECT tipus, detall, creat_en FROM incidencia_comanda
+  WHERE comanda_id = $1
+  ORDER BY creat_en ASC
+`;
+
+/** Detalle completo (cabecera + líneas + incidencias) por UUID interno — usado por GET/POST/PATCH para no repetir la misma consulta tres veces. */
 async function carregarDetallPerUuid(comandaUuid: string): Promise<ComandaDetallApi> {
   const cap = await pool.query<FilaComandaResum>(`${SELECT_COMANDA_RESUM} WHERE c.id = $1`, [
     comandaUuid,
   ]);
   const linies = await pool.query<FilaComandaLinia>(SELECT_COMANDA_LINIA, [comandaUuid]);
+  const incidencies = await pool.query<FilaIncidenciaComanda>(SELECT_COMANDA_INCIDENCIES, [
+    comandaUuid,
+  ]);
   const fila = cap.rows[0]!;
-  const { totalLinies: _totalLinies, ...resum } = aApiResum(fila);
+  const {
+    totalLinies: _totalLinies,
+    totalIncidencies: _totalInc,
+    tipusIncidencia: _tipusInc,
+    ...resum
+  } = aApiResum(fila);
   return {
     ...resum,
     obsProduccio: fila.obs_produccio,
     obsLliurament: fila.obs_lliurament,
     congelatA: formatearDataApi(fila.congelat_a),
     linies: linies.rows.map(aApiLinia),
+    incidencies: incidencies.rows.map(aApiIncidencia),
   };
 }
 

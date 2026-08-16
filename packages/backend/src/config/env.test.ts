@@ -175,4 +175,22 @@ describe('parsearEnv', () => {
       expect(() => parsearEnv({ ...entornoValido, NODE_ENV: 'production' })).not.toThrow();
     });
   });
+
+  describe('capa 10 — CORS_ORIGIN', () => {
+    it('es opcional: sin ella, undefined (fuera de producción no se usa igual, ver http/cors.ts)', () => {
+      expect(parsearEnv(entornoValido).CORS_ORIGIN).toBeUndefined();
+    });
+
+    it('tiene que ser una URL válida si viene', () => {
+      expect(() => parsearEnv({ ...entornoValido, CORS_ORIGIN: 'no-es-una-url' })).toThrow(
+        /CORS_ORIGIN/,
+      );
+    });
+
+    it('acepta una URL válida', () => {
+      expect(
+        parsearEnv({ ...entornoValido, CORS_ORIGIN: 'https://app.dpages.cat' }).CORS_ORIGIN,
+      ).toBe('https://app.dpages.cat');
+    });
+  });
 });

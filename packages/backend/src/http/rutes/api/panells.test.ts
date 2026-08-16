@@ -11,6 +11,7 @@ import {
 describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
   let entorn: EntornTestApi;
   let construirServidor: typeof construirServidorType;
+  let producteId: number;
 
   beforeAll(async () => {
     entorn = await prepararEntornApi('panells');
@@ -20,7 +21,7 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
       `INSERT INTO producte (codi, descripcio, pes_kg, preu_venda, tipus)
        VALUES ('LLF01', 'Llom fresc de porc', '1.250', '9.86', 'simple') RETURNING id_seq`,
     );
-    const producteId = Number(producte.rows[0]!.id_seq);
+    producteId = Number(producte.rows[0]!.id_seq);
 
     const fastify = construirServidor();
     // 3 pedidos con la misma línea — más que la página (mida=2) para
@@ -90,6 +91,34 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
     );
     expect(despres.totals.liniesConfirmades).toBe(1);
     expect(despres.totals.liniesPendents).toBe(2);
+
+    await fastify.close();
+  });
+
+  it('GET /panells/oficina: resumen liviano de incidencies (capa 10), sin el detalle completo', async () => {
+    const fastify = construirServidor();
+
+    const creada = await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/comandes',
+      payload: { origen: 'telefon', linies: [{ producteId, unitatsDemanades: 1 }] },
+    });
+    const comandaId = cuerpoJson<{ id: number }>(creada).id;
+    const comandaUuid = await entorn.poolTest.query<{ id: string }>(
+      `SELECT id FROM comanda WHERE id_seq = $1`,
+      [comandaId],
+    );
+    await entorn.poolTest.query(
+      `INSERT INTO incidencia_comanda (comanda_id, tipus, detall) VALUES ($1, 'sense_dades_client', 'Sense NIF ni email')`,
+      [comandaUuid.rows[0]!.id],
+    );
+
+    const cuerpo = cuerpoJson<PanellOficinaApi>(
+      await fastify.inject({ method: 'GET', url: '/api/v1/panells/oficina' }),
+    );
+    const fila = cuerpo.dades.find((f) => f.comandaId === comandaId);
+    expect(fila?.totalIncidencies).toBe(1);
+    expect(fila?.tipusIncidencia).toBe('sense_dades_client');
 
     await fastify.close();
   });
