@@ -1,0 +1,939 @@
+openapi: 3.0.3
+info:
+  title: dPagès API v1
+  version: '1.0'
+  description: >
+    API interna del sistema de gestión de comandas de dPagès. Fuente única de
+    verdad del contrato entre backend y frontend — ver también
+    docs/contrato-api.md para las explicaciones de negocio detrás de cada
+    regla (por qué el empaquetado exige valores obligatorios, qué es
+    kgEditable, etc.).
+
+    Refleja el estado confirmado hasta la capa 11: detalle de incidencias,
+    CORS, alta manual de cliente, dirección de entrega del pedido, fecha y
+    observación por línea, y código de tarifa. Los campos de agrupación de
+    artículo (formato, envasado, agrupación de producción) quedan fuera
+    hasta que el cliente los confirme.
+  contact:
+    name: VisioFlow Tech
+
+servers:
+  - url: http://localhost:8080
+    description: Desarrollo local
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Salut
+  - name: Categories
+  - name: Productes
+  - name: Tarifes
+  - name: Clients
+  - name: Transportistes
+  - name: Comandes
+  - name: Empaquetat
+  - name: Panells
+
+paths:
+  /salut:
+    get:
+      tags: [Salut]
+      summary: Estado del servicio
+      security: []
+      responses:
+        '200':
+          description: Servicio operativo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  estat: { type: string, example: ok }
+                  versio: { type: string, example: '0.1.0' }
+                  baseDades: { type: string, example: ok }
+
+  /api/v1/categories:
+    get:
+      tags: [Categories]
+      summary: Listar categorías de artículo
+      parameters:
+        - $ref: '#/components/parameters/Pagina'
+        - $ref: '#/components/parameters/Mida'
+      responses:
+        '200':
+          description: Listado paginado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dades:
+                    type: array
+                    items: { $ref: '#/components/schemas/Categoria' }
+                  paginacio: { $ref: '#/components/schemas/Paginacio' }
+
+  /api/v1/categories/{id}:
+    patch:
+      tags: [Categories]
+      summary: Actualizar una categoría (parcial)
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agrupacioRendiment: { type: string, nullable: true }
+      responses:
+        '200':
+          description: Categoría actualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Categoria' }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+
+  /api/v1/productes:
+    get:
+      tags: [Productes]
+      summary: Listar artículos del catálogo
+      parameters:
+        - name: categoriaId
+          in: query
+          schema: { type: integer }
+        - name: tipus
+          in: query
+          schema: { type: string, enum: [simple, variable] }
+        - name: actiu
+          in: query
+          schema: { type: boolean }
+        - name: cerca
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Pagina'
+        - $ref: '#/components/parameters/Mida'
+      responses:
+        '200':
+          description: Listado paginado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dades:
+                    type: array
+                    items: { $ref: '#/components/schemas/Producte' }
+                  paginacio: { $ref: '#/components/schemas/Paginacio' }
+    post:
+      tags: [Productes]
+      summary: Crear un artículo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProducteEntrada' }
+      responses:
+        '201':
+          description: Artículo creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Producte' }
+        '400': { $ref: '#/components/responses/Validacio' }
+
+  /api/v1/productes/{id}:
+    get:
+      tags: [Productes]
+      summary: Obtener un artículo
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Artículo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Producte' }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+    patch:
+      tags: [Productes]
+      summary: Actualizar un artículo (parcial)
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProducteEntrada' }
+      responses:
+        '200':
+          description: Artículo actualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Producte' }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+
+  /api/v1/tarifes/matriu:
+    get:
+      tags: [Tarifes]
+      summary: Matriz de precios (tarifa × artículo)
+      parameters:
+        - name: categoriaId
+          in: query
+          schema: { type: integer }
+        - name: cerca
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Pagina'
+        - $ref: '#/components/parameters/Mida'
+      responses:
+        '200':
+          description: Matriz paginada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tarifes:
+                    type: array
+                    items: { $ref: '#/components/schemas/TarifaResum' }
+                  dades:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        producteId: { type: integer }
+                        codi: { type: string }
+                        descripcio: { type: string }
+                        preus:
+                          type: object
+                          additionalProperties:
+                            type: string
+                            nullable: true
+                          example: { '1': '9.86', '2': null }
+                  paginacio: { $ref: '#/components/schemas/Paginacio' }
+
+  /api/v1/tarifes/{tarifaId}/preus/{producteId}:
+    patch:
+      tags: [Tarifes]
+      summary: Actualizar el precio de un artículo en una tarifa (edición de celda)
+      parameters:
+        - name: tarifaId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: producteId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [preu]
+              properties:
+                preu: { type: string, example: '9.50' }
+      responses:
+        '200':
+          description: Precio actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tarifaId: { type: integer }
+                  producteId: { type: integer }
+                  preu: { type: string }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+
+  /api/v1/clients:
+    get:
+      tags: [Clients]
+      summary: Listar clientes
+      parameters:
+        - name: cerca
+          in: query
+          schema: { type: string }
+        - name: tarifaId
+          in: query
+          schema: { type: integer }
+        - name: actiu
+          in: query
+          schema: { type: boolean }
+        - $ref: '#/components/parameters/Pagina'
+        - $ref: '#/components/parameters/Mida'
+      responses:
+        '200':
+          description: Listado paginado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dades:
+                    type: array
+                    items: { $ref: '#/components/schemas/Client' }
+                  paginacio: { $ref: '#/components/schemas/Paginacio' }
+    post:
+      tags: [Clients]
+      summary: >
+        Alta manual de cliente. Necesario cuando un pedido entra por
+        teléfono/WhatsApp/email de alguien que todavía no existe en el
+        sistema.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClientEntrada' }
+      responses:
+        '201':
+          description: Cliente creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Client' }
+        '400': { $ref: '#/components/responses/Validacio' }
+
+  /api/v1/clients/{id}:
+    patch:
+      tags: [Clients]
+      summary: Actualizar un cliente (parcial) — asignar tarifa o transportista por defecto
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tarifaId: { type: integer, nullable: true }
+                transportistaDefecteId: { type: integer, nullable: true }
+      responses:
+        '200':
+          description: Cliente actualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Client' }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+
+  /api/v1/transportistes:
+    get:
+      tags: [Transportistes]
+      summary: Listar transportistas
+      responses:
+        '200':
+          description: Listado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dades:
+                    type: array
+                    items: { $ref: '#/components/schemas/Transportista' }
+
+  /api/v1/comandes:
+    get:
+      tags: [Comandes]
+      summary: Listar pedidos
+      parameters:
+        - name: estat
+          in: query
+          schema: { $ref: '#/components/schemas/EstatComanda' }
+        - name: clientId
+          in: query
+          schema: { type: integer }
+        - name: origen
+          in: query
+          schema: { $ref: '#/components/schemas/OrigenComanda' }
+        - name: dataDes
+          in: query
+          schema: { type: string, format: date }
+        - name: dataFins
+          in: query
+          schema: { type: string, format: date }
+        - name: cerca
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Pagina'
+        - $ref: '#/components/parameters/Mida'
+      responses:
+        '200':
+          description: Listado paginado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dades:
+                    type: array
+                    items: { $ref: '#/components/schemas/ComandaResum' }
+                  paginacio: { $ref: '#/components/schemas/Paginacio' }
+    post:
+      tags: [Comandes]
+      summary: Alta manual de pedido (teléfono, email, WhatsApp)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ComandaEntrada' }
+      responses:
+        '201':
+          description: Pedido creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComandaDetall' }
+        '400': { $ref: '#/components/responses/Validacio' }
+
+  /api/v1/comandes/{id}:
+    get:
+      tags: [Comandes]
+      summary: Detalle de un pedido, con líneas e incidencias
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Pedido
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComandaDetall' }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+    patch:
+      tags: [Comandes]
+      summary: Actualizar cabecera del pedido (parcial)
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ComandaEntradaParcial' }
+      responses:
+        '200':
+          description: Pedido actualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComandaDetall' }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+        '409': { $ref: '#/components/responses/Conflicte' }
+
+  /api/v1/comandes/{comandaId}/linies/{liniaId}:
+    delete:
+      tags: [Comandes]
+      summary: Eliminar una línea de pedido
+      parameters:
+        - name: comandaId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: liniaId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Eliminada }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+        '409': { $ref: '#/components/responses/Conflicte' }
+
+  /api/v1/comandes/{comandaId}/linies/{liniaId}/lliurament:
+    patch:
+      tags: [Empaquetat]
+      summary: >
+        Registrar unidades y kilos entregados de una línea (panel de
+        empaquetado). Ambos campos son obligatorios y no pueden ser cero —
+        ver docs/contrato-api.md sección 5 para el motivo de negocio. Si el
+        pedido está congelado, devuelve 409.
+      parameters:
+        - name: comandaId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: liniaId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [unitatsLliurades, kgLliurats]
+              properties:
+                unitatsLliurades: { type: integer, minimum: 1 }
+                kgLliurats: { type: string, example: '9.750' }
+      responses:
+        '200':
+          description: Línea confirmada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  liniaId: { type: integer }
+                  comandaId: { type: integer }
+                  unitatsLliurades: { type: integer }
+                  kgLliurats: { type: string }
+                  confirmatA: { type: string, format: date-time }
+                  confirmatPer:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      nom: { type: string }
+        '400': { $ref: '#/components/responses/Validacio' }
+        '409': { $ref: '#/components/responses/Conflicte' }
+
+  /api/v1/panells/oficina:
+    get:
+      tags: [Panells]
+      summary: Panel de oficina (solo lectura, con subtotales sobre todo lo filtrado)
+      parameters:
+        - name: dataExpedicioDes
+          in: query
+          schema: { type: string, format: date }
+        - name: dataExpedicioFins
+          in: query
+          schema: { type: string, format: date }
+        - name: transportistaId
+          in: query
+          schema: { type: integer }
+        - name: estat
+          in: query
+          schema: { $ref: '#/components/schemas/EstatComanda' }
+        - name: clientId
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/Pagina'
+        - $ref: '#/components/parameters/Mida'
+      responses:
+        '200':
+          description: Panel con totales
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totals:
+                    type: object
+                    properties:
+                      comandes: { type: integer }
+                      linies: { type: integer }
+                      totalKg: { type: string }
+                      totalEur: { type: string }
+                  dades:
+                    type: array
+                    items: { $ref: '#/components/schemas/ComandaResum' }
+                  paginacio: { $ref: '#/components/schemas/Paginacio' }
+
+  /api/v1/panells/obrador:
+    get:
+      tags: [Panells]
+      summary: Panel de obrador (solo lectura, agrupado por artículo)
+      parameters:
+        - name: dataProduccioDes
+          in: query
+          schema: { type: string, format: date }
+        - name: dataProduccioFins
+          in: query
+          schema: { type: string, format: date }
+        - name: categoriaId
+          in: query
+          schema: { type: integer }
+        - name: tipus
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Pagina'
+        - $ref: '#/components/parameters/Mida'
+      responses:
+        '200':
+          description: Panel con totales
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totals:
+                    type: object
+                    properties:
+                      linies: { type: integer }
+                      totalUnitats: { type: integer }
+                      totalKg: { type: string }
+                  dades: { type: array, items: { type: object } }
+                  paginacio: { $ref: '#/components/schemas/Paginacio' }
+
+  /api/v1/panells/empaquetat:
+    get:
+      tags: [Panells]
+      summary: Panel de empaquetado (única pantalla operativa con edición, vía /lliurament)
+      parameters:
+        - name: dataExpedicioDes
+          in: query
+          schema: { type: string, format: date }
+        - name: dataExpedicioFins
+          in: query
+          schema: { type: string, format: date }
+        - name: transportistaId
+          in: query
+          schema: { type: integer }
+        - name: clientId
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/Pagina'
+        - $ref: '#/components/parameters/Mida'
+      responses:
+        '200':
+          description: Panel con totales
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totals:
+                    type: object
+                    properties:
+                      linies: { type: integer }
+                      unitatsDemanades: { type: integer }
+                      unitatsLliurades: { type: integer }
+                      kgDemanats: { type: string }
+                      kgLliurats: { type: string }
+                      liniesConfirmades: { type: integer }
+                      liniesPendents: { type: integer }
+                  dades: { type: array, items: { type: object } }
+                  paginacio: { $ref: '#/components/schemas/Paginacio' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Firebase ID token
+      description: >
+        Requerido en todas las rutas excepto /salut. En desarrollo local con
+        AUTH_DISABLED=true no hace falta enviarlo.
+
+  parameters:
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer }
+    Pagina:
+      name: pagina
+      in: query
+      schema: { type: integer, default: 1 }
+    Mida:
+      name: mida
+      in: query
+      schema: { type: integer, default: 50, maximum: 200 }
+
+  responses:
+    NoTrobat:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Validacio:
+      description: Error de validación
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflicte:
+      description: Conflicto (p. ej. pedido congelado)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    EstatComanda:
+      type: string
+      enum: [oberta, en_proces, tancada, amb_incidencia]
+
+    OrigenComanda:
+      type: string
+      enum: [web, email, whatsapp, telefon]
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            codi:
+              type: string
+              enum: [VALIDACIO, NO_AUTENTICAT, SENSE_PERMIS, NO_TROBAT, CONFLICTE, ERROR_INTERN]
+            missatge: { type: string }
+            detalls:
+              type: array
+              items:
+                type: object
+                properties:
+                  camp: { type: string }
+                  missatge: { type: string }
+
+    Paginacio:
+      type: object
+      properties:
+        pagina: { type: integer }
+        mida: { type: integer }
+        total: { type: integer }
+        totalPagines: { type: integer }
+
+    Categoria:
+      type: object
+      properties:
+        id: { type: integer }
+        nom: { type: string }
+        elaboratPorc: { type: boolean }
+        agrupacioRendiment: { type: string, nullable: true }
+
+    Producte:
+      type: object
+      properties:
+        id: { type: integer }
+        codi: { type: string }
+        descripcio: { type: string }
+        descripcioVenda: { type: string }
+        tipus: { type: string, enum: [simple, variable] }
+        pesKg:
+          type: string
+          nullable: true
+          description: 'Null = artículo «a medida»; el peso de línea queda editable'
+        preuVenda: { type: string }
+        actiu: { type: boolean }
+        categoria:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            nom: { type: string }
+
+    ProducteEntrada:
+      type: object
+      properties:
+        codi: { type: string }
+        descripcio: { type: string }
+        descripcioVenda: { type: string }
+        tipus: { type: string, enum: [simple, variable] }
+        pesKg: { type: string, nullable: true }
+        preuVenda: { type: string }
+        categoriaId: { type: integer }
+
+    Tarifa:
+      type: object
+      description: Referencia mínima, usada dentro de client.tarifa, comanda.tarifa, etc.
+      properties:
+        id: { type: integer }
+        nom: { type: string }
+
+    TarifaResum:
+      type: object
+      description: Forma usada en la matriz de tarifas (GET /tarifes/matriu), con código propio.
+      properties:
+        id: { type: integer }
+        codi: { type: string }
+        nom: { type: string }
+
+    Client:
+      type: object
+      properties:
+        id: { type: integer }
+        codi: { type: string }
+        nom: { type: string }
+        nif: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        telefon: { type: string, nullable: true }
+        poblacio: { type: string, nullable: true }
+        tarifa:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            nom: { type: string }
+        transportistaDefecte:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            nom: { type: string }
+        actiu: { type: boolean }
+
+    ClientEntrada:
+      type: object
+      required: [codi, nom, poblacio]
+      description: Mínimo confirmado por el prototipo. El resto son opcionales.
+      properties:
+        codi: { type: string }
+        nom: { type: string }
+        poblacio: { type: string }
+        tarifaId: { type: integer, nullable: true }
+        email: { type: string, nullable: true }
+        telefon: { type: string, nullable: true }
+        nif: { type: string, nullable: true }
+
+    Transportista:
+      type: object
+      properties:
+        id: { type: integer }
+        nom: { type: string }
+        actiu: { type: boolean }
+
+    ComandaResum:
+      type: object
+      description: Forma usada en listados (GET /comandes, panell d'oficina)
+      properties:
+        id: { type: integer }
+        num: { type: string }
+        origen: { $ref: '#/components/schemas/OrigenComanda' }
+        estat: { $ref: '#/components/schemas/EstatComanda' }
+        client:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            nom: { type: string }
+            poblacio: { type: string }
+        tarifa:
+          type: object
+          nullable: true
+          properties: { id: { type: integer }, nom: { type: string } }
+        transportista:
+          type: object
+          nullable: true
+          properties: { id: { type: integer }, nom: { type: string } }
+        poblacioDesti: { type: string, nullable: true }
+        dataComanda: { type: string, format: date-time }
+        dataProduccio: { type: string, format: date-time, nullable: true }
+        dataExpedicio: { type: string, format: date-time, nullable: true }
+        dataLliurament: { type: string, format: date-time, nullable: true }
+        bultos: { type: integer, nullable: true }
+        totalLinies: { type: integer }
+        totalKg: { type: string }
+        totalEur: { type: string }
+        congelada: { type: boolean }
+        totalIncidencies:
+          type: integer
+          description: Cantidad de incidencias asociadas al pedido
+        tipusIncidencia:
+          type: string
+          nullable: true
+          description: Null si hay más de un tipo de incidencia mezclado
+
+    ComandaLinia:
+      type: object
+      properties:
+        id: { type: integer }
+        ordinal: { type: integer }
+        producte:
+          type: object
+          nullable: true
+          description: Null si el artículo no se pudo resolver (ver incidencies)
+          properties:
+            id: { type: integer }
+            codi: { type: string }
+            descripcio: { type: string }
+        unitatsDemanades: { type: integer }
+        kgDemanats: { type: string }
+        kgEditable:
+          type: boolean
+          description: Calculado por el backend según si el artículo tiene pesKg
+        dataProduccio:
+          type: string
+          format: date-time
+          nullable: true
+          description: Fecha de producción propia de la línea, distinta de la del pedido
+        obsProduccio:
+          type: string
+          nullable: true
+          description: Observación de producción propia de la línea
+        unitatsLliurades: { type: integer }
+        kgLliurats: { type: string }
+        confirmatA: { type: string, format: date-time, nullable: true }
+        preuUnitari: { type: string }
+        totalLinia: { type: string }
+        esborrat: { type: boolean }
+
+    Incidencia:
+      type: object
+      properties:
+        tipus:
+          type: string
+          example: article_no_resolt
+        detall: { type: string }
+        creatA: { type: string, format: date-time }
+
+    ComandaDetall:
+      type: object
+      description: Forma usada en GET /comandes/:id y POST /comandes
+      properties:
+        id: { type: integer }
+        num: { type: string }
+        origen: { $ref: '#/components/schemas/OrigenComanda' }
+        estat: { $ref: '#/components/schemas/EstatComanda' }
+        client:
+          type: object
+          nullable: true
+          properties: { id: { type: integer }, nom: { type: string }, poblacio: { type: string } }
+        tarifa:
+          type: object
+          nullable: true
+          properties: { id: { type: integer }, nom: { type: string } }
+        transportista:
+          type: object
+          nullable: true
+          properties: { id: { type: integer }, nom: { type: string } }
+        poblacioDesti: { type: string, nullable: true }
+        adrecaLliurament:
+          type: string
+          nullable: true
+          description: Dirección de entrega, distinta de la población de destino
+        dataComanda: { type: string, format: date-time }
+        dataProduccio: { type: string, format: date-time, nullable: true }
+        dataExpedicio: { type: string, format: date-time, nullable: true }
+        dataLliurament: { type: string, format: date-time, nullable: true }
+        bultos: { type: integer, nullable: true }
+        obsProduccio: { type: string, nullable: true }
+        obsLliurament: { type: string, nullable: true }
+        totalKg: { type: string }
+        totalEur: { type: string }
+        congelada: { type: boolean }
+        congelatA: { type: string, format: date-time, nullable: true }
+        linies:
+          type: array
+          items: { $ref: '#/components/schemas/ComandaLinia' }
+        incidencies:
+          type: array
+          items: { $ref: '#/components/schemas/Incidencia' }
+
+    ComandaEntrada:
+      type: object
+      required: [origen, clientId, linies]
+      properties:
+        origen: { $ref: '#/components/schemas/OrigenComanda' }
+        clientId: { type: integer }
+        dataLliurament: { type: string, format: date-time, nullable: true }
+        transportistaId: { type: integer, nullable: true }
+        obsLliurament: { type: string, nullable: true }
+        linies:
+          type: array
+          items:
+            type: object
+            required: [producteId, unitatsDemanades]
+            properties:
+              producteId: { type: integer }
+              unitatsDemanades: { type: integer, minimum: 1 }
+              kgDemanats:
+                type: string
+                nullable: true
+                description: Sólo si el artículo es «a medida» (sin pesKg)
+
+    ComandaEntradaParcial:
+      type: object
+      properties:
+        tarifaId: { type: integer, nullable: true }
+        transportistaId: { type: integer, nullable: true }
+        poblacioDesti: { type: string, nullable: true }
+        adrecaLliurament: { type: string, nullable: true }
+        dataProduccio: { type: string, format: date-time, nullable: true }
+        dataExpedicio: { type: string, format: date-time, nullable: true }
+        dataLliurament: { type: string, format: date-time, nullable: true }
+        bultos: { type: integer, nullable: true }
+        obsProduccio: { type: string, nullable: true }
+        obsLliurament: { type: string, nullable: true }
