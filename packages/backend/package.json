@@ -23,6 +23,7 @@
   "dependencies": {
     "@dpages/shared": "*",
     "fastify": "^5.1.0",
+    "firebase-admin": "^14.2.0",
     "jose": "^5.9.0",
     "pg": "^8.13.0",
     "pino": "^9.6.0",

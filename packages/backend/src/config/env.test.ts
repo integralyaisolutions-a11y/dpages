@@ -149,4 +149,30 @@ describe('parsearEnv', () => {
       ).toBe(true);
     });
   });
+
+  describe('ADR-021 — guarda de AUTH_DISABLED', () => {
+    it('AUTH_DISABLED es false por defecto, y sólo "true" literal lo activa', () => {
+      expect(parsearEnv(entornoValido).AUTH_DISABLED).toBe(false);
+      expect(parsearEnv({ ...entornoValido, AUTH_DISABLED: 'cualquier-cosa' }).AUTH_DISABLED).toBe(
+        false,
+      );
+      expect(parsearEnv({ ...entornoValido, AUTH_DISABLED: 'true' }).AUTH_DISABLED).toBe(true);
+    });
+
+    it('rechaza AUTH_DISABLED=true con NODE_ENV=production', () => {
+      expect(() =>
+        parsearEnv({ ...entornoValido, NODE_ENV: 'production', AUTH_DISABLED: 'true' }),
+      ).toThrow(/AUTH_DISABLED/);
+    });
+
+    it('acepta AUTH_DISABLED=true fuera de producción', () => {
+      expect(() =>
+        parsearEnv({ ...entornoValido, NODE_ENV: 'development', AUTH_DISABLED: 'true' }),
+      ).not.toThrow();
+    });
+
+    it('permite NODE_ENV=production sin AUTH_DISABLED', () => {
+      expect(() => parsearEnv({ ...entornoValido, NODE_ENV: 'production' })).not.toThrow();
+    });
+  });
 });

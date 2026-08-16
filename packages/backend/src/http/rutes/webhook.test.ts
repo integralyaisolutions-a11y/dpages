@@ -64,6 +64,13 @@ beforeAll(async () => {
 
   poolTest = new Pool({ connectionString: env.DATABASE_URL, options: `-c search_path=${esquema}` });
 
+  // AUTH_DISABLED=false para todo este archivo (ADR-021): si alguna vez el
+  // hook de autenticación de negocio quedara mal registrado y terminara
+  // aplicándose también acá, los tests de "firma válida" de más abajo — que
+  // nunca mandan cabecera Authorization con un token de Firebase — pasarían
+  // a fallar con 401 en vez de 200, delatando la regresión.
+  process.env.AUTH_DISABLED = 'false';
+
   // El pool singleton de la app (db/pool.ts) todavía no abrió ninguna
   // conexión física en este proceso de test — recién lo hace en la primera
   // consulta real. `PGOPTIONS` es el mecanismo que usa `pg` como fallback
@@ -81,6 +88,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   delete process.env.PGOPTIONS;
+  delete process.env.AUTH_DISABLED;
   await poolTest.end();
   const cleanup = new Client({ connectionString: env.DATABASE_URL });
   await cleanup.connect();

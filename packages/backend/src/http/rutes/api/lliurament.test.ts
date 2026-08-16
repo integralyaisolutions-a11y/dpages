@@ -65,8 +65,9 @@ describe('API negoci — PATCH .../lliurament (Postgres real, esquema aislado)',
       kgLliurats: '9.750',
     });
     expect(cuerpo.confirmatA).toMatch(/Z$/);
-    // Firebase Auth llega en una capa posterior — mientras tanto es un valor fijo, no un usuario real.
-    expect(cuerpo.confirmatPer).toEqual({ id: 0, nom: 'Desenvolupament (sense autenticació)' });
+    // AUTH_DISABLED=true (default de test, ver vitest.config.ts): el middleware
+    // (ADR-021) adjunta este uid fijo de desarrollo en vez de exigir un token real.
+    expect(cuerpo.confirmatPer).toEqual({ id: 0, nom: 'dev-sense-auth' });
 
     await fastify.close();
   });

@@ -16,9 +16,6 @@ import {
   resolverTransportistaUuid,
 } from './comu.js';
 
-/** Nombre a mostrar cuando una línea SÍ está confirmada — ver misma nota en lliurament.ts sobre Firebase pendiente. */
-const OPERARI_SENSE_AUTH_NOM = 'Desenvolupament (sense autenticació)';
-
 async function resolverFiltreEntitat(
   reply: FastifyReply,
   valor: unknown,
@@ -351,11 +348,12 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       unitats_lliurades: number;
       kg_lliurats: string;
       confirmat_a: Date | null;
+      confirmat_per: string | null;
     }>(
       `SELECT cl.id_seq, c.id_seq AS comanda_id_seq, c.num, c.data_expedicio, c.data_lliurament,
               tr.nom AS transportista_nom, cli.nom AS client_nom, p.codi, p.descripcio,
               cl.unitats_demanades, cl.pes_calculat_kg AS kg_demanats, cl.unitats_lliurades,
-              cl.kg_lliurats, cl.confirmat_a
+              cl.kg_lliurats, cl.confirmat_a, cl.confirmat_per
        ${base}
        ORDER BY c.data_expedicio ASC NULLS LAST, c.num ASC, cl.ordinal ASC
        LIMIT $${valors.length + 1} OFFSET $${valors.length + 2}`,
@@ -380,7 +378,10 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       unitatsLliurades: f.unitats_lliurades,
       kgLliurats: f.kg_lliurats,
       confirmatA: formatearDataApi(f.confirmat_a),
-      confirmatPer: f.confirmat_a !== null ? OPERARI_SENSE_AUTH_NOM : null,
+      // Sin tabla de usuarios todavía (capa posterior): se muestra el uid
+      // real de Firebase (o el marcador de desarrollo con AUTH_DISABLED),
+      // no un nombre — no hay ningún directorio del que sacarlo.
+      confirmatPer: f.confirmat_per,
     }));
 
     return {

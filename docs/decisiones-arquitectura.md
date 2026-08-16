@@ -704,20 +704,17 @@ GENERATED ALWAYS AS IDENTITY` de sólo lectura para el mundo externo
   de que el pedido "entra en producción": la regla de negocio real que
   resuelve esa tensión no está definida todavía, así que acá se implementa
   el criterio que se pidió, no una interpretación propia.
-- **`confirmatPer` es un valor fijo, no un usuario real** (`{ id: 0, nom:
-"Desenvolupament (sense autenticació)" }` en la respuesta del
-  endpoint de empaquetado; la columna `comanda_linia.confirmat_per` guarda
-  un marcador de texto fijo, no un uid de Firebase). Firebase Auth llega en
-  una capa posterior — mientras tanto no hay ningún operario identificable,
-  y este placeholder deja rastro de que la confirmación pasó por acá sin
-  inventar una identidad que no existe.
-- **Ningún endpoint de negocio valida autenticación todavía** (contrato,
-  sección 2: "mientras Firebase no esté configurado, el backend en modo
-  desarrollo acepta peticiones sin token"). A diferencia del endpoint de
-  tareas (ADR-009), que sí tiene un secreto compartido como paso
-  intermedio, acá no hay ningún mecanismo — es la brecha de seguridad
-  esperada de esta capa, que se cierra cuando llegue Firebase Auth, no
-  antes.
+- ~~**`confirmatPer` es un valor fijo, no un usuario real.**~~ **Actualizado
+  por ADR-021**: desde la capa 9, `confirmatPer` lleva el `uid` real que
+  adjunta el middleware de autenticación (`{ id: 0, nom: usuari.uid }` — el
+  `id: 0` se mantiene porque todavía no hay tabla de usuarios; `nom` ya no
+  es un placeholder). En modo desarrollo sin token (`AUTH_DISABLED=true`)
+  el uid es el fijo `"dev-sense-auth"`, no un operario real.
+- ~~**Ningún endpoint de negocio valida autenticación todavía.**~~
+  **Actualizado por ADR-021**: la capa 9 agrega el middleware real de
+  Firebase Auth sobre todas las rutas de `/api/v1`. La brecha descrita acá
+  ya está cerrada, salvo el bypass explícito y controlado de desarrollo
+  (`AUTH_DISABLED`, ver ADR-021).
 
 **Consecuencias**: Michel puede construir el frontend contra esta API real
 desde ahora — la forma exacta coincide con el contrato, incluidos los
@@ -867,3 +864,78 @@ real de que la calidad del dato de NIF en WooCommerce no alcanza para
 resolverlo sólo con código — si Integraly confirma otro criterio o aporta
 un dato más confiable (P-11), esta ADR se marca `Superseded` y se corrige
 `resolucio-client.ts`, no el resto del sistema.
+
+---
+
+## ADR-021 — Firebase Auth: autenticado sí, restringido por rol no
+
+**Estado**: Aceptado.
+
+**Contexto**: el contrato de API (`docs/contrato-api.md`, sección 2) exige
+`Authorization: Bearer <token de Firebase>` en toda ruta de negocio salvo
+`/salut`, y hasta ahora eso no estaba implementado — el backend en modo
+desarrollo aceptaba cualquier petición sin token (ver ADR-019, brecha
+esperada de esa capa). Michel crea el proyecto de Firebase recién ahora
+(guía de GCP); no hay credenciales reales todavía.
+
+Sobre permisos: el cliente decidió (ver `contexto-negocio.md`, sección
+"Roles y permisos") que no hace falta restringir accesos — todo usuario
+autenticado ve y opera cualquiera de los cuatro paneles, el rol sólo decide
+la ubicación por defecto al entrar. VisioFlow decidió igual mantener
+Firebase Auth con roles (mismo criterio de la propuesta original), para
+tener `uid` y rol disponibles en auditoría aunque no se usen para bloquear
+nada.
+
+**Decisión**:
+
+- **Middleware de verificación real, no una capa cosmética.** Un
+  `preHandler` de Fastify (`crearMiddlewareAuth`, en `http/auth-firebase.ts`)
+  usa `firebase-admin` (`getAuth(app).verifyIdToken`) para validar el token
+  del header `Authorization`. Sin token o con un token inválido: `401
+NO_AUTENTICAT`, misma forma de error del contrato. No valida ningún rol —
+  cualquier usuario autenticado pasa.
+- **El hook vive sólo dentro del scope de plugin `/api/v1`.** Se registra
+  con `api.addHook('preHandler', ...)` adentro del `fastify.register(...,
+{ prefix: '/api/v1' })` de `servidor.ts`, antes de las rutas de negocio.
+  `/salut`, `/webhooks/woocommerce` y `/tasques/*` se registran en la
+  instancia externa de `fastify`, fuera de ese scope — la encapsulación de
+  plugins de Fastify los excluye automáticamente, sin necesidad de
+  chequear rutas a mano. Cada uno sigue con su propio mecanismo (sin
+  autenticación, HMAC, y secreto compartido/OIDC respectivamente — ADR-009,
+  ADR-016).
+- **Bypass de desarrollo, mismo criterio que la guarda de `WC_BASE_URL`
+  (config/env.ts).** `AUTH_DISABLED=true` salta la verificación real y
+  adjunta un uid fijo (`"dev-sense-auth"`, rol `null`) — pero sólo existe
+  como variable explícita, y `config/env.ts` rechaza el arranque completo
+  si `NODE_ENV=production` y `AUTH_DISABLED=true` a la vez. El caso seguro
+  (token obligatorio) es el default; el bypass es opt-in y estructuralmente
+  imposible de desplegar a producción por descuido.
+- **Verificador inyectable, para no depender de un proyecto de Firebase
+  real en los tests.** `crearMiddlewareAuth(verificador: VerificadorToken =
+verificarTokenFirebase)` recibe la función de verificación como parámetro
+  — los tests inyectan un verificador simulado (`auth-firebase.test.ts`);
+  la implementación real (`verificarTokenFirebase`) inicializa el SDK de
+  Firebase de forma perezosa (recién en el primer uso real, nunca al
+  importar el módulo) y nunca se ejecuta en este repo hoy. En Cloud Run
+  usará las credenciales por defecto de la instancia (ADC), sin variables
+  nuevas; en local, sólo si algún día se prueba con `AUTH_DISABLED=false`
+  contra un proyecto real, hace falta `GOOGLE_APPLICATION_CREDENTIALS`
+  (estándar del SDK, no una variable propia — ver `.env.example`).
+- **`uid` y `rol` quedan en `req.usuari`** (augmentación de tipos de
+  Fastify, mismo patrón que `req.rawBody` en `webhook.ts`), disponibles
+  para el resto del handler. Primer uso real: `PATCH
+.../linies/:liniaId/lliurament` graba el `uid` en
+  `comanda_linia.confirmat_per` (antes un marcador de texto fijo, ver
+  ADR-019) y lo devuelve en `confirmatPer.nom` de la respuesta — deja de
+  ser un placeholder.
+
+**Consecuencias**: las rutas de negocio exigen autenticación real desde
+ahora (salvo el bypass explícito de desarrollo); ningún endpoint bloquea
+por rol, como pidió el cliente. Cuando exista el proyecto de Firebase real,
+activar la verificación es sólo configurar `AUTH_DISABLED` (o quitarla) y,
+en local, `GOOGLE_APPLICATION_CREDENTIALS` — no cambia ningún código. El
+costo es que `req.usuari.rol` queda sin uso real por ahora (ninguna ruta lo
+lee) más allá de quedar disponible para cuando el frontend decida el panel
+por defecto y para auditoría; si el cliente cambia de criterio y pide
+restringir por rol más adelante, el punto de enganche ya existe
+(`req.usuari.rol` en cada handler) y no hace falta tocar el middleware.

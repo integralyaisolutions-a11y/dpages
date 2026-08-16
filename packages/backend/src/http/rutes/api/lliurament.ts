@@ -10,17 +10,6 @@ import {
 } from './comu.js';
 
 /**
- * Firebase Auth llega en una capa posterior (el usuario lo pidió
- * explícitamente para esta capa: "dejá el modo desarrollo sin token").
- * Mientras tanto no hay ningún operario real identificable — este valor
- * fijo deja rastro de que la confirmación pasó por acá, sin inventar una
- * identidad. `confirmat_per` en la base guarda un marcador simple, no un
- * uid real, hasta que exista autenticación de verdad.
- */
-const OPERARI_SENSE_AUTH = 'dev-sense-auth';
-const OPERARI_SENSE_AUTH_NOM = 'Desenvolupament (sense autenticació)';
-
-/**
  * El endpoint más delicado del sistema (contrato, sección 5): unitats i kg
  * lliurats son OBLIGATORIOS y nunca pueden quedar en cero, aunque
  * coincidan con lo pedido — es doble confirmación deliberada (mermas →
@@ -63,6 +52,11 @@ export function registrarRutaLliurament(fastify: FastifyInstance): void {
       return enviarConflicte(reply, 'La comanda està congelada i ja no admet canvis');
     }
 
+    // El middleware de auth (ADR-021) siempre lo deja seteado antes de
+    // llegar acá — si faltara, ya habría respondido 401 y este handler ni
+    // se ejecutaría.
+    const usuari = req.usuari!;
+
     const resultat = await pool.query<{ id_seq: string; confirmat_a: Date }>(
       `UPDATE comanda_linia SET
          unitats_lliurades = $3,
@@ -71,17 +65,20 @@ export function registrarRutaLliurament(fastify: FastifyInstance): void {
          confirmat_per = $5
        WHERE id_seq = $1 AND comanda_id = $2
        RETURNING id_seq, confirmat_a`,
-      [liniaIdPublic, comanda.rows[0].id, cos.unitatsLliurades, cos.kgLliurats, OPERARI_SENSE_AUTH],
+      [liniaIdPublic, comanda.rows[0].id, cos.unitatsLliurades, cos.kgLliurats, usuari.uid],
     );
     if (!resultat.rows[0]) return enviarNoTrobat(reply, 'Línia no trobada');
 
+    // Sin tabla de usuarios todavía (capa posterior): `id` queda en 0 como
+    // marcador estructural, `nom` muestra el uid real de Firebase — no es
+    // lindo, pero es honesto (no inventa un nombre que no tenemos).
     const resposta: LliuramentRespostaApi = {
       liniaId: Number(resultat.rows[0].id_seq),
       comandaId: comandaIdPublic,
       unitatsLliurades: cos.unitatsLliurades!,
       kgLliurats: cos.kgLliurats!,
       confirmatA: formatearDataApi(resultat.rows[0].confirmat_a)!,
-      confirmatPer: { id: 0, nom: OPERARI_SENSE_AUTH_NOM },
+      confirmatPer: { id: 0, nom: usuari.uid },
     };
     return resposta;
   });

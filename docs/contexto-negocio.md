@@ -32,6 +32,20 @@ está mal.
 - Idioma de salida: catalán. Bilingüe catalán/castellano posible, sin
   confirmar (ver "Pendientes" abajo).
 
+## Roles y permisos
+
+**Decisión del cliente**: no hace falta restringir accesos por rol. Todo el
+mundo ve todo — cualquier usuario autenticado puede consultar y operar
+cualquiera de los cuatro paneles (oficina, obrador, empaquetado,
+producció/planificació). El rol de cada usuario sólo decide en qué panel
+lo ubica el sistema por defecto al entrar, no qué puede ver o hacer.
+
+**Decisión de VisioFlow**: mantener Firebase Auth con roles (custom claims)
+de todos modos, mismo criterio de la propuesta original — no para bloquear
+acceso a ningún endpoint, sino para tener el `uid` y el rol de quien hace
+cada acción disponibles para auditoría (`comanda_linia.confirmat_per`, por
+ejemplo). Implementación: ADR-021 en `decisiones-arquitectura.md`.
+
 ## Equipo de desarrollo
 
 - **Gerardo** — backend, integración con WooCommerce, base de datos.

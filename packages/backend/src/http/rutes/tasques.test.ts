@@ -57,11 +57,18 @@ beforeAll(async () => {
   poolTest = new Pool({ connectionString: env.DATABASE_URL, options: `-c search_path=${esquema}` });
 
   process.env.PGOPTIONS = `-c search_path=${esquema}`;
+  // AUTH_DISABLED=false para todo este archivo (ADR-021): las tareas usan su
+  // propio mecanismo (secreto compartido/OIDC, ver autenticacio-tasques.ts),
+  // nunca un token de Firebase. Si el hook de negocio se aplicara acá por
+  // error, los tests de "secreto correcto" de más abajo pasarían a fallar
+  // con 401, delatando la regresión.
+  process.env.AUTH_DISABLED = 'false';
   ({ construirServidor } = await import('../servidor.js'));
 });
 
 afterAll(async () => {
   delete process.env.PGOPTIONS;
+  delete process.env.AUTH_DISABLED;
   await poolTest.end();
   const cleanup = new Client({ connectionString: env.DATABASE_URL });
   await cleanup.connect();

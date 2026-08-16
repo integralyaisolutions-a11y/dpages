@@ -27,6 +27,11 @@ export default defineConfig({
       WC_CONSUMER_SECRET: 'cs_test',
       WEBHOOK_SECRET: 'webhook_secret_test',
       TASQUES_SECRET: 'tasques_secret_test',
+      // NODE_ENV=test nunca es 'production' (ver config/env.ts), así que
+      // esto es válido acá — los tests de rutas de negocio (capa 8) no
+      // necesitan un token en cada petición. auth-firebase.test.ts anula
+      // esta variable en su propio archivo para probar el camino real.
+      AUTH_DISABLED: 'true',
     },
   },
 });

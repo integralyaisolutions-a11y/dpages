@@ -83,9 +83,32 @@ const esquemaEnv = z
       .string()
       .optional()
       .transform((valor) => valor === 'true'),
+
+    // ADR-021: capa de negocio requiere Firebase Auth (contrato, sección 2).
+    // Fuera de producción se puede saltear con este interruptor explícito —
+    // "true" literal, cualquier otro valor (incluido no definirla) exige
+    // token siempre, incluso en desarrollo. Mismo criterio que la guarda de
+    // WC_BASE_URL: el caso seguro es el default, el bypass es opt-in.
+    AUTH_DISABLED: z
+      .string()
+      .optional()
+      .transform((valor) => valor === 'true'),
   })
   .superRefine((data, ctx) => {
-    if (data.NODE_ENV === 'production') return;
+    if (data.NODE_ENV === 'production') {
+      // Imposible arrancar en producción con la autenticación apagada —
+      // ni por una variable copiada de otro entorno ni por un descuido.
+      if (data.AUTH_DISABLED) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['AUTH_DISABLED'],
+          message:
+            'no puede ser "true" con NODE_ENV=production — la autenticación ' +
+            'de Firebase es obligatoria en producción, sin excepción.',
+        });
+      }
+      return;
+    }
 
     // Si WC_BASE_URL ya venía mal formada, ese error lo reporta el `.url()`
     // de más arriba — acá simplemente no hay nada más que chequear.

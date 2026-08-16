@@ -1,4 +1,5 @@
 import Fastify, { type FastifyBaseLogger, type FastifyError, type FastifyInstance } from 'fastify';
+import { crearMiddlewareAuth } from './auth-firebase.js';
 import { cosError } from './error-api.js';
 import { logger } from '../lib/logger.js';
 import { registrarRutesCategories } from './rutes/api/categories.js';
@@ -69,12 +70,13 @@ export function construirServidor(): FastifyInstance {
   registrarRutesTasques(fastify);
 
   // Endpoints de negocio (docs/contrato-api.md, capa 8) bajo /api/v1 — base
-  // URL que el contrato fija en su sección 2. Autenticación: en modo
-  // desarrollo (NODE_ENV !== production) el contrato permite peticiones sin
-  // token de Firebase; Firebase Auth llega en una capa posterior, así que
-  // por ahora estas rutas no validan nada — no confiar en esto en producción.
+  // URL que el contrato fija en su sección 2. El hook de autenticación (ADR-021)
+  // se registra ANTES que las rutas y sólo dentro de ESTE scope de plugin —
+  // /salut, /webhooks/woocommerce y /tasques/* viven fuera de él, en la
+  // instancia externa de `fastify`, y por eso nunca pasan por acá.
   void fastify.register(
     (api, _opts, done) => {
+      api.addHook('preHandler', crearMiddlewareAuth());
       registrarRutesCategories(api);
       registrarRutesProductes(api);
       registrarRutesTarifes(api);
