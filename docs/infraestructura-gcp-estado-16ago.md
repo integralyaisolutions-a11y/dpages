@@ -40,17 +40,17 @@ ID interno `dpages-be46b` — Firebase le agregó un sufijo porque el nombre
 corto ya estaba tomado globalmente; no afecta nada de GCP, sólo aparece en
 este config).
 
-```javascript
-const firebaseConfig = {
-  apiKey: 'AIzaSyA9QrDNMnczCj5ImRChN4C_fU5UWlgYr4I',
-  authDomain: 'dpages-be46b.firebaseapp.com',
-  projectId: 'dpages-be46b',
-  storageBucket: 'dpages-be46b.firebasestorage.app',
-  messagingSenderId: '368112493582',
-  appId: '1:368112493582:web:d56953e8008594ab3a885f',
-  measurementId: 'G-9VD3PZHRZX',
-};
-```
+**El config completo no va en este archivo** (aunque el `apiKey` de Firebase
+es público por diseño — no es un secreto real, ver
+[documentación oficial](https://firebase.google.com/support/guides/security-checklist#api-keys-not-secret)
+— GitHub lo marca igual como posible secreto, y evitamos el ruido dejándolo
+fuera del repo). Gerardo te lo pasa directo por [Slack/WhatsApp/el canal que
+usen] — son 7 campos, se copian y pegan en dos segundos.
+
+Para volver a obtenerlo vos misma en cualquier momento, sin depender de
+Gerardo: **console.firebase.google.com** → proyecto `dpages` → ⚙️
+**Configuración del proyecto** → **General** → sección **"Tus apps"** → la
+app `dpages-frontend` ya registrada.
 
 Con esto ya podés integrar el login en Next.js — es completamente
 independiente de todo lo demás de este documento, no depende de ningún
