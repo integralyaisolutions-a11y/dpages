@@ -40,5 +40,9 @@
     "rimraf": "^6.0.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.15.0"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.101.4",
+    "firebase": "^12.17.1"
   }
 }

@@ -1,26 +1,36 @@
-# @dpages/frontend
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-Placeholder. Todavía no hay scaffold de Next.js — lo arma Michel.
+## Getting Started
 
-## Cómo consumir `@dpages/shared`
-
-Se decidió (ADR-010, ver `docs/decisiones-arquitectura.md`) que
-`@dpages/shared` se consume como paquete **compilado**, no como código
-fuente vía paths de TypeScript. Next.js lo resuelve sin configuración
-adicional, siempre que esté compilado:
+First, run the development server:
 
 ```bash
-npm install   # desde la raíz del monorepo — ya compila @dpages/shared solo (script "postinstall")
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
-El `dist/` de `shared` no está commiteado, así que si lo ves desactualizado
-(por ejemplo, Gerardo editó un tipo y no volvió a compilar) corré
-`npm run build:shared` desde la raíz.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-## Pendiente de definir con el cliente (no bloquea empezar el frontend)
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-- Si el sistema es bilingüe catalán/castellano o sólo catalán.
-- Campos de agrupación del catálogo para las pantallas.
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-Ver `docs/contexto-negocio.md` para el resto de las decisiones abiertas y
-`docs/contrato-api.md` para los endpoints del backend a medida que existen.
+## Learn More
+
+To learn more about Next.js, take a look at the following resources:
+
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
