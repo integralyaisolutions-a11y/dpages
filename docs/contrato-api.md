@@ -24,6 +24,19 @@ tocar ese paquete — lo usamos los dos.
 **Regla de oro:** si algo de este documento no coincide con lo que hace el
 backend, es un error del backend, no del frontend. Avisá.
 
+### Notas de arquitectura
+
+**El sistema dejó de tratarse como espejo de WooCommerce** (confirmado con el
+cliente el 18/08/2026). Es el sistema de pedidos propio; WooCommerce es un
+canal de entrada más, no la fuente de verdad. Esto ya se aplicaba a los
+pedidos — ahora se extiende al catálogo en un punto puntual:
+
+**El catálogo se sigue sincronizando desde WooCommerce** (artículos,
+precios, etc.) — eso no cambió. Pero **la categoría del producto ya NO se
+sincroniza**: es autoridad del propio sistema, relacionada por SKU. Si en
+algún momento WooCommerce y el sistema discrepan en a qué categoría
+pertenece un artículo, gana el sistema.
+
 ---
 
 ## 2. Convenciones generales
@@ -169,10 +182,18 @@ Todas están en `@dpages/shared`. Importalas, no las escribas a mano.
 
 ```typescript
 type EstatComanda = 'oberta' | 'en_proces' | 'tancada' | 'amb_incidencia';
-type OrigenComanda = 'web' | 'email' | 'whatsapp' | 'telefon';
 type TipusProducte = 'simple' | 'variable';
 type Idioma = 'ca' | 'es';
 ```
+
+> **`origen` (de `ComandaResumApi`/`ComandaDetallApi`) dejó de ser un enum
+> fijo** (confirmado 18/08/2026): es el `codi` de una tabla mantenible
+> (`origen_comanda`), no un union literal — por eso el tipo en
+> `@dpages/shared` es `string`, no una lista cerrada. Los valores válidos
+> hoy son `"woocommerce"` y `"manual"`; es extensible sin tocar código (a
+> futuro, `"manual"` se puede desglosar en `"whatsapp"`/`"email"`/`"telefon"`
+> agregando una fila, no una migración de tipo). Ver la sección "Orígenes
+> de pedido" para el CRUD.
 
 Etiquetas para mostrar (el backend no las envía, van en el frontend):
 
@@ -216,13 +237,19 @@ En el orden de prioridad que marcó el cliente.
       "id": 1,
       "nom": "Fresc",
       "elaboratPorc": true,
-      "agrupacioRendiment": null
+      "agrupacioRendiment": "KG"
     },
     {
       "id": 2,
       "nom": "Embotits cuits",
       "elaboratPorc": true,
-      "agrupacioRendiment": null
+      "agrupacioRendiment": "PAQ"
+    },
+    {
+      "id": 4,
+      "nom": "Magre",
+      "elaboratPorc": true,
+      "agrupacioRendiment": "MAGRE"
     },
     {
       "id": 3,
@@ -237,9 +264,19 @@ En el orden de prioridad que marcó el cliente.
 
 **`PATCH /categories/:id`** — cuerpo parcial, sólo los campos a cambiar.
 
-> `agrupacioRendiment` viene siempre `null` por ahora. Es uno de los campos de
-> agrupación que el cliente define en la reunión del lunes. Michel: dejá la
-> columna preparada pero no construyas lógica encima todavía.
+> **`agrupacioRendiment`** (confirmado con el cliente el 18/08/2026, ya no
+> pendiente) toma uno de tres valores, y decide cómo esa categoría entra en
+> el cálculo del Panell Producció (ver esa sección):
+>
+> - **`"KG"`** — el rendimiento se calcula en kilos.
+> - **`"PAQ"`** — el rendimiento se calcula en paquetes/unidades.
+> - **`"MAGRE"`** — no participa fila por fila: va al total global de
+>   `PanellProduccioApi.totals`.
+>
+> **`null` sólo cuando `elaboratPorc` es `false`** — es una regla de
+> negocio (esa categoría no participa del cálculo de rendimiento porcino),
+> no un dato pendiente de cargar. Si `elaboratPorc` es `true`, siempre trae
+> uno de los tres valores.
 
 ---
 
@@ -261,7 +298,10 @@ Filtros: `?categoriaId=1&tipus=simple&actiu=true&cerca=llom`
       "pesKg": "1.250",
       "preuVenda": "9.86",
       "actiu": true,
-      "categoria": { "id": 1, "nom": "Fresc" }
+      "categoria": { "id": 1, "nom": "Fresc" },
+      "agrupacioProduccio": "Llom",
+      "format": "SENCER",
+      "envasat": "NORMAL (pes)"
     },
     {
       "id": 13,
@@ -272,7 +312,10 @@ Filtros: `?categoriaId=1&tipus=simple&actiu=true&cerca=llom`
       "pesKg": null,
       "preuVenda": "7.60",
       "actiu": true,
-      "categoria": { "id": 1, "nom": "Fresc" }
+      "categoria": { "id": 1, "nom": "Fresc" },
+      "agrupacioProduccio": null,
+      "format": null,
+      "envasat": "NORMAL"
     }
   ],
   "paginacio": { "pagina": 1, "mida": 50, "total": 111, "totalPagines": 3 }
@@ -289,6 +332,19 @@ Filtros: `?categoriaId=1&tipus=simple&actiu=true&cerca=llom`
 >
 > Hoy casi todo el catálogo tiene `pesKg` en `null`, porque el dato aún no
 > llegó del cliente. Michel: construí bien los dos caminos.
+
+> **Tres campos nuevos, confirmados con el cliente el 18/08/2026:**
+>
+> - **`agrupacioProduccio`** — texto libre. Agrupa varios códigos bajo una
+>   misma familia lógica de producción (por ejemplo, variantes de un mismo
+>   corte que se elaboran juntas). `null` si el artículo no pertenece a
+>   ninguna agrupación. Es la misma agrupación que usa el Panell Producció.
+> - **`format`** — uno de `"SENCER"`, `"TALLAT"`, `"LLESCAT"`, o `null`.
+> - **`envasat`** — uno de `"NORMAL"`, `"NORMAL (pes)"`, `"NORMAL (web)"`,
+>   `"ESPECIAL"`, o `null`.
+>
+> No los trates como opcionales en el sentido de "puede faltar el dato": los
+> tres pueden ser `null` legítimamente cuando no aplican a ese artículo.
 
 ---
 
@@ -646,8 +702,12 @@ Filtros: `?dataExpedicioDes=&dataExpedicioFins=&transportistaId=&estat=&clientId
 
 ### 4.7 · Panell Obrador
 
-Sólo lectura. Agrupado por producto, no por pedido: al obrador el concepto de
-pedido le da igual, trabaja por artículo.
+**Cambio de criterio, confirmado con el cliente el 18/08/2026 (prototipo +
+reunión): ya NO es "agrupado por producto".** Obrador muestra líneas de
+pedido individuales, sin agrupar — cada fila es una línea real de un pedido
+real, no un total sumado. `TotalsPanellObradorApi` no cambió:
+`linies`/`totalUnitats`/`totalKg` siguen siendo válidos sumados sobre las
+líneas individuales visibles.
 
 **`GET /panells/obrador`**
 
@@ -662,23 +722,40 @@ Filtros: `?dataProduccioDes=&dataProduccioFins=&categoriaId=&tipus=`
   },
   "dades": [
     {
-      "producteId": 12,
-      "codi": "LLF01",
-      "producte": "Llom fresc de porc",
-      "tipus": "simple",
+      "liniaId": 981,
+      "comandaId": 142,
+      "producte": { "id": 12, "codi": "LLF01", "descripcio": "Llom fresc de porc" },
       "categoria": "Fresc",
-      "dataProduccio": "2026-08-16T00:00:00Z",
-      "dataExpedicio": "2026-08-17T00:00:00Z",
-      "dataLliurament": "2026-08-18T00:00:00Z",
-      "unitats": 42,
-      "kg": "52.500",
-      "obsProduccio": "Tallar fi",
-      "obsLliurament": null
+      "format": "SENCER",
+      "envasat": "NORMAL (pes)",
+      "client": "Restaurant Example",
+      "dataProduccio": "2026-08-16T06:00:00Z",
+      "unitats": 10,
+      "kg": "12.500",
+      "obsProduccio": "Tallar fi"
+    },
+    {
+      "liniaId": 982,
+      "comandaId": 142,
+      "producte": { "id": 13, "codi": "PIC01", "descripcio": "Picada de porc" },
+      "categoria": "Fresc",
+      "format": null,
+      "envasat": "NORMAL",
+      "client": "Restaurant Example",
+      "dataProduccio": null,
+      "unitats": 4,
+      "kg": "0.000",
+      "obsProduccio": null
     }
   ],
   "paginacio": { "pagina": 1, "mida": 50, "total": 34, "totalPagines": 1 }
 }
 ```
+
+> Cada fila es exactamente una `comanda_linia` — `liniaId`/`comandaId`
+> identifican de qué pedido viene, por si obrador necesita volver al
+> detalle. `dataProduccio` es la de la LÍNEA (ver sección 4.5), no la de la
+> cabecera del pedido.
 
 ---
 
@@ -721,6 +798,252 @@ Filtros: `?dataExpedicioDes=&dataExpedicioFins=&transportistaId=&clientId=`
     }
   ],
   "paginacio": { "pagina": 1, "mida": 50, "total": 50, "totalPagines": 1 }
+}
+```
+
+---
+
+### 4.9 · Rendiments Porcs
+
+Nueva (confirmada con el cliente el 18/08/2026). Ficha de rendimiento por
+producto: cuántas unidades salen de un cerdo y cuánto pesa cada una — es la
+base del cálculo del Panell Producció (sección 4.10).
+
+**`GET /rendiments-porcs`**
+
+Filtros: `?agrupacioRendiment=KG&categoria=Fresc&agrupacioProduccio=Llom&producteId=12`
+
+```json
+{
+  "dades": [
+    {
+      "id": 1,
+      "producte": { "id": 12, "codi": "LLF01", "descripcio": "Llom fresc de porc" },
+      "agrupacioRendiment": "KG",
+      "categoria": "Fresc",
+      "agrupacioProduccio": "Llom",
+      "unitatsPerPorc": "2.000",
+      "kgPerUnitat": "3.500",
+      "pesTotal": "7.000"
+    }
+  ],
+  "paginacio": { "pagina": 1, "mida": 50, "total": 42, "totalPagines": 1 }
+}
+```
+
+> `agrupacioRendiment`, `categoria` y `agrupacioProduccio` son de **sólo
+> lectura** acá: se derivan del producto/categoría asociados (secciones 4.1
+> y 4.2), no se editan en este CRUD. `pesTotal` es calculado por el backend
+> (`unitatsPerPorc × kgPerUnitat`), tampoco se envía en las escrituras.
+
+**`POST /rendiments-porcs`**
+
+```json
+{ "producteId": 12, "unitatsPerPorc": "2.000", "kgPerUnitat": "3.500" }
+```
+
+Respuesta `201`, misma forma que una fila de `GET /rendiments-porcs`.
+
+**`PATCH /rendiments-porcs/:id`** — línea por línea, mismo criterio de
+edición en línea que el resto del sistema (sin ventana emergente). Cuerpo
+parcial: `unitatsPerPorc` y/o `kgPerUnitat`.
+
+**`DELETE /rendiments-porcs/:id`** — `204` sin cuerpo.
+
+---
+
+### 4.10 · Panell Producció
+
+Nueva (confirmada con el cliente el 18/08/2026). Sólo lectura. Una fila por
+producto con demanda en el rango filtrado, calculada a partir de los
+pedidos y de la ficha de `Rendiments Porcs`.
+
+**`GET /panells/produccio`**
+
+Filtros: `?agrupacioRendiment=KG&producteId=12&dataDes=2026-08-01&dataFins=2026-08-31&nombrePorcs=5`
+
+```json
+{
+  "totals": {
+    "totalKgAElaborar": "0.000",
+    "totalKgMagro": "0.000",
+    "diferencia": "0.000"
+  },
+  "dades": [],
+  "paginacio": { "pagina": 1, "mida": 50, "total": 0, "totalPagines": 0 }
+}
+```
+
+**Las tres fórmulas**, según `agrupacioRendiment` de la categoría de cada
+producto — cada agrupación calcula un par distinto de campos, el resto
+queda en `null` por fila:
+
+**Agrupación `"KG"`** (cálculo por línea, en kilos — sólo `kgAElaborar`
+tiene valor, `paqPedido` queda `null`, no aplica):
+
+```
+Rendiment  = unitatsPerPorc × kgPerUnitat × nombrePorcs
+Diferencia = Rendiment − kgAElaborar
+```
+
+Ejemplo real (con `nombrePorcs = 5`): producto **COSTELLETA**,
+`unitatsPerPorc = 2,00`, `kgPerUnitat = 12,000`.
+`Rendiment = 2,00 × 12,000 × 5 = 120,000`. Con `kgAElaborar = 35,000`:
+`Diferencia = 120,000 − 35,000 = 85,000`.
+
+**Agrupación `"PAQ"`** (cálculo por línea, en unidades — sólo `paqPedido`
+tiene valor, `kgAElaborar` queda `null`):
+
+```
+Rendiment  = unitatsPerPorc × nombrePorcs
+Diferencia = Rendiment − paqPedido
+```
+
+Ejemplo real: producto **PEUS**, `unitatsPerPorc = 4,00`,
+`nombrePorcs = 5`. `Rendiment = 4,00 × 5 = 20,00`. Con `paqPedido = 132,00`:
+`Diferencia = 20,00 − 132,00 = −112,00` (negativo: se pidió más de lo que
+rinden esos cerdos).
+
+**Agrupación `"MAGRE"`** (sin cálculo por línea — `rendiment`/`diferencia`
+quedan `null` en estas filas; se calcula un único total global, no se
+reparte fila por fila):
+
+```
+totalKgMagro      = Σ(kgPerUnitat de cada agrupación de producción marcada
+                       como magra en Rendiments Porcs) × nombrePorcs
+diferencia global = totalKgMagro − totalKgAElaborar
+```
+
+Ejemplo real: tres agrupaciones magras rinden 12, 6 y 7 kg por cerdo
+respectivamente. Con `nombrePorcs = 5`: `totalKgMagro = (12 + 6 + 7) × 5 =
+125`. Con `totalKgAElaborar = 512,982` (ver abajo): `Diferencia = 125 −
+512,982 = −387,982`.
+
+**`totals.totalKgAElaborar`** (cabecera): suma de la columna `kgAElaborar`
+de **todas** las filas visibles (incluidas las de agrupación `"KG"`) en el
+rango de fechas filtrado — no sólo las de agrupación `"MAGRE"`.
+
+> Estas fórmulas se derivaron por ingeniería inversa contra los datos de
+> ejemplo del prototipo de Lovable, y verifican exacto en las 13 filas de
+> referencia disponibles. **Pendiente de ratificación formal por el cliente
+> (Francesc)** — no bloquea la implementación, pero si al confirmarlas
+> aparece alguna corrección, esta sección (y el cálculo del backend cuando
+> exista) se actualiza.
+
+---
+
+### 4.11 · Orígens de comanda
+
+Nueva (confirmada con el cliente el 18/08/2026). CRUD simple de la tabla
+`origen_comanda` — reemplaza el enum fijo `OrigenComanda` que tenía el
+contrato hasta esta versión (ver sección 3).
+
+**`GET /origens-comanda`**
+
+```json
+{
+  "dades": [
+    { "id": 1, "codi": "woocommerce", "nom": "WooCommerce", "actiu": true },
+    { "id": 2, "codi": "manual", "nom": "Manual", "actiu": true }
+  ]
+}
+```
+
+**`POST /origens-comanda`**
+
+```json
+{ "codi": "whatsapp", "nom": "WhatsApp" }
+```
+
+Respuesta `201`, misma forma que una fila de `GET /origens-comanda`
+(`actiu` arranca en `true` si no se manda).
+
+**`PATCH /origens-comanda/:id`** — cuerpo parcial (`nom`, `actiu`). `codi`
+no se edita una vez creado — es la clave estable que usan
+`ComandaResumApi.origen`/`ComandaDetallApi.origen`.
+
+**`DELETE /origens-comanda/:id`** — `204` sin cuerpo. En la práctica,
+preferí `PATCH { "actiu": false }` si ya hay pedidos usando ese origen —
+borrarlo de verdad puede dejar pedidos existentes con un `origen` que ya
+no resuelve a nada.
+
+---
+
+### 4.12 · Usuaris i rols
+
+Nueva (confirmada con el cliente el 18/08/2026). Un **rol** define qué
+módulos de la aplicación puede VER el usuario — no restringe acciones
+dentro de un módulo. Ver ADR-021: ningún endpoint de negocio bloquea por
+rol todavía; `modulsPermesos` es lo que el **frontend** usa para decidir
+qué mostrar en el menú, no algo que el backend haga cumplir.
+
+**`GET /rols`**
+
+```json
+{
+  "dades": [
+    {
+      "id": 1,
+      "nom": "Oficina",
+      "modulsPermesos": ["categories", "catalog", "tarifes", "clients", "comandes", "panells"]
+    },
+    {
+      "id": 2,
+      "nom": "Obrador",
+      "modulsPermesos": ["panells"]
+    }
+  ]
+}
+```
+
+**`POST /rols`** · **`PATCH /rols/:id`** (cuerpo parcial) · **`DELETE /rols/:id`**
+
+```json
+{ "nom": "Producció", "modulsPermesos": ["panells", "produccio"] }
+```
+
+**`GET /usuaris`**
+
+```json
+{
+  "dades": [
+    {
+      "id": 1,
+      "firebaseUid": "abc123firebase",
+      "nom": "Anna Oficina",
+      "email": "anna@dpages.cat",
+      "rol": { "id": 1, "nom": "Oficina" },
+      "actiu": true
+    }
+  ],
+  "paginacio": { "pagina": 1, "mida": 50, "total": 8, "totalPagines": 1 }
+}
+```
+
+**`POST /usuaris`** · **`PATCH /usuaris/:id`** (cuerpo parcial) · **`DELETE /usuaris/:id`**
+
+```json
+{
+  "firebaseUid": "xyz789firebase",
+  "nom": "Marc Obrador",
+  "email": "marc@dpages.cat",
+  "rolId": 2
+}
+```
+
+**`GET /jo`** — devuelve el usuario autenticado (resuelto por el `uid` del
+token de Firebase, sección 2) con su rol y módulos permitidos. Es lo
+primero que llama el frontend después de loguearse, para saber en qué
+panel ubicar a la persona por defecto y qué mostrar en el menú.
+
+```json
+{
+  "id": 1,
+  "firebaseUid": "abc123firebase",
+  "nom": "Anna Oficina",
+  "email": "anna@dpages.cat",
+  "rol": { "id": 1, "nom": "Oficina" },
+  "actiu": true
 }
 ```
 
@@ -802,13 +1125,18 @@ pierde el trabajo de las anteriores.
 No están en el contrato porque el cliente todavía no los definió. Michel: no
 construyas nada encima de estos puntos.
 
-| Tema                                     | Estado                                                                                      |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Campos de agrupación del catálogo        | Se definen en la reunión del lunes                                                          |
-| Panell Producció y Rendiments Porcs      | El cliente no los cerró. No se construyen                                                   |
-| Descuentos                               | El 45 % de los pedidos web llevan cupón, pero quedaron fuera de esta versión. Sin confirmar |
-| Asignación de transportista              | Sin criterio definido                                                                       |
-| Si el sistema es bilingüe o sólo catalán | Sin confirmar                                                                               |
+| Tema                                     | Estado                                                                                                   |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Fórmulas del Panell Producció            | Shape de la respuesta cerrado (sección 4.10); los números de las tres fórmulas (KG/PAQ/MAGRE) todavía no |
+| Descuentos                               | El 45 % de los pedidos web llevan cupón, pero quedaron fuera de esta versión. Sin confirmar              |
+| Asignación de transportista              | Sin criterio definido                                                                                    |
+| Si el sistema es bilingüe o sólo catalán | Sin confirmar                                                                                            |
+
+> **Resuelto el 18/08/2026** (ya no pendiente, ya está en el contrato):
+> campos de agrupación del catálogo (`agrupacioProduccio`, `format`,
+> `envasat`, sección 4.2), `agrupacioRendiment` de categoría (sección 4.1),
+> y el shape de Panell Producció y Rendiments Porcs (secciones 4.9 y 4.10
+> — sólo faltan los números de las fórmulas, ver arriba).
 
 ---
 

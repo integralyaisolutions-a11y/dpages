@@ -13,13 +13,21 @@ export interface Producte {
   pesKg: string | null;
   actiu: boolean;
   /**
-   * Confirmada: existe en WooCommerce y las pantallas de catálogo/obrador
-   * filtran por ella. Lo único pendiente es `CategoriaProducte.agrupacioRendiment`
-   * (ver docs/contexto-negocio.md) — no confundir "sin categoría todavía
-   * resuelta" (null, poco común) con "agrupación de rendimiento sin definir"
-   * (siempre null por ahora, en la propia categoría).
+   * Ya NO se sincroniza desde WooCommerce (confirmado con el cliente el
+   * 18/08/2026): la categoría es autoridad del propio sistema, relacionada
+   * por SKU — WooCommerce dejó de ser la fuente de verdad del catálogo
+   * también en este punto, no sólo en pedidos. Null = todavía sin
+   * categoría resuelta (poco común).
    */
   categoriaId: string | null;
+  /**
+   * Texto libre: agrupa varios códigos bajo una misma familia lógica de
+   * producción (por ejemplo, variantes de un mismo corte que se elaboran
+   * juntas). Null si el artículo no pertenece a ninguna agrupación.
+   */
+  agrupacioProduccio: string | null;
+  format: 'SENCER' | 'TALLAT' | 'LLESCAT' | null;
+  envasat: 'NORMAL' | 'NORMAL (pes)' | 'NORMAL (web)' | 'ESPECIAL' | null;
 }
 
 /**
@@ -45,14 +53,16 @@ export interface AliasProducte {
  * (Fresc/Fresco, Conserves/Conservas...) — igual que los artículos, una fila
  * acá por categoría real, resuelta por nombre canónico en la transformación
  * (heurística provisoria, ver `resolverNomCategoriaCanonic` en el backend).
- *
- * Sin `agrupacioRendiment` a propósito: es el único campo de categoría que
- * sigue pendiente de definir con el cliente (ver "Pendientes de definición"
- * en docs/contexto-negocio.md). Se agrega con una migración aparte cuando
- * se cierre esa decisión — no hay columna todavía, así que tampoco hay
- * campo acá.
  */
 export interface CategoriaProducte {
   id: string;
   nom: string;
+  elaboratPorc: boolean;
+  /**
+   * Regla de negocio, no ausencia de dato: `null` sólo cuando
+   * `elaboratPorc` es `false` — una categoría que no es elaborado de cerdo
+   * no participa del cálculo de rendimiento. Cuando `elaboratPorc` es
+   * `true`, siempre trae uno de los tres valores.
+   */
+  agrupacioRendiment: 'KG' | 'MAGRE' | 'PAQ' | null;
 }

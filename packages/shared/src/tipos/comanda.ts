@@ -6,16 +6,23 @@ export const ESTATS_COMANDA = ['oberta', 'en_proces', 'tancada', 'amb_incidencia
 export type EstatComanda = (typeof ESTATS_COMANDA)[number];
 
 /**
- * Canal de entrada del pedido. La web es un canal más (16-20% del volumen),
- * no la fuente de verdad del sistema.
+ * Origen del pedido. Confirmado con el cliente el 18/08/2026: dejó de ser
+ * un enum fijo en código — conceptualmente es una tabla mantenible
+ * (`origen_comanda`), no un union literal, así que el tipo queda como
+ * `string` a propósito. Valores válidos hoy: `'woocommerce'` y `'manual'`
+ * — el sistema dejó de tratarse como espejo de WooCommerce, que ahora es
+ * sólo uno de los canales de entrada. Extensible sin tocar código: a
+ * futuro, `'manual'` se puede desglosar en valores separados
+ * (`whatsapp`, `email`, `telefon`) agregando una fila a la tabla, no una
+ * migración de este tipo.
  */
-export const CANALS_ORIGEN = ['web', 'email', 'whatsapp', 'telefon'] as const;
-export type CanalOrigen = (typeof CANALS_ORIGEN)[number];
+export type CanalOrigen = string;
 
 export interface Comanda {
   id: string;
   /** null en pedidos capturados a mano (email/WhatsApp/teléfono). */
   wooOrderId: number | null;
+  /** El `codi` de `origen_comanda` (ver CanalOrigen) — hoy 'woocommerce' o 'manual'. */
   origen: CanalOrigen;
   estat: EstatComanda;
   /** Regla de congelación (ADR-007): null = no congelada; si no, cuándo entró en producción y el sync dejó de sobrescribirla. */
@@ -39,7 +46,15 @@ export interface Comanda {
   observacions: string | null;
 
   dataCreacio: string;
-  /** date_modified_gmt de WooCommerce (UTC, TIMESTAMPTZ); guardián de versión, ver ADR-004. */
+  /**
+   * date_modified_gmt de WooCommerce (UTC, TIMESTAMPTZ); guardián de
+   * versión, ver ADR-004. Pierde relevancia para PEDIDOS desde el
+   * 18/08/2026: una vez que un pedido entra desde WooCommerce, ya no
+   * vuelve a sincronizarse (ver ADR pendiente de escritura) — el campo
+   * sigue existiendo por historia/trazabilidad, pero no hay un sync
+   * corriente que lo actualice. Sigue siendo relevante para el catálogo
+   * (`Producte`/`CategoriaProducte`), que sí se sincroniza en curso.
+   */
   dataModificacioWoo: string | null;
 }
 

@@ -54,8 +54,8 @@ export interface CategoriaApi {
   id: number;
   nom: string;
   elaboratPorc: boolean;
-  /** Siempre null por ahora — campo de agrupación pendiente (contrato, sección 7). */
-  agrupacioRendiment: string | null;
+  /** `null` sólo cuando `elaboratPorc` es `false` — regla de negocio, no falta de dato. */
+  agrupacioRendiment: 'KG' | 'MAGRE' | 'PAQ' | null;
 }
 
 // ── 4.2 · Catàleg de productes ──────────────────────────────────────────
@@ -76,6 +76,41 @@ export interface ProducteApi {
   preuVenda: string | null;
   actiu: boolean;
   categoria: CategoriaResumApi | null;
+  /** Texto libre: agrupa varios códigos bajo una misma familia lógica de producción. Null si no aplica. */
+  agrupacioProduccio: string | null;
+  format: 'SENCER' | 'TALLAT' | 'LLESCAT' | null;
+  envasat: 'NORMAL' | 'NORMAL (pes)' | 'NORMAL (web)' | 'ESPECIAL' | null;
+}
+
+// ── 4.2b · Rendiments Porcs ──────────────────────────────────────────────
+
+/**
+ * Ficha de rendimiento por producto: cuántas unidades salen de un cerdo y
+ * cuánto pesa cada una — la base del cálculo del Panell Producció (KG,
+ * PAQ, MAGRE). `agrupacioRendiment`, `categoria` y `agrupacioProduccio`
+ * son de sólo lectura acá: se derivan del producto/categoría asociados,
+ * no se editan en este CRUD.
+ */
+export interface RendimentPorcApi {
+  id: number;
+  producte: { id: number; codi: string | null; descripcio: string };
+  /** Derivado de producte.categoria.agrupacioRendiment — sólo lectura. */
+  agrupacioRendiment: string;
+  /** Derivado de producte.categoria.nom — sólo lectura. */
+  categoria: string;
+  /** Derivado de producte.agrupacioProduccio — sólo lectura. */
+  agrupacioProduccio: string | null;
+  /** NUMERIC como string, mismo criterio que pesKg. */
+  unitatsPerPorc: string;
+  kgPerUnitat: string;
+  /** Calculado = unitatsPerPorc × kgPerUnitat. */
+  pesTotal: string;
+}
+
+export interface RendimentPorcEntradaApi {
+  producteId: number;
+  unitatsPerPorc: string;
+  kgPerUnitat: string;
 }
 
 // ── 4.3 · Llistat de tarifes ─────────────────────────────────────────────
@@ -129,8 +164,31 @@ export interface ClientCreacioApi {
 
 export interface TransportistaApi {
   id: number;
+  /** Texto libre, nemotécnico, definido por el usuario al dar de alta — ej. "TR-DHL". */
+  codi: string | null;
   nom: string;
   actiu: boolean;
+}
+
+// ── 4.4b · Orígens de comanda ────────────────────────────────────────────
+
+/**
+ * `origen_comanda` como tabla mantenible (confirmado 18/08/2026), no un
+ * enum fijo — de ahí el CRUD completo. `codi` es el valor que aparece en
+ * `ComandaResumApi.origen`/`ComandaDetallApi.origen` (hoy "woocommerce" y
+ * "manual"; extensible a futuro sin tocar código, ej. "whatsapp").
+ */
+export interface OrigenComandaApi {
+  id: number;
+  codi: string;
+  nom: string;
+  actiu: boolean;
+}
+
+export interface OrigenComandaEntradaApi {
+  codi: string;
+  nom: string;
+  actiu?: boolean;
 }
 
 // ── 4.5 · Comandes ───────────────────────────────────────────────────────
@@ -138,6 +196,7 @@ export interface TransportistaApi {
 export interface ComandaResumApi {
   id: number;
   num: string;
+  /** `OrigenComandaApi.codi` (hoy "woocommerce" o "manual") — extensible sin tocar código, ver sección 3 del contrato. */
   origen: string;
   estat: string;
   client: { id: number; nom: string; poblacio: string | null } | null;
@@ -171,6 +230,13 @@ export interface ComandaLiniaApi {
   unitatsLliurades: number;
   kgLliurats: string;
   confirmatA: string | null;
+  /**
+   * Cascada de resolución de precio, en este orden: 1) la tarifa asignada
+   * al cliente del pedido para este producto (`tarifa_preu`); 2) si no
+   * hay, el precio base del producto (`ProducteApi.preuVenda`); 3) si
+   * tampoco hay ninguno de los dos, queda en `"0.00"` y se registra una
+   * incidencia — nunca una línea sin precio silenciosa.
+   */
   preuUnitari: string;
   totalLinia: string;
   /** Editable por línea (prototipo /pedidos), distinta de comanda.dataProduccio (cabecera). */
@@ -189,6 +255,7 @@ export interface IncidenciaComandaApi {
 export interface ComandaDetallApi {
   id: number;
   num: string;
+  /** `OrigenComandaApi.codi` (hoy "woocommerce" o "manual") — extensible sin tocar código, ver sección 3 del contrato. */
   origen: string;
   estat: string;
   client: { id: number; nom: string; poblacio: string | null } | null;
@@ -293,19 +360,25 @@ export interface TotalsPanellObradorApi {
   totalKg: string;
 }
 
+/**
+ * Confirmado con el cliente el 18/08/2026 (prototipo + reunión): Obrador
+ * muestra líneas de pedido INDIVIDUALES, sin agrupar por producto —
+ * reemplaza la forma agregada anterior. `TotalsPanellObradorApi` no
+ * cambia: linies/totalUnitats/totalKg siguen siendo válidos sobre líneas
+ * individuales.
+ */
 export interface FilaPanellObradorApi {
-  producteId: number;
-  codi: string | null;
-  producte: string;
-  tipus: string;
+  liniaId: number;
+  comandaId: number;
+  producte: { id: number; codi: string | null; descripcio: string };
   categoria: string | null;
+  format: string | null;
+  envasat: string | null;
+  client: string | null;
   dataProduccio: string | null;
-  dataExpedicio: string | null;
-  dataLliurament: string | null;
   unitats: number;
   kg: string;
   obsProduccio: string | null;
-  obsLliurament: string | null;
 }
 
 export interface PanellObradorApi {
@@ -348,4 +421,80 @@ export interface PanellEmpaquetatApi {
   totals: TotalsPanellEmpaquetatApi;
   dades: FilaPanellEmpaquetatApi[];
   paginacio: Paginacio;
+}
+
+// ── 4.9 · Panell Producció ────────────────────────────────────────────────
+
+/**
+ * Una fila por producto con demanda en el rango filtrado. Las tres
+ * fórmulas (KG, PAQ, MAGRE) conviven en la misma tabla — por eso varios
+ * campos son excluyentes entre sí según `agrupacioRendiment`, ver
+ * docs/contrato-api.md ("Panell Producció") para los ejemplos numéricos
+ * verificados contra el prototipo:
+ * - `agrupacioRendiment: "KG"` → sólo `kgAElaborar` (paqPedido null).
+ * - `agrupacioRendiment: "PAQ"` → sólo `paqPedido` (kgAElaborar null).
+ * - `agrupacioRendiment: "MAGRE"` → `rendiment`/`diferencia` van al total
+ *   global de `PanellProduccioApi.totals`, no por línea (ambos null acá).
+ */
+export interface PanellProduccioFilaApi {
+  agrupacioRendiment: string;
+  categoria: string;
+  agrupacioProduccio: string;
+  producte: { id: number; descripcio: string };
+  /** Null cuando la agrupación es KG o MAGRE (no aplica). */
+  paqPedido: string | null;
+  /** Null cuando la agrupación es PAQ. */
+  kgAElaborar: string | null;
+  /** Null en filas MAGRE (van al total global, no por línea). */
+  rendiment: string | null;
+  /** Mismo criterio que rendiment. */
+  diferencia: string | null;
+}
+
+export interface PanellProduccioApi {
+  totals: {
+    totalKgAElaborar: string;
+    totalKgMagro: string;
+    diferencia: string;
+  };
+  dades: PanellProduccioFilaApi[];
+  paginacio: Paginacio;
+}
+
+// ── 6 · Usuaris i rols ────────────────────────────────────────────────────
+
+/**
+ * Un rol define qué módulos de la aplicación puede ver el usuario — no
+ * restringe acciones dentro de un módulo (ver ADR-021: ningún endpoint de
+ * negocio bloquea por rol todavía; `modulsPermesos` es lo que el
+ * FRONTEND usa para decidir qué mostrar en el menú).
+ */
+export interface RolApi {
+  id: number;
+  nom: string;
+  /** Claves de módulo, ej. ["categories", "catalog", "tarifes", "clients", "comandes", "panells", "produccio", "usuaris"]. */
+  modulsPermesos: string[];
+}
+
+export interface RolEntradaApi {
+  nom: string;
+  modulsPermesos: string[];
+}
+
+export interface UsuariApi {
+  id: number;
+  /** uid de Firebase Auth — vínculo con el token, ver ADR-021. */
+  firebaseUid: string;
+  nom: string;
+  email: string;
+  rol: { id: number; nom: string };
+  actiu: boolean;
+}
+
+export interface UsuariEntradaApi {
+  firebaseUid: string;
+  nom: string;
+  email: string;
+  rolId: number;
+  actiu?: boolean;
 }

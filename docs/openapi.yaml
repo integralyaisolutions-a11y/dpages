@@ -9,11 +9,19 @@ info:
     regla (por qué el empaquetado exige valores obligatorios, qué es
     kgEditable, etc.).
 
-    Refleja el estado confirmado hasta la capa 11: detalle de incidencias,
+    Refleja el estado confirmado hasta la capa 11 (detalle de incidencias,
     CORS, alta manual de cliente, dirección de entrega del pedido, fecha y
-    observación por línea, y código de tarifa. Los campos de agrupación de
-    artículo (formato, envasado, agrupación de producción) quedan fuera
-    hasta que el cliente los confirme.
+    observación por línea, código de tarifa) MÁS las decisiones funcionales
+    confirmadas con el cliente el 18/08/2026: campos de agrupación de
+    artículo (formato, envasado, agrupación de producción), agrupación de
+    rendimiento por categoría, Rendiments Porcs, Panell Producció (shape
+    cerrado; las fórmulas numéricas todavía no — ver
+    docs/contrato-api.md sección 4.10), Panell Obrador por línea individual
+    (ya no agrupado por producto), orígenes de pedido como tabla mantenible
+    (ya no un enum fijo), y usuarios/roles. Esta versión es SOLO contrato —
+    los endpoints nuevos (rendiments-porcs, panells/produccio,
+    origens-comanda, usuaris, rols, jo) todavía no están implementados en
+    el backend real.
   contact:
     name: VisioFlow Tech
 
@@ -28,12 +36,16 @@ tags:
   - name: Salut
   - name: Categories
   - name: Productes
+  - name: RendimentsPorcs
   - name: Tarifes
   - name: Clients
   - name: Transportistes
   - name: Comandes
+  - name: OrigensComanda
   - name: Empaquetat
   - name: Panells
+  - name: Usuaris
+  - name: Rols
 
 paths:
   /salut:
@@ -85,7 +97,7 @@ paths:
             schema:
               type: object
               properties:
-                agrupacioRendiment: { type: string, nullable: true }
+                agrupacioRendiment: { type: string, enum: [KG, MAGRE, PAQ], nullable: true }
       responses:
         '200':
           description: Categoría actualizada
@@ -169,6 +181,81 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Producte' }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+
+  /api/v1/rendiments-porcs:
+    get:
+      tags: [RendimentsPorcs]
+      summary: >-
+        Listar fichas de rendimiento porcino. Nuevo, confirmado 18/08/2026.
+        Todavía no implementado en el backend real.
+      parameters:
+        - name: agrupacioRendiment
+          in: query
+          schema: { type: string, enum: [KG, MAGRE, PAQ] }
+        - name: categoria
+          in: query
+          schema: { type: string }
+        - name: agrupacioProduccio
+          in: query
+          schema: { type: string }
+        - name: producteId
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/Pagina'
+        - $ref: '#/components/parameters/Mida'
+      responses:
+        '200':
+          description: Listado paginado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dades:
+                    type: array
+                    items: { $ref: '#/components/schemas/RendimentPorc' }
+                  paginacio: { $ref: '#/components/schemas/Paginacio' }
+    post:
+      tags: [RendimentsPorcs]
+      summary: Crear una ficha de rendimiento
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RendimentPorcEntrada' }
+      responses:
+        '201':
+          description: Ficha creada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RendimentPorc' }
+        '400': { $ref: '#/components/responses/Validacio' }
+
+  /api/v1/rendiments-porcs/{id}:
+    patch:
+      tags: [RendimentsPorcs]
+      summary: Actualizar una ficha de rendimiento (parcial, edición en línea)
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RendimentPorcEntrada' }
+      responses:
+        '200':
+          description: Ficha actualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RendimentPorc' }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+    delete:
+      tags: [RendimentsPorcs]
+      summary: Eliminar una ficha de rendimiento
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '204': { description: Eliminada }
         '404': { $ref: '#/components/responses/NoTrobat' }
 
   /api/v1/tarifes/matriu:
@@ -344,7 +431,8 @@ paths:
           schema: { type: integer }
         - name: origen
           in: query
-          schema: { $ref: '#/components/schemas/OrigenComanda' }
+          description: 'Codi de origen_comanda, ej. "woocommerce" o "manual" — ya no es un enum fijo.'
+          schema: { type: string }
         - name: dataDes
           in: query
           schema: { type: string, format: date }
@@ -526,7 +614,10 @@ paths:
   /api/v1/panells/obrador:
     get:
       tags: [Panells]
-      summary: Panel de obrador (solo lectura, agrupado por artículo)
+      summary: >-
+        Panel de obrador (solo lectura). Confirmado con el cliente el
+        18/08/2026: líneas de pedido INDIVIDUALES, ya no agrupado por
+        artículo.
       parameters:
         - name: dataProduccioDes
           in: query
@@ -556,8 +647,43 @@ paths:
                       linies: { type: integer }
                       totalUnitats: { type: integer }
                       totalKg: { type: string }
-                  dades: { type: array, items: { type: object } }
+                  dades:
+                    type: array
+                    items: { $ref: '#/components/schemas/FilaPanellObrador' }
                   paginacio: { $ref: '#/components/schemas/Paginacio' }
+
+  /api/v1/panells/produccio:
+    get:
+      tags: [Panells]
+      summary: >-
+        Panel de producción (solo lectura). Nuevo, confirmado 18/08/2026.
+        Todavía no implementado en el backend real — las fórmulas
+        numéricas de KG/PAQ/MAGRE quedan pendientes de confirmar, ver
+        docs/contrato-api.md sección 4.10.
+      parameters:
+        - name: agrupacioRendiment
+          in: query
+          schema: { type: string, enum: [KG, MAGRE, PAQ] }
+        - name: producteId
+          in: query
+          schema: { type: integer }
+        - name: dataDes
+          in: query
+          schema: { type: string, format: date }
+        - name: dataFins
+          in: query
+          schema: { type: string, format: date }
+        - name: nombrePorcs
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/Pagina'
+        - $ref: '#/components/parameters/Mida'
+      responses:
+        '200':
+          description: Panel con totales
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PanellProduccio' }
 
   /api/v1/panells/empaquetat:
     get:
@@ -598,6 +724,208 @@ paths:
                       liniesPendents: { type: integer }
                   dades: { type: array, items: { type: object } }
                   paginacio: { $ref: '#/components/schemas/Paginacio' }
+
+  /api/v1/origens-comanda:
+    get:
+      tags: [OrigensComanda]
+      summary: >-
+        Listar orígenes de pedido. Nuevo, confirmado 18/08/2026 — reemplaza
+        el enum fijo OrigenComanda. Todavía no implementado en el backend real.
+      responses:
+        '200':
+          description: Listado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dades:
+                    type: array
+                    items: { $ref: '#/components/schemas/OrigenComanda' }
+    post:
+      tags: [OrigensComanda]
+      summary: Crear un origen de pedido
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrigenComandaEntrada' }
+      responses:
+        '201':
+          description: Origen creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrigenComanda' }
+        '400': { $ref: '#/components/responses/Validacio' }
+
+  /api/v1/origens-comanda/{id}:
+    patch:
+      tags: [OrigensComanda]
+      summary: Actualizar un origen de pedido (parcial — codi no se edita)
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nom: { type: string }
+                actiu: { type: boolean }
+      responses:
+        '200':
+          description: Origen actualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrigenComanda' }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+    delete:
+      tags: [OrigensComanda]
+      summary: >-
+        Eliminar un origen de pedido. En la práctica, preferir
+        PATCH {actiu: false} si ya hay pedidos usando ese origen.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '204': { description: Eliminado }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+
+  /api/v1/rols:
+    get:
+      tags: [Rols]
+      summary: >-
+        Listar roles. Nuevo, confirmado 18/08/2026. Todavía no implementado
+        en el backend real.
+      responses:
+        '200':
+          description: Listado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dades:
+                    type: array
+                    items: { $ref: '#/components/schemas/Rol' }
+    post:
+      tags: [Rols]
+      summary: Crear un rol
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RolEntrada' }
+      responses:
+        '201':
+          description: Rol creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Rol' }
+        '400': { $ref: '#/components/responses/Validacio' }
+
+  /api/v1/rols/{id}:
+    patch:
+      tags: [Rols]
+      summary: Actualizar un rol (parcial)
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RolEntrada' }
+      responses:
+        '200':
+          description: Rol actualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Rol' }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+    delete:
+      tags: [Rols]
+      summary: Eliminar un rol
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '204': { description: Eliminado }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+
+  /api/v1/usuaris:
+    get:
+      tags: [Usuaris]
+      summary: >-
+        Listar usuarios. Nuevo, confirmado 18/08/2026. Todavía no
+        implementado en el backend real.
+      parameters:
+        - $ref: '#/components/parameters/Pagina'
+        - $ref: '#/components/parameters/Mida'
+      responses:
+        '200':
+          description: Listado paginado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dades:
+                    type: array
+                    items: { $ref: '#/components/schemas/Usuari' }
+                  paginacio: { $ref: '#/components/schemas/Paginacio' }
+    post:
+      tags: [Usuaris]
+      summary: Crear un usuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UsuariEntrada' }
+      responses:
+        '201':
+          description: Usuario creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Usuari' }
+        '400': { $ref: '#/components/responses/Validacio' }
+
+  /api/v1/usuaris/{id}:
+    patch:
+      tags: [Usuaris]
+      summary: Actualizar un usuario (parcial)
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UsuariEntrada' }
+      responses:
+        '200':
+          description: Usuario actualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Usuari' }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+    delete:
+      tags: [Usuaris]
+      summary: Eliminar un usuario
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '204': { description: Eliminado }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+
+  /api/v1/jo:
+    get:
+      tags: [Usuaris]
+      summary: >-
+        Usuario autenticado (resuelto por el uid del token de Firebase) con
+        su rol y módulos permitidos. Lo primero que llama el frontend
+        después de loguearse. Nuevo, confirmado 18/08/2026. Todavía no
+        implementado en el backend real.
+      responses:
+        '200':
+          description: Usuario autenticado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Usuari' }
 
 components:
   securitySchemes:
@@ -646,10 +974,6 @@ components:
       type: string
       enum: [oberta, en_proces, tancada, amb_incidencia]
 
-    OrigenComanda:
-      type: string
-      enum: [web, email, whatsapp, telefon]
-
     Error:
       type: object
       properties:
@@ -682,7 +1006,13 @@ components:
         id: { type: integer }
         nom: { type: string }
         elaboratPorc: { type: boolean }
-        agrupacioRendiment: { type: string, nullable: true }
+        agrupacioRendiment:
+          type: string
+          enum: [KG, MAGRE, PAQ]
+          nullable: true
+          description: >-
+            Null sólo cuando elaboratPorc es false — regla de negocio, no
+            falta de dato. Confirmado con el cliente el 18/08/2026.
 
     Producte:
       type: object
@@ -704,6 +1034,18 @@ components:
           properties:
             id: { type: integer }
             nom: { type: string }
+        agrupacioProduccio:
+          type: string
+          nullable: true
+          description: Texto libre. Agrupa varios códigos bajo una misma familia lógica de producción.
+        format:
+          type: string
+          enum: [SENCER, TALLAT, LLESCAT]
+          nullable: true
+        envasat:
+          type: string
+          enum: ['NORMAL', 'NORMAL (pes)', 'NORMAL (web)', 'ESPECIAL']
+          nullable: true
 
     ProducteEntrada:
       type: object
@@ -715,6 +1057,12 @@ components:
         pesKg: { type: string, nullable: true }
         preuVenda: { type: string }
         categoriaId: { type: integer }
+        agrupacioProduccio: { type: string, nullable: true }
+        format: { type: string, enum: [SENCER, TALLAT, LLESCAT], nullable: true }
+        envasat:
+          type: string
+          enum: ['NORMAL', 'NORMAL (pes)', 'NORMAL (web)', 'ESPECIAL']
+          nullable: true
 
     Tarifa:
       type: object
@@ -772,6 +1120,10 @@ components:
       type: object
       properties:
         id: { type: integer }
+        codi:
+          type: string
+          nullable: true
+          description: 'Texto libre, nemotécnico, definido por el usuario al dar de alta — ej. "TR-DHL".'
         nom: { type: string }
         actiu: { type: boolean }
 
@@ -781,7 +1133,11 @@ components:
       properties:
         id: { type: integer }
         num: { type: string }
-        origen: { $ref: '#/components/schemas/OrigenComanda' }
+        origen:
+          type: string
+          description: >-
+            Codi de origen_comanda (ej. "woocommerce", "manual") — ya no es
+            un enum fijo, ver el schema OrigenComanda y GET /origens-comanda.
         estat: { $ref: '#/components/schemas/EstatComanda' }
         client:
           type: object
@@ -846,7 +1202,13 @@ components:
         unitatsLliurades: { type: integer }
         kgLliurats: { type: string }
         confirmatA: { type: string, format: date-time, nullable: true }
-        preuUnitari: { type: string }
+        preuUnitari:
+          type: string
+          description: >-
+            Cascada de resolución: 1) tarifa asignada al cliente para este
+            producto; 2) si no hay, el precio base del producto
+            (Producte.preuVenda); 3) si tampoco hay, "0.00" con incidencia
+            registrada.
         totalLinia: { type: string }
         esborrat: { type: boolean }
 
@@ -865,7 +1227,11 @@ components:
       properties:
         id: { type: integer }
         num: { type: string }
-        origen: { $ref: '#/components/schemas/OrigenComanda' }
+        origen:
+          type: string
+          description: >-
+            Codi de origen_comanda (ej. "woocommerce", "manual") — ya no es
+            un enum fijo, ver el schema OrigenComanda y GET /origens-comanda.
         estat: { $ref: '#/components/schemas/EstatComanda' }
         client:
           type: object
@@ -906,7 +1272,11 @@ components:
       type: object
       required: [origen, clientId, linies]
       properties:
-        origen: { $ref: '#/components/schemas/OrigenComanda' }
+        origen:
+          type: string
+          description: >-
+            Codi de origen_comanda (ej. "woocommerce", "manual") — ya no es
+            un enum fijo, ver el schema OrigenComanda y GET /origens-comanda.
         clientId: { type: integer }
         dataLliurament: { type: string, format: date-time, nullable: true }
         transportistaId: { type: integer, nullable: true }
@@ -937,3 +1307,186 @@ components:
         bultos: { type: integer, nullable: true }
         obsProduccio: { type: string, nullable: true }
         obsLliurament: { type: string, nullable: true }
+
+    FilaPanellObrador:
+      type: object
+      description: >-
+        Confirmado con el cliente el 18/08/2026: una fila por LÍNEA de
+        pedido individual, ya no agrupado por producto.
+      properties:
+        liniaId: { type: integer }
+        comandaId: { type: integer }
+        producte:
+          type: object
+          properties:
+            id: { type: integer }
+            codi: { type: string, nullable: true }
+            descripcio: { type: string }
+        categoria: { type: string, nullable: true }
+        format: { type: string, nullable: true }
+        envasat: { type: string, nullable: true }
+        client: { type: string, nullable: true }
+        dataProduccio:
+          type: string
+          format: date-time
+          nullable: true
+          description: Fecha de producción propia de la línea.
+        unitats: { type: integer }
+        kg: { type: string }
+        obsProduccio: { type: string, nullable: true }
+
+    RendimentPorc:
+      type: object
+      description: >-
+        Ficha de rendimiento por producto — base del cálculo de Panell
+        Producció. Nueva, confirmada el 18/08/2026. Todavía no
+        implementada en el backend real.
+      properties:
+        id: { type: integer }
+        producte:
+          type: object
+          properties:
+            id: { type: integer }
+            codi: { type: string, nullable: true }
+            descripcio: { type: string }
+        agrupacioRendiment:
+          type: string
+          description: Derivado de producte.categoria.agrupacioRendiment — sólo lectura.
+        categoria:
+          type: string
+          description: Derivado de producte.categoria.nom — sólo lectura.
+        agrupacioProduccio:
+          type: string
+          nullable: true
+          description: Derivado de producte.agrupacioProduccio — sólo lectura.
+        unitatsPerPorc: { type: string }
+        kgPerUnitat: { type: string }
+        pesTotal:
+          type: string
+          description: Calculado = unitatsPerPorc × kgPerUnitat.
+
+    RendimentPorcEntrada:
+      type: object
+      required: [producteId, unitatsPerPorc, kgPerUnitat]
+      properties:
+        producteId: { type: integer }
+        unitatsPerPorc: { type: string }
+        kgPerUnitat: { type: string }
+
+    OrigenComanda:
+      type: object
+      description: >-
+        Entidad de origen_comanda (confirmado 18/08/2026: tabla mantenible,
+        ya no un enum fijo). codi es el valor de ComandaResum.origen /
+        ComandaDetall.origen.
+      properties:
+        id: { type: integer }
+        codi: { type: string, example: woocommerce }
+        nom: { type: string, example: WooCommerce }
+        actiu: { type: boolean }
+
+    OrigenComandaEntrada:
+      type: object
+      required: [codi, nom]
+      properties:
+        codi:
+          type: string
+          description: Estable una vez creado — no se edita por PATCH.
+        nom: { type: string }
+        actiu: { type: boolean, default: true }
+
+    PanellProduccioFila:
+      type: object
+      description: >-
+        Nueva, confirmada el 18/08/2026. Todavía no implementada en el
+        backend real — las fórmulas numéricas de KG/PAQ/MAGRE quedan
+        pendientes de confirmar, ver docs/contrato-api.md sección 4.10.
+      properties:
+        agrupacioRendiment: { type: string, enum: [KG, MAGRE, PAQ] }
+        categoria: { type: string }
+        agrupacioProduccio: { type: string }
+        producte:
+          type: object
+          properties:
+            id: { type: integer }
+            descripcio: { type: string }
+        paqPedido:
+          type: string
+          nullable: true
+          description: Null cuando agrupacioRendiment es KG o MAGRE (no aplica).
+        kgAElaborar:
+          type: string
+          nullable: true
+          description: Null cuando agrupacioRendiment es PAQ.
+        rendiment:
+          type: string
+          nullable: true
+          description: Null en filas MAGRE — van al total global, no por línea.
+        diferencia:
+          type: string
+          nullable: true
+          description: Mismo criterio que rendiment.
+
+    PanellProduccio:
+      type: object
+      properties:
+        totals:
+          type: object
+          properties:
+            totalKgAElaborar: { type: string }
+            totalKgMagro: { type: string }
+            diferencia: { type: string }
+        dades:
+          type: array
+          items: { $ref: '#/components/schemas/PanellProduccioFila' }
+        paginacio: { $ref: '#/components/schemas/Paginacio' }
+
+    Rol:
+      type: object
+      description: >-
+        Define qué módulos ve el usuario en el frontend — no restringe
+        acciones (ADR-021, ningún endpoint de negocio bloquea por rol).
+        Nuevo, confirmado 18/08/2026.
+      properties:
+        id: { type: integer }
+        nom: { type: string }
+        modulsPermesos:
+          type: array
+          items: { type: string }
+          example: [categories, catalog, tarifes, clients, comandes, panells]
+
+    RolEntrada:
+      type: object
+      required: [nom, modulsPermesos]
+      properties:
+        nom: { type: string }
+        modulsPermesos:
+          type: array
+          items: { type: string }
+
+    Usuari:
+      type: object
+      description: Nuevo, confirmado 18/08/2026. Todavía no implementado en el backend real.
+      properties:
+        id: { type: integer }
+        firebaseUid:
+          type: string
+          description: uid de Firebase Auth — vínculo con el token, ver ADR-021.
+        nom: { type: string }
+        email: { type: string }
+        rol:
+          type: object
+          properties:
+            id: { type: integer }
+            nom: { type: string }
+        actiu: { type: boolean }
+
+    UsuariEntrada:
+      type: object
+      required: [firebaseUid, nom, email, rolId]
+      properties:
+        firebaseUid: { type: string }
+        nom: { type: string }
+        email: { type: string }
+        rolId: { type: integer }
+        actiu: { type: boolean, default: true }
