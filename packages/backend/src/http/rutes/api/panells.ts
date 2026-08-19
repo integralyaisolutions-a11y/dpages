@@ -253,19 +253,29 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       [...valors, mida, offset],
     );
 
+    // TODO(capa-15): Obrador hoy sigue agregado por producto en SQL, pero
+    // el contrato ya exige líneas de pedido individuales (hoja de ruta
+    // técnica, capa 15, punto A-6: "Reescribir el SQL y FilaPanellObradorApi").
+    // Esto es un parche de TIPOS para poder compilar/desplegar — NO es la
+    // implementación correcta. liniaId/comandaId/client quedan en 0/0/null
+    // porque el modelo agregado no tiene una línea, un pedido ni un cliente
+    // reales que ofrecer (una fila acá es un producto con varias líneas de
+    // varios pedidos mezcladas). format/envasat quedan en null porque la
+    // consulta todavía no los trae — existen en producte desde la
+    // migración 0011, pero agregarlos es parte de la reescritura real de
+    // la capa 15, no de este parche.
     const dades: FilaPanellObradorApi[] = files.rows.map((f) => ({
-      producteId: Number(f.id_seq),
-      codi: f.codi,
-      producte: f.descripcio,
-      tipus: f.tipus,
+      liniaId: 0,
+      comandaId: 0,
+      producte: { id: Number(f.id_seq), codi: f.codi, descripcio: f.descripcio },
       categoria: f.categoria_nom,
+      format: null,
+      envasat: null,
+      client: null,
       dataProduccio: formatearDataApi(f.data_produccio),
-      dataExpedicio: formatearDataApi(f.data_expedicio),
-      dataLliurament: formatearDataApi(f.data_lliurament),
       unitats: Number(f.unitats),
       kg: f.kg,
       obsProduccio: f.obs_produccio,
-      obsLliurament: f.obs_lliurament,
     }));
 
     return {

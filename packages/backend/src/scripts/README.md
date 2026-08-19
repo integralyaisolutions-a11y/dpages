@@ -32,6 +32,17 @@ No son parte del servicio, no se despliegan a Cloud Run. Sin script de
   tsx --env-file-if-exists=../../.env src/scripts/netejar-historic-desenvolupament.ts [fecha ISO]
   ```
 
+- **`seed-arranque.ts`** — carga (UPSERT, correrlo de nuevo no duplica)
+  las 8 categorías y los 2 orígenes de pedido de arranque, autorizados por
+  el cliente (Francesc) el 18/08/2026 para no esperar los datos reales
+  hasta el cut-over. A diferencia de `netejar-historic-desenvolupament.ts`,
+  **no** rechaza correr en producción — se piensa usar también contra
+  Cloud SQL real.
+
+  ```
+  tsx --env-file-if-exists=../../.env src/scripts/seed-arranque.ts
+  ```
+
 Previstas, todavía sin escribir:
 
 - **Perfilado de la tienda WooCommerce** — reutilizando

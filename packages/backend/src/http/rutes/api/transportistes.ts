@@ -5,12 +5,13 @@ import { construirPaginacio, parsearPaginacio } from './comu.js';
 
 interface FilaTransportista {
   id_seq: string;
+  codi: string | null;
   nom: string;
   actiu: boolean;
 }
 
 function aApi(fila: FilaTransportista): TransportistaApi {
-  return { id: Number(fila.id_seq), nom: fila.nom, actiu: fila.actiu };
+  return { id: Number(fila.id_seq), codi: fila.codi, nom: fila.nom, actiu: fila.actiu };
 }
 
 export function registrarRutesTransportistes(fastify: FastifyInstance): void {
@@ -19,7 +20,7 @@ export function registrarRutesTransportistes(fastify: FastifyInstance): void {
 
     const total = await pool.query<{ count: string }>('SELECT count(*) FROM transportista');
     const files = await pool.query<FilaTransportista>(
-      'SELECT id_seq, nom, actiu FROM transportista ORDER BY nom ASC LIMIT $1 OFFSET $2',
+      'SELECT id_seq, codi, nom, actiu FROM transportista ORDER BY nom ASC LIMIT $1 OFFSET $2',
       [mida, offset],
     );
 

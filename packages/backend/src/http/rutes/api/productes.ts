@@ -10,6 +10,18 @@ import {
   resolverCategoriaUuid,
 } from './comu.js';
 
+type Format = 'SENCER' | 'TALLAT' | 'LLESCAT';
+type Envasat = 'NORMAL' | 'NORMAL (pes)' | 'NORMAL (web)' | 'ESPECIAL';
+const FORMATS: readonly Format[] = ['SENCER', 'TALLAT', 'LLESCAT'];
+const ENVASATS: readonly Envasat[] = ['NORMAL', 'NORMAL (pes)', 'NORMAL (web)', 'ESPECIAL'];
+
+function esFormatValid(valor: unknown): valor is Format {
+  return typeof valor === 'string' && FORMATS.includes(valor as Format);
+}
+function esEnvasatValid(valor: unknown): valor is Envasat {
+  return typeof valor === 'string' && ENVASATS.includes(valor as Envasat);
+}
+
 interface FilaProducte {
   id_seq: string;
   codi: string | null;
@@ -21,6 +33,9 @@ interface FilaProducte {
   actiu: boolean;
   categoria_id_seq: string | null;
   categoria_nom: string | null;
+  agrupacio_produccio: string | null;
+  format: Format | null;
+  envasat: Envasat | null;
 }
 
 function aApi(fila: FilaProducte): ProducteApi {
@@ -37,12 +52,16 @@ function aApi(fila: FilaProducte): ProducteApi {
       fila.categoria_id_seq !== null && fila.categoria_nom !== null
         ? { id: Number(fila.categoria_id_seq), nom: fila.categoria_nom }
         : null,
+    agrupacioProduccio: fila.agrupacio_produccio,
+    format: fila.format,
+    envasat: fila.envasat,
   };
 }
 
 const SELECT_PRODUCTE = `
   SELECT p.id_seq, p.codi, p.descripcio, p.descripcio_venda, p.tipus, p.pes_kg,
-         p.preu_venda, p.actiu, c.id_seq AS categoria_id_seq, c.nom AS categoria_nom
+         p.preu_venda, p.actiu, c.id_seq AS categoria_id_seq, c.nom AS categoria_nom,
+         p.agrupacio_produccio, p.format, p.envasat
   FROM producte p
   LEFT JOIN categoria_producte c ON c.id = p.categoria_id
 `;
@@ -72,6 +91,24 @@ export function registrarRutesProductes(fastify: FastifyInstance): void {
     if (query.actiu === 'true' || query.actiu === 'false') {
       condicions.push(`p.actiu = $${valors.length + 1}`);
       valors.push(query.actiu === 'true');
+    }
+    if (typeof query.format === 'string' && query.format !== '') {
+      if (!esFormatValid(query.format)) {
+        return enviarValidacio(reply, `format ha de ser: ${FORMATS.join(', ')}`);
+      }
+      condicions.push(`p.format = $${valors.length + 1}`);
+      valors.push(query.format);
+    }
+    if (typeof query.envasat === 'string' && query.envasat !== '') {
+      if (!esEnvasatValid(query.envasat)) {
+        return enviarValidacio(reply, `envasat ha de ser: ${ENVASATS.join(', ')}`);
+      }
+      condicions.push(`p.envasat = $${valors.length + 1}`);
+      valors.push(query.envasat);
+    }
+    if (typeof query.agrupacioProduccio === 'string' && query.agrupacioProduccio !== '') {
+      condicions.push(`p.agrupacio_produccio = $${valors.length + 1}`);
+      valors.push(query.agrupacioProduccio);
     }
     if (typeof query.cerca === 'string' && query.cerca.trim() !== '') {
       condicions.push(
@@ -118,6 +155,9 @@ export function registrarRutesProductes(fastify: FastifyInstance): void {
       preuVenda: string | null;
       actiu: boolean;
       categoriaId: number | null;
+      agrupacioProduccio: string | null;
+      format: Format | null;
+      envasat: Envasat | null;
     }>;
 
     if (!cos.descripcio || cos.descripcio.trim() === '') {
@@ -128,6 +168,16 @@ export function registrarRutesProductes(fastify: FastifyInstance): void {
     if (cos.tipus !== undefined && cos.tipus !== 'simple' && cos.tipus !== 'variable') {
       return enviarValidacio(reply, 'tipus ha de ser "simple" o "variable"', [
         { camp: 'tipus', missatge: 'ha de ser "simple" o "variable"' },
+      ]);
+    }
+    if (cos.format !== undefined && cos.format !== null && !esFormatValid(cos.format)) {
+      return enviarValidacio(reply, `format ha de ser ${FORMATS.join(', ')} o null`, [
+        { camp: 'format', missatge: `ha de ser ${FORMATS.join(', ')} o null` },
+      ]);
+    }
+    if (cos.envasat !== undefined && cos.envasat !== null && !esEnvasatValid(cos.envasat)) {
+      return enviarValidacio(reply, `envasat ha de ser ${ENVASATS.join(', ')} o null`, [
+        { camp: 'envasat', missatge: `ha de ser ${ENVASATS.join(', ')} o null` },
       ]);
     }
 
@@ -143,12 +193,14 @@ export function registrarRutesProductes(fastify: FastifyInstance): void {
 
     const insertat = await pool.query<FilaProducte>(
       `WITH nou AS (
-         INSERT INTO producte (codi, descripcio, descripcio_venda, tipus, pes_kg, preu_venda, actiu, categoria_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         INSERT INTO producte (codi, descripcio, descripcio_venda, tipus, pes_kg, preu_venda, actiu,
+                                categoria_id, agrupacio_produccio, format, envasat)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING *
        )
        SELECT nou.id_seq, nou.codi, nou.descripcio, nou.descripcio_venda, nou.tipus, nou.pes_kg,
-              nou.preu_venda, nou.actiu, c.id_seq AS categoria_id_seq, c.nom AS categoria_nom
+              nou.preu_venda, nou.actiu, c.id_seq AS categoria_id_seq, c.nom AS categoria_nom,
+              nou.agrupacio_produccio, nou.format, nou.envasat
        FROM nou LEFT JOIN categoria_producte c ON c.id = nou.categoria_id`,
       [
         cos.codi ?? null,
@@ -159,6 +211,9 @@ export function registrarRutesProductes(fastify: FastifyInstance): void {
         cos.preuVenda ?? null,
         cos.actiu ?? true,
         categoriaUuid,
+        cos.agrupacioProduccio ?? null,
+        cos.format ?? null,
+        cos.envasat ?? null,
       ],
     );
 
@@ -179,6 +234,9 @@ export function registrarRutesProductes(fastify: FastifyInstance): void {
       preuVenda: string | null;
       actiu: boolean;
       categoriaId: number | null;
+      agrupacioProduccio: string | null;
+      format: Format | null;
+      envasat: Envasat | null;
     }>;
 
     if (cos.descripcio !== undefined && cos.descripcio.trim() === '') {
@@ -189,6 +247,16 @@ export function registrarRutesProductes(fastify: FastifyInstance): void {
     if (cos.tipus !== undefined && cos.tipus !== 'simple' && cos.tipus !== 'variable') {
       return enviarValidacio(reply, 'tipus ha de ser "simple" o "variable"', [
         { camp: 'tipus', missatge: 'ha de ser "simple" o "variable"' },
+      ]);
+    }
+    if (cos.format !== undefined && cos.format !== null && !esFormatValid(cos.format)) {
+      return enviarValidacio(reply, `format ha de ser ${FORMATS.join(', ')} o null`, [
+        { camp: 'format', missatge: `ha de ser ${FORMATS.join(', ')} o null` },
+      ]);
+    }
+    if (cos.envasat !== undefined && cos.envasat !== null && !esEnvasatValid(cos.envasat)) {
+      return enviarValidacio(reply, `envasat ha de ser ${ENVASATS.join(', ')} o null`, [
+        { camp: 'envasat', missatge: `ha de ser ${ENVASATS.join(', ')} o null` },
       ]);
     }
 
@@ -215,7 +283,10 @@ export function registrarRutesProductes(fastify: FastifyInstance): void {
          pes_kg = CASE WHEN $8 THEN $9 ELSE pes_kg END,
          preu_venda = CASE WHEN $10 THEN $11 ELSE preu_venda END,
          actiu = COALESCE($12, actiu),
-         categoria_id = CASE WHEN $13 THEN $14 ELSE categoria_id END
+         categoria_id = CASE WHEN $13 THEN $14 ELSE categoria_id END,
+         agrupacio_produccio = CASE WHEN $15 THEN $16 ELSE agrupacio_produccio END,
+         format = CASE WHEN $17 THEN $18 ELSE format END,
+         envasat = CASE WHEN $19 THEN $20 ELSE envasat END
        WHERE id_seq = $1
        RETURNING id`,
       [
@@ -233,6 +304,12 @@ export function registrarRutesProductes(fastify: FastifyInstance): void {
         cos.actiu ?? null,
         categoriaUuid !== undefined,
         categoriaUuid ?? null,
+        cos.agrupacioProduccio !== undefined,
+        cos.agrupacioProduccio ?? null,
+        cos.format !== undefined,
+        cos.format ?? null,
+        cos.envasat !== undefined,
+        cos.envasat ?? null,
       ],
     );
 
