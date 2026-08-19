@@ -117,17 +117,37 @@ async function registrarIncidenciaConflicteIdentitatSiFalta(
   );
 }
 
+/**
+ * `origen_comanda` (capa 13, sembrado por seed-arranque.ts) reemplaza la
+ * columna vieja `origen` (deprecated desde la migración 0013) — todo pedido
+ * que entra por este transformador viene de WooCommerce, así que siempre
+ * resuelve al mismo codi fijo.
+ */
+async function resolverOrigenWoocommerceUuid(client: PoolClient): Promise<string> {
+  const res = await client.query<{ id: string }>(
+    `SELECT id FROM origen_comanda WHERE codi = 'woocommerce'`,
+  );
+  if (!res.rows[0]) {
+    throw new Error(
+      `No existe la fila origen_comanda con codi='woocommerce' — falta correr seed-arranque.ts`,
+    );
+  }
+  return res.rows[0].id;
+}
+
 async function crearComanda(
   client: PoolClient,
   wooOrder: WooOrder,
   clientId: string | null,
 ): Promise<string> {
+  const origenId = await resolverOrigenWoocommerceUuid(client);
   const res = await client.query<{ id: string }>(
-    `INSERT INTO comanda (woo_order_id, origen, estat, estat_web, poblacio_desti, total, data_modificacio_woo, client_id)
-     VALUES ($1, 'web', 'oberta', $2, $3, $4, $5, $6)
+    `INSERT INTO comanda (woo_order_id, origen_id, estat, estat_web, poblacio_desti, total, data_modificacio_woo, client_id)
+     VALUES ($1, $2, 'oberta', $3, $4, $5, $6, $7)
      RETURNING id`,
     [
       wooOrder.id,
+      origenId,
       wooOrder.status,
       wooOrder.shipping.city,
       wooOrder.total,

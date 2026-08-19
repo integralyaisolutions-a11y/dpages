@@ -533,8 +533,8 @@ Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-
   "dades": [
     {
       "id": 142,
-      "num": "2026-0142",
-      "origen": "web",
+      "num": "000142",
+      "origen": "woocommerce",
       "estat": "oberta",
       "client": { "id": 45, "nom": "Restaurant Example", "poblacio": "Manresa" },
       "tarifa": { "id": 2, "nom": "Restaurants" },
@@ -572,8 +572,8 @@ Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-
 ```json
 {
   "id": 142,
-  "num": "2026-0142",
-  "origen": "web",
+  "num": "000142",
+  "origen": "woocommerce",
   "estat": "oberta",
   "client": { "id": 45, "nom": "Restaurant Example", "poblacio": "Manresa" },
   "tarifa": { "id": 2, "nom": "Restaurants" },
@@ -657,7 +657,7 @@ correo y WhatsApp, que son la mayoría del volumen real.
 
 ```json
 {
-  "origen": "telefon",
+  "origen": "manual",
   "clientId": 45,
   "dataLliurament": "2026-08-20T00:00:00Z",
   "transportistaId": 1,
@@ -706,7 +706,7 @@ Filtros: `?dataExpedicioDes=&dataExpedicioFins=&transportistaId=&estat=&clientId
   "dades": [
     {
       "comandaId": 142,
-      "num": "2026-0142",
+      "num": "000142",
       "client": "Restaurant Example",
       "poblacioDesti": "Manresa",
       "tarifa": "Restaurants",
@@ -819,7 +819,7 @@ Filtros: `?dataExpedicioDes=&dataExpedicioFins=&transportistaId=&clientId=`
     {
       "liniaId": 981,
       "comandaId": 142,
-      "num": "2026-0142",
+      "num": "000142",
       "dataExpedicio": "2026-08-17T00:00:00Z",
       "dataLliurament": "2026-08-18T00:00:00Z",
       "transportista": "DHL",

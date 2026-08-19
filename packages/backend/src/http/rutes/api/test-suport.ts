@@ -26,6 +26,16 @@ export async function prepararEntornApi(prefix: string): Promise<EntornTestApi> 
   await setup.query(`CREATE SCHEMA "${esquema}"`);
   await setup.query(`SET search_path TO "${esquema}"`);
   await migrarArriba(setup);
+  // origen_comanda no se siembra en la migración (sus filas son datos de
+  // arranque, ver seed-arranque.ts) — pero desde la capa 15 (migración
+  // 0013), comanda.origen_id es NOT NULL y toda alta de comanda (manual o
+  // sync) necesita resolver contra ella. Sin esto, cualquier test que cree
+  // una comanda fallaría por falta de las filas mínimas que en un ambiente
+  // real ya están cargadas antes de que el sistema reciba tráfico.
+  await setup.query(`
+    INSERT INTO origen_comanda (codi, nom) VALUES ('woocommerce', 'WooCommerce'), ('manual', 'Manual')
+    ON CONFLICT (codi) DO NOTHING
+  `);
   await setup.end();
 
   const poolTest = new Pool({

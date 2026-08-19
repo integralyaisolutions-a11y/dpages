@@ -169,7 +169,7 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
     };
   });
 
-  // ── 4.7 · Panell Obrador (agrupado por artículo, no por pedido) ─────
+  // ── 4.7 · Panell Obrador (líneas de pedido individuales, no agregado) ──
   fastify.get('/panells/obrador', async (req, reply) => {
     const query = req.query as Record<string, unknown>;
     const { pagina, mida, offset } = parsearPaginacio(query);
@@ -177,12 +177,16 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
     const condicions: string[] = ['NOT cl.esborrat'];
     const valors: unknown[] = [];
 
+    // dataProduccio filtra por la fecha de la LÍNEA (cl.data_produccio), no
+    // la de la cabecera del pedido — desde que Obrador dejó de ser agregado
+    // por producto (contrato, sección 4.7), es la línea la que tiene fecha
+    // de producción propia; la de comanda es otro campo (sección 4.5).
     if (typeof query.dataProduccioDes === 'string' && query.dataProduccioDes !== '') {
-      condicions.push(`c.data_produccio >= $${valors.length + 1}`);
+      condicions.push(`cl.data_produccio >= $${valors.length + 1}`);
       valors.push(query.dataProduccioDes);
     }
     if (typeof query.dataProduccioFins === 'string' && query.dataProduccioFins !== '') {
-      condicions.push(`c.data_produccio <= $${valors.length + 1}`);
+      condicions.push(`cl.data_produccio <= $${valors.length + 1}`);
       valors.push(query.dataProduccioFins);
     }
     const categoriaUuid = await resolverFiltreEntitat(
@@ -202,11 +206,15 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
     }
     const where = `WHERE ${condicions.join(' AND ')}`;
 
+    // INNER JOIN a producte: igual que antes de esta reescritura, una línia
+    // sin artículo resuelto (producte_id nulo — ver migración 0005) no tiene
+    // nada que mostrar acá y queda fuera.
     const base = `
       FROM comanda_linia cl
       JOIN comanda c ON c.id = cl.comanda_id
       JOIN producte p ON p.id = cl.producte_id
       LEFT JOIN categoria_producte cat ON cat.id = p.categoria_id
+      LEFT JOIN client cli ON cli.id = c.client_id
       ${where}
     `;
 
@@ -217,63 +225,46 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       valors,
     );
 
-    // Agrupado por artículo + fechas del lote (mismo producto puede tener
-    // fechas distintas en pedidos distintos dentro del rango filtrado).
-    const grupBy = `p.id_seq, p.codi, p.descripcio, p.tipus, cat.nom, c.data_produccio, c.data_expedicio, c.data_lliurament`;
-
-    const totalGrups = await pool.query<{ count: string }>(
-      `SELECT count(*) FROM (SELECT 1 ${base} GROUP BY ${grupBy}) sub`,
-      valors,
-    );
-
     const files = await pool.query<{
-      id_seq: string;
-      codi: string | null;
-      descripcio: string;
-      tipus: string;
+      linia_id_seq: string;
+      comanda_id_seq: string;
+      producte_id_seq: string;
+      producte_codi: string | null;
+      producte_descripcio: string;
       categoria_nom: string | null;
+      format: string | null;
+      envasat: string | null;
+      client_nom: string | null;
       data_produccio: Date | null;
-      data_expedicio: Date | null;
-      data_lliurament: Date | null;
-      unitats: string;
+      unitats: number;
       kg: string;
       obs_produccio: string | null;
-      obs_lliurament: string | null;
     }>(
-      `SELECT p.id_seq, p.codi, p.descripcio, p.tipus, cat.nom AS categoria_nom,
-              c.data_produccio, c.data_expedicio, c.data_lliurament,
-              SUM(cl.unitats_demanades) AS unitats,
-              SUM(cl.pes_calculat_kg)::numeric(14,3) AS kg,
-              string_agg(DISTINCT NULLIF(cl.obs_produccio, ''), ' · ') AS obs_produccio,
-              string_agg(DISTINCT NULLIF(c.obs_lliurament, ''), ' · ') AS obs_lliurament
+      `SELECT cl.id_seq AS linia_id_seq, c.id_seq AS comanda_id_seq,
+              p.id_seq AS producte_id_seq, p.codi AS producte_codi, p.descripcio AS producte_descripcio,
+              cat.nom AS categoria_nom, p.format, p.envasat, cli.nom AS client_nom,
+              cl.data_produccio, cl.unitats_demanades AS unitats, cl.pes_calculat_kg AS kg,
+              cl.obs_produccio
        ${base}
-       GROUP BY ${grupBy}
-       ORDER BY c.data_produccio ASC NULLS LAST, p.descripcio ASC
+       ORDER BY cl.data_produccio ASC NULLS LAST, c.num ASC, cl.ordinal ASC
        LIMIT $${valors.length + 1} OFFSET $${valors.length + 2}`,
       [...valors, mida, offset],
     );
 
-    // TODO(capa-15): Obrador hoy sigue agregado por producto en SQL, pero
-    // el contrato ya exige líneas de pedido individuales (hoja de ruta
-    // técnica, capa 15, punto A-6: "Reescribir el SQL y FilaPanellObradorApi").
-    // Esto es un parche de TIPOS para poder compilar/desplegar — NO es la
-    // implementación correcta. liniaId/comandaId/client quedan en 0/0/null
-    // porque el modelo agregado no tiene una línea, un pedido ni un cliente
-    // reales que ofrecer (una fila acá es un producto con varias líneas de
-    // varios pedidos mezcladas). format/envasat quedan en null porque la
-    // consulta todavía no los trae — existen en producte desde la
-    // migración 0011, pero agregarlos es parte de la reescritura real de
-    // la capa 15, no de este parche.
     const dades: FilaPanellObradorApi[] = files.rows.map((f) => ({
-      liniaId: 0,
-      comandaId: 0,
-      producte: { id: Number(f.id_seq), codi: f.codi, descripcio: f.descripcio },
+      liniaId: Number(f.linia_id_seq),
+      comandaId: Number(f.comanda_id_seq),
+      producte: {
+        id: Number(f.producte_id_seq),
+        codi: f.producte_codi,
+        descripcio: f.producte_descripcio,
+      },
       categoria: f.categoria_nom,
-      format: null,
-      envasat: null,
-      client: null,
+      format: f.format,
+      envasat: f.envasat,
+      client: f.client_nom,
       dataProduccio: formatearDataApi(f.data_produccio),
-      unitats: Number(f.unitats),
+      unitats: f.unitats,
       kg: f.kg,
       obsProduccio: f.obs_produccio,
     }));
@@ -285,7 +276,7 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
         totalKg: totals.rows[0]?.total_kg ?? '0.000',
       },
       dades,
-      paginacio: construirPaginacio(pagina, mida, Number(totalGrups.rows[0]?.count ?? 0)),
+      paginacio: construirPaginacio(pagina, mida, Number(totals.rows[0]?.linies ?? 0)),
     };
   });
 

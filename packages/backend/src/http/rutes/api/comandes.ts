@@ -93,7 +93,7 @@ function aApiResum(fila: FilaComandaResum): ComandaResumApi {
 // distinto); si hay más de un tipo mezclado, queda null — "resumen liviano",
 // el detalle completo por tipo está en GET /comandes/:id (incidencies[]).
 const SELECT_COMANDA_RESUM = `
-  SELECT c.id_seq, c.num, c.origen, c.estat,
+  SELECT c.id_seq, c.num, oc.codi AS origen, c.estat,
          cl.id_seq AS client_id_seq, cl.nom AS client_nom, cl.poblacio AS client_poblacio,
          t.id_seq AS tarifa_id_seq, t.nom AS tarifa_nom,
          tr.id_seq AS transportista_id_seq, tr.nom AS transportista_nom,
@@ -105,6 +105,7 @@ const SELECT_COMANDA_RESUM = `
          COALESCE(inc.total_incidencies, 0) AS total_incidencies,
          inc.tipus_incidencia
   FROM comanda c
+  JOIN origen_comanda oc ON oc.id = c.origen_id
   LEFT JOIN client cl ON cl.id = c.client_id
   LEFT JOIN tarifa t ON t.id = c.tarifa_id
   LEFT JOIN transportista tr ON tr.id = c.transportista_id
@@ -228,6 +229,31 @@ async function estaCongelada(dbPool: Pool, comandaUuid: string): Promise<boolean
   return res.rows[0]?.congelat_a !== null && res.rows[0]?.congelat_a !== undefined;
 }
 
+/**
+ * Cascada de resolución de precio de línia (contrato,
+ * `ComandaLiniaApi.preuUnitari`): 1) la tarifa asignada al cliente del
+ * pedido, si tiene precio para este producto; 2) si no, el precio base del
+ * producto; 3) si tampoco hay ninguno de los dos, "0.00" — `sensePreu` le
+ * indica al llamador que hay que registrar una incidencia, nunca queda una
+ * línea con precio silenciosamente en cero.
+ */
+async function resolverPreuLinia(
+  dbPool: Pool,
+  clientTarifaId: string | null,
+  producteUuid: string,
+  preuVenda: string | null,
+): Promise<{ preuUnitari: string; sensePreu: boolean }> {
+  if (clientTarifaId !== null) {
+    const tarifa = await dbPool.query<{ preu: string }>(
+      'SELECT preu FROM tarifa_preu WHERE tarifa_id = $1 AND producte_id = $2',
+      [clientTarifaId, producteUuid],
+    );
+    if (tarifa.rows[0]) return { preuUnitari: tarifa.rows[0].preu, sensePreu: false };
+  }
+  if (preuVenda !== null) return { preuUnitari: preuVenda, sensePreu: false };
+  return { preuUnitari: '0.00', sensePreu: true };
+}
+
 async function resolverComandaOResponder(
   reply: FastifyReply,
   idParam: string,
@@ -258,7 +284,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       valors.push(query.estat);
     }
     if (typeof query.origen === 'string' && query.origen !== '') {
-      condicions.push(`c.origen = $${valors.length + 1}`);
+      condicions.push(`oc.codi = $${valors.length + 1}`);
       valors.push(query.origen);
     }
     if (typeof query.clientId === 'string') {
@@ -283,7 +309,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
     const where = condicions.length > 0 ? `WHERE ${condicions.join(' AND ')}` : '';
 
     const total = await pool.query<{ count: string }>(
-      `SELECT count(*) FROM comanda c ${where}`,
+      `SELECT count(*) FROM comanda c JOIN origen_comanda oc ON oc.id = c.origen_id ${where}`,
       valors,
     );
     const files = await pool.query<FilaComandaResum>(
@@ -314,8 +340,8 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
     }>;
 
     const detalls: { camp: string; missatge: string }[] = [];
-    if (!cos.origen || !['web', 'email', 'whatsapp', 'telefon'].includes(cos.origen)) {
-      detalls.push({ camp: 'origen', missatge: 'ha de ser web, email, whatsapp o telefon' });
+    if (!cos.origen || cos.origen.trim() === '') {
+      detalls.push({ camp: 'origen', missatge: 'és obligatori' });
     }
     if (!cos.linies || cos.linies.length === 0) {
       detalls.push({ camp: 'linies', missatge: 'la comanda ha de tenir com a mínim una línia' });
@@ -324,7 +350,22 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       return enviarValidacio(reply, 'Falten dades obligatòries', detalls);
     }
 
+    // origen ja no és un enum fix (capa 13/14, migració 0013): és el codi
+    // d'una fila d'origen_comanda — es resol igual que clientId/
+    // transportistaId més avall.
+    const origen = await pool.query<{ id: string }>(
+      'SELECT id FROM origen_comanda WHERE codi = $1',
+      [cos.origen],
+    );
+    if (!origen.rows[0]) {
+      return enviarValidacio(reply, "L'origen indicat no existeix", [
+        { camp: 'origen', missatge: 'no existeix' },
+      ]);
+    }
+    const origenUuid = origen.rows[0].id;
+
     let clientUuid: string | null = null;
+    let clientTarifaId: string | null = null;
     if (cos.clientId !== undefined) {
       clientUuid = await resolverClientUuid(pool, cos.clientId);
       if (clientUuid === null) {
@@ -332,6 +373,11 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
           { camp: 'clientId', missatge: 'no existeix' },
         ]);
       }
+      const clientFila = await pool.query<{ tarifa_id: string | null }>(
+        'SELECT tarifa_id FROM client WHERE id = $1',
+        [clientUuid],
+      );
+      clientTarifaId = clientFila.rows[0]?.tarifa_id ?? null;
     }
     let transportistaUuid: string | null = null;
     if (cos.transportistaId !== undefined) {
@@ -346,8 +392,10 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
     // Resolver y validar TODAS las líneas antes de escribir nada.
     const liniesResoltes: {
       producteUuid: string;
+      producteIdPublic: number;
       unitats: number;
       preuUnitari: string;
+      sensePreu: boolean;
       pesFitxaKg: string | null;
       pesCalculatKg: string;
       pesEditable: boolean;
@@ -394,10 +442,19 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
         pesEditable = true;
       }
 
+      const { preuUnitari, sensePreu } = await resolverPreuLinia(
+        pool,
+        clientTarifaId,
+        producteUuid,
+        preuVenda,
+      );
+
       liniesResoltes.push({
         producteUuid,
+        producteIdPublic: linia.producteId,
         unitats: linia.unitatsDemanades,
-        preuUnitari: preuVenda ?? '0.00',
+        preuUnitari,
+        sensePreu,
         pesFitxaKg,
         pesCalculatKg,
         pesEditable,
@@ -412,14 +469,19 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       const totalEur = liniesResoltes
         .reduce((acc, l) => acc + l.unitats * Number(l.preuUnitari), 0)
         .toFixed(2);
+      // Si alguna línea no pudo resolver precio (ni tarifa ni preu_venda),
+      // el pedido nace directamente amb_incidencia — mismo criterio que el
+      // resto del sistema (nunca "oberta" con un problema silencioso).
+      const teLiniaSensePreu = liniesResoltes.some((l) => l.sensePreu);
 
       const comanda = await client.query<{ id: string }>(
-        `INSERT INTO comanda (origen, estat, client_id, poblacio_desti, total, data_lliurament,
+        `INSERT INTO comanda (origen_id, estat, client_id, poblacio_desti, total, data_lliurament,
                                transportista_id, obs_lliurament)
-         VALUES ($1, 'oberta', $2, NULL, $3, $4, $5, $6)
+         VALUES ($1, $2, $3, NULL, $4, $5, $6, $7)
          RETURNING id`,
         [
-          cos.origen,
+          origenUuid,
+          teLiniaSensePreu ? 'amb_incidencia' : 'oberta',
           clientUuid,
           totalEur,
           cos.dataLliurament ?? null,
@@ -446,6 +508,15 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
             l.pesEditable,
           ],
         );
+        if (l.sensePreu) {
+          await client.query(
+            `INSERT INTO incidencia_comanda (comanda_id, tipus, detall) VALUES ($1, 'sense_preu', $2)`,
+            [
+              comandaUuid,
+              `Línia ${i + 1}: el producte ${l.producteIdPublic} no té preu resolt (sense tarifa amb preu ni preu base) — preuUnitari es va deixar en 0.00.`,
+            ],
+          );
+        }
       }
 
       await client.query('COMMIT');

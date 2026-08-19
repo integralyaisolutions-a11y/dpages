@@ -45,7 +45,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
-        origen: 'telefon',
+        origen: 'manual',
         linies: [{ producteId: producteAMidaId, unitatsDemanades: 4 }],
       },
     });
@@ -56,7 +56,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
-        origen: 'telefon',
+        origen: 'manual',
         clientId,
         linies: [
           { producteId: producteFitxaId, unitatsDemanades: 10 },
@@ -67,7 +67,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
 
     expect(res.statusCode).toBe(201);
     const cuerpo = cuerpoJson<ComandaDetallApi>(res);
-    expect(cuerpo.num).toMatch(/^\d{4}-\d{4}$/);
+    expect(cuerpo.num).toMatch(/^\d{6}$/);
     expect(cuerpo.linies).toHaveLength(2);
 
     const liniaFitxa = cuerpo.linies.find((l) => l.producte?.id === producteFitxaId);
@@ -86,7 +86,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
     const res = await fastify.inject({
       method: 'POST',
       url: '/api/v1/comandes',
-      payload: { origen: 'telefon', linies: [] },
+      payload: { origen: 'manual', linies: [] },
     });
 
     expect(res.statusCode).toBe(400);
@@ -102,7 +102,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
-        origen: 'telefon',
+        origen: 'manual',
         linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
       },
     });
@@ -112,7 +112,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
-        origen: 'telefon',
+        origen: 'manual',
         linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
       },
     });
@@ -139,7 +139,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
-        origen: 'telefon',
+        origen: 'manual',
         linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
       },
     });
@@ -169,7 +169,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
-        origen: 'telefon',
+        origen: 'manual',
         linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
       },
     });
@@ -199,7 +199,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
-        origen: 'telefon',
+        origen: 'manual',
         linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
       },
     });
@@ -252,7 +252,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
-        origen: 'telefon',
+        origen: 'manual',
         linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
       },
     });
@@ -285,7 +285,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
-          origen: 'telefon',
+          origen: 'manual',
           linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
         },
       });
@@ -318,7 +318,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
-          origen: 'telefon',
+          origen: 'manual',
           linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
         },
       });
@@ -336,6 +336,87 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         await fastify.inject({ method: 'GET', url: `/api/v1/comandes/${comandaCreada.id}` }),
       );
       expect(detall.linies[0]?.dataProduccio).toBe('2026-08-20T07:00:00Z');
+
+      await fastify.close();
+    });
+  });
+
+  describe('capa 15 — cascada de resolució de preu de línia', () => {
+    it('amb tarifa assignada al client i preu definit per aquest producte: fa servir el preu de la tarifa', async () => {
+      const tarifa = await entorn.poolTest.query<{ id: string }>(
+        `INSERT INTO tarifa (codi, nom) VALUES ('CAP15-A', 'Tarifa capa 15 A') RETURNING id`,
+      );
+      await entorn.poolTest.query(
+        `INSERT INTO tarifa_preu (tarifa_id, producte_id, preu)
+         VALUES ($1, (SELECT id FROM producte WHERE id_seq = $2), '5.00')`,
+        [tarifa.rows[0]!.id, producteFitxaId],
+      );
+      const client = await entorn.poolTest.query<{ id_seq: string }>(
+        `INSERT INTO client (nom, poblacio, tarifa_id) VALUES ('Client amb tarifa', 'Vic', $1) RETURNING id_seq`,
+        [tarifa.rows[0]!.id],
+      );
+      const clientAmbTarifaId = Number(client.rows[0]!.id_seq);
+
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          clientId: clientAmbTarifaId,
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 2 }],
+        },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const cuerpo = cuerpoJson<ComandaDetallApi>(res);
+      expect(cuerpo.linies[0]?.preuUnitari).toBe('5.00');
+      expect(cuerpo.estat).toBe('oberta');
+
+      await fastify.close();
+    });
+
+    it('sense tarifa (o tarifa sense preu per aquest producte): fa servir producte.preuVenda', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const cuerpo = cuerpoJson<ComandaDetallApi>(res);
+      expect(cuerpo.linies[0]?.preuUnitari).toBe('9.86'); // producte.preu_venda del beforeAll
+      expect(cuerpo.estat).toBe('oberta');
+
+      await fastify.close();
+    });
+
+    it('sense tarifa i sense preuVenda: preuUnitari queda en "0.00" i es registra incidència sense_preu', async () => {
+      const producteSensePreu = await entorn.poolTest.query<{ id_seq: string }>(
+        `INSERT INTO producte (codi, descripcio, pes_kg, tipus)
+         VALUES ('SP01', 'Producte sense preu', '1.000', 'simple') RETURNING id_seq`,
+      );
+      const producteSensePreuId = Number(producteSensePreu.rows[0]!.id_seq);
+
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteSensePreuId, unitatsDemanades: 1 }],
+        },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const cuerpo = cuerpoJson<ComandaDetallApi>(res);
+      expect(cuerpo.linies[0]?.preuUnitari).toBe('0.00');
+      expect(cuerpo.estat).toBe('amb_incidencia');
+      expect(cuerpo.incidencies.some((i) => i.tipus === 'sense_preu')).toBe(true);
 
       await fastify.close();
     });

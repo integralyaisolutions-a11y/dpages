@@ -30,6 +30,12 @@ describe('transformarComanda (Postgres real, esquema aislado)', () => {
     await setup.query(`CREATE SCHEMA "${esquema}"`);
     await setup.query(`SET search_path TO "${esquema}"`);
     await migrarArriba(setup);
+    // Datos de arranque mínimos (ver seed-arranque.ts) que la migración no
+    // siembra — desde la capa 15 (migración 0013), comanda.origen_id es
+    // NOT NULL y crearComanda() resuelve contra la fila 'woocommerce'.
+    await setup.query(
+      `INSERT INTO origen_comanda (codi, nom) VALUES ('woocommerce', 'WooCommerce'), ('manual', 'Manual')`,
+    );
 
     // Artículo con peso de ficha, y su alias — para que la línea LLF01 resuelva
     // con kgDemanats calculado (peso conocido, no "a medida").
@@ -161,10 +167,11 @@ describe('transformarComanda (Postgres real, esquema aislado)', () => {
     );
     const comanda = await poolTest.query<{ id: string }>(
       `INSERT INTO comanda (
-         woo_order_id, origen, estat, estat_web, poblacio_desti, total, data_modificacio_woo,
+         woo_order_id, origen_id, estat, estat_web, poblacio_desti, total, data_modificacio_woo,
          data_produccio, data_expedicio, data_lliurament, transportista_id, obs_produccio
        ) VALUES (
-         777001, 'web', 'en_proces', 'processing', 'Manresa', '10.00', '2026-01-01T00:00:00Z',
+         777001, (SELECT id FROM origen_comanda WHERE codi = 'woocommerce'), 'en_proces', 'processing',
+         'Manresa', '10.00', '2026-01-01T00:00:00Z',
          '2026-01-05T00:00:00Z', '2026-01-06T00:00:00Z', '2026-01-07T00:00:00Z', $1, 'Tallar més gruixut'
        ) RETURNING id`,
       [transportista.rows[0]?.id],

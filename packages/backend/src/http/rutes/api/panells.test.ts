@@ -1,4 +1,9 @@
-import type { PanellEmpaquetatApi, PanellObradorApi, PanellOficinaApi } from '@dpages/shared';
+import type {
+  ComandaDetallApi,
+  PanellEmpaquetatApi,
+  PanellObradorApi,
+  PanellOficinaApi,
+} from '@dpages/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { construirServidor as construirServidorType } from '../../servidor.js';
 import {
@@ -31,7 +36,7 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
-          origen: 'telefon',
+          origen: 'manual',
           linies: [{ producteId, unitatsDemanades: 2 }],
         },
       });
@@ -51,21 +56,6 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
     expect(cuerpo.totals.comandes).toBe(3); // total real, no la página
     expect(cuerpo.totals.linies).toBe(3);
     expect(cuerpo.paginacio).toEqual({ pagina: 1, mida: 2, total: 3, totalPagines: 2 });
-
-    await fastify.close();
-  });
-
-  it('GET /panells/obrador: agrupado por artículo, no por pedido', async () => {
-    const fastify = construirServidor();
-    const res = await fastify.inject({ method: 'GET', url: '/api/v1/panells/obrador' });
-
-    expect(res.statusCode).toBe(200);
-    const cuerpo = cuerpoJson<PanellObradorApi>(res);
-    // 3 pedidos × 2 unidades del mismo artículo = una sola fila agrupada con 6 unidades.
-    expect(cuerpo.dades).toHaveLength(1);
-    expect(cuerpo.dades[0]?.unitats).toBe(6);
-    expect(cuerpo.dades[0]?.kg).toBe('7.500'); // 6 × 1.250
-    expect(cuerpo.totals.totalUnitats).toBe(6);
 
     await fastify.close();
   });
@@ -101,7 +91,7 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
     const creada = await fastify.inject({
       method: 'POST',
       url: '/api/v1/comandes',
-      payload: { origen: 'telefon', linies: [{ producteId, unitatsDemanades: 1 }] },
+      payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 1 }] },
     });
     const comandaId = cuerpoJson<{ id: number }>(creada).id;
     const comandaUuid = await entorn.poolTest.query<{ id: string }>(
@@ -119,6 +109,51 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
     const fila = cuerpo.dades.find((f) => f.comandaId === comandaId);
     expect(fila?.totalIncidencies).toBe(1);
     expect(fila?.tipusIncidencia).toBe('sense_dades_client');
+
+    await fastify.close();
+  });
+
+  // Al final del describe a propósito: crea un pedido más, y los tests
+  // anteriores (empaquetat, oficina) asumen totales exactos sobre los 3 del
+  // beforeAll — de haber ido antes, los habría roto.
+  it('GET /panells/obrador: líneas de pedido individuales (liniaId/comandaId/client reales, no agregado)', async () => {
+    const fastify = construirServidor();
+
+    // Cliente real — para verificar que "client" resuelve a un valor real y
+    // no queda hardcodeado en null (capa 15, cambio A).
+    const client = await entorn.poolTest.query<{ id_seq: string }>(
+      `INSERT INTO client (nom, poblacio) VALUES ('Restaurant Example', 'Manresa') RETURNING id_seq`,
+    );
+    const clientId = Number(client.rows[0]!.id_seq);
+    const creada = await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/comandes',
+      payload: { origen: 'manual', clientId, linies: [{ producteId, unitatsDemanades: 3 }] },
+    });
+    const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+    const liniaCreada = comandaCreada.linies[0]!;
+
+    const res = await fastify.inject({ method: 'GET', url: '/api/v1/panells/obrador?mida=200' });
+
+    expect(res.statusCode).toBe(200);
+    const cuerpo = cuerpoJson<PanellObradorApi>(res);
+
+    const filaNova = cuerpo.dades.find((f) => f.comandaId === comandaCreada.id);
+    expect(filaNova).toBeDefined();
+    expect(filaNova?.liniaId).toBe(liniaCreada.id);
+    expect(filaNova?.client).toBe('Restaurant Example');
+    expect(filaNova?.unitats).toBe(3);
+    expect(filaNova?.kg).toBe('3.750'); // 3 × 1.250
+
+    // Las 3 líneas del beforeAll siguen ahí, sin agrupar y sin cliente —
+    // antes de esta reescritura habrían colapsado en una sola fila sumada.
+    const filesDelBeforeAll = cuerpo.dades.filter(
+      (f) => f.comandaId !== comandaCreada.id && f.unitats === 2 && f.client === null,
+    );
+    expect(filesDelBeforeAll.length).toBeGreaterThanOrEqual(3);
+
+    // Ninguna fila comparte liniaId con otra — son líneas reales, no un agregado.
+    expect(new Set(cuerpo.dades.map((f) => f.liniaId)).size).toBe(cuerpo.dades.length);
 
     await fastify.close();
   });

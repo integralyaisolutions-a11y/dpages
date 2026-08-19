@@ -37,7 +37,7 @@ describe('API negoci — PATCH .../lliurament (Postgres real, esquema aislado)',
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
-        origen: 'telefon',
+        origen: 'manual',
         linies: [{ producteId: Number(producte.rows[0]!.id_seq), unitatsDemanades: 8 }],
       },
     });
