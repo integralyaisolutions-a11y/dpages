@@ -84,6 +84,21 @@ paths:
                     type: array
                     items: { $ref: '#/components/schemas/Categoria' }
                   paginacio: { $ref: '#/components/schemas/Paginacio' }
+    post:
+      tags: [Categories]
+      summary: Crear una categoría
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoriaEntrada' }
+      responses:
+        '201':
+          description: Categoría creada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Categoria' }
+        '400': { $ref: '#/components/responses/Validacio' }
 
   /api/v1/categories/{id}:
     patch:
@@ -94,17 +109,27 @@ paths:
       requestBody:
         content:
           application/json:
-            schema:
-              type: object
-              properties:
-                agrupacioRendiment: { type: string, enum: [KG, MAGRE, PAQ], nullable: true }
+            schema: { $ref: '#/components/schemas/CategoriaEntrada' }
       responses:
         '200':
           description: Categoría actualizada
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Categoria' }
+        '400': { $ref: '#/components/responses/Validacio' }
         '404': { $ref: '#/components/responses/NoTrobat' }
+    delete:
+      tags: [Categories]
+      summary: >-
+        Eliminar una categoría. Borrado protegido: si algún artículo activo
+        todavía la usa, responde 409 con el recuento en vez de dejar
+        artículos con una referencia rota.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '204': { description: Eliminada }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+        '409': { $ref: '#/components/responses/Conflicte' }
 
   /api/v1/productes:
     get:
@@ -188,7 +213,8 @@ paths:
       tags: [RendimentsPorcs]
       summary: >-
         Listar fichas de rendimiento porcino. Nuevo, confirmado 18/08/2026.
-        Todavía no implementado en el backend real.
+        Sólo devuelve fichas cuyo producto pertenece a una categoría con
+        agrupacioRendiment definido (ver descripción del schema RendimentPorc).
       parameters:
         - name: agrupacioRendiment
           in: query
@@ -199,9 +225,13 @@ paths:
         - name: agrupacioProduccio
           in: query
           schema: { type: string }
-        - name: producteId
+        - name: producte
           in: query
-          schema: { type: integer }
+          description: >-
+            Filtra por descripció del producte, coincidencia exacta
+            (case-insensitive) — regla 3.1 transversal del proyecto, no
+            substring.
+          schema: { type: string }
         - $ref: '#/components/parameters/Pagina'
         - $ref: '#/components/parameters/Mida'
       responses:
@@ -235,19 +265,26 @@ paths:
   /api/v1/rendiments-porcs/{id}:
     patch:
       tags: [RendimentsPorcs]
-      summary: Actualizar una ficha de rendimiento (parcial, edición en línea)
+      summary: >-
+        Actualizar una ficha de rendimiento (parcial, edición en línea).
+        producteId no se edita una vez creada la fila.
       parameters:
         - $ref: '#/components/parameters/IdPath'
       requestBody:
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/RendimentPorcEntrada' }
+            schema:
+              type: object
+              properties:
+                unitatsPerPorc: { type: string, example: '2.00' }
+                kgPerUnitat: { type: string, example: '3.500' }
       responses:
         '200':
           description: Ficha actualizada
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RendimentPorc' }
+        '400': { $ref: '#/components/responses/Validacio' }
         '404': { $ref: '#/components/responses/NoTrobat' }
     delete:
       tags: [RendimentsPorcs]
@@ -297,6 +334,24 @@ paths:
                             nullable: true
                           example: { '1': '9.86', '2': null }
                   paginacio: { $ref: '#/components/schemas/Paginacio' }
+
+  /api/v1/tarifes:
+    post:
+      tags: [Tarifes]
+      summary: Crear una tarifa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TarifaEntrada' }
+      responses:
+        '201':
+          description: Tarifa creada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TarifaResum' }
+        '400': { $ref: '#/components/responses/Validacio' }
+        '409': { $ref: '#/components/responses/Conflicte' }
 
   /api/v1/tarifes/{tarifaId}/preus/{producteId}:
     patch:
@@ -417,6 +472,42 @@ paths:
                   dades:
                     type: array
                     items: { $ref: '#/components/schemas/Transportista' }
+    post:
+      tags: [Transportistes]
+      summary: Crear un transportista
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TransportistaEntrada' }
+      responses:
+        '201':
+          description: Transportista creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transportista' }
+        '400': { $ref: '#/components/responses/Validacio' }
+        '409': { $ref: '#/components/responses/Conflicte' }
+
+  /api/v1/transportistes/{id}:
+    patch:
+      tags: [Transportistes]
+      summary: Actualizar un transportista (parcial)
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TransportistaEntrada' }
+      responses:
+        '200':
+          description: Transportista actualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transportista' }
+        '400': { $ref: '#/components/responses/Validacio' }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+        '409': { $ref: '#/components/responses/Conflicte' }
 
   /api/v1/comandes:
     get:
@@ -1014,6 +1105,20 @@ components:
             Null sólo cuando elaboratPorc es false — regla de negocio, no
             falta de dato. Confirmado con el cliente el 18/08/2026.
 
+    CategoriaEntrada:
+      type: object
+      description: >-
+        Cuerpo de POST /categories (nom obligatorio) y PATCH /categories/{id}
+        (cuerpo parcial). agrupacioRendiment sólo se acepta si elaboratPorc
+        (el enviado, o si no viene, el actual) es true.
+      properties:
+        nom: { type: string }
+        elaboratPorc: { type: boolean, default: false }
+        agrupacioRendiment:
+          type: string
+          enum: [KG, MAGRE, PAQ]
+          nullable: true
+
     Producte:
       type: object
       properties:
@@ -1079,6 +1184,14 @@ components:
         codi: { type: string }
         nom: { type: string }
 
+    TarifaEntrada:
+      type: object
+      required: [codi, nom]
+      description: Cuerpo de POST /tarifes. codi es único — repetido responde 409.
+      properties:
+        codi: { type: string }
+        nom: { type: string }
+
     Client:
       type: object
       properties:
@@ -1126,6 +1239,16 @@ components:
           description: 'Texto libre, nemotécnico, definido por el usuario al dar de alta — ej. "TR-DHL".'
         nom: { type: string }
         actiu: { type: boolean }
+
+    TransportistaEntrada:
+      type: object
+      description: >-
+        Cuerpo de POST /transportistes (nom obligatorio) y PATCH
+        /transportistes/{id} (cuerpo parcial). codi es opcional pero único
+        cuando se manda — repetido responde 409.
+      properties:
+        nom: { type: string }
+        codi: { type: string, nullable: true }
 
     ComandaResum:
       type: object
@@ -1339,8 +1462,9 @@ components:
       type: object
       description: >-
         Ficha de rendimiento por producto — base del cálculo de Panell
-        Producció. Nueva, confirmada el 18/08/2026. Todavía no
-        implementada en el backend real.
+        Producció. Nueva, confirmada el 18/08/2026. Sólo aparece si el
+        producto pertenece a una categoría con agrupacioRendiment definido
+        (ver GET /rendiments-porcs).
       properties:
         id: { type: integer }
         producte:
@@ -1359,19 +1483,23 @@ components:
           type: string
           nullable: true
           description: Derivado de producte.agrupacioProduccio — sólo lectura.
-        unitatsPerPorc: { type: string }
-        kgPerUnitat: { type: string }
+        unitatsPerPorc: { type: string, example: '2.00' }
+        kgPerUnitat: { type: string, example: '3.500' }
         pesTotal:
           type: string
+          example: '7.000'
           description: Calculado = unitatsPerPorc × kgPerUnitat.
 
     RendimentPorcEntrada:
       type: object
       required: [producteId, unitatsPerPorc, kgPerUnitat]
+      description: >-
+        unitatsPerPorc admite hasta 2 decimales, kgPerUnitat hasta 3 (mismas
+        escalas que la columna en base).
       properties:
         producteId: { type: integer }
-        unitatsPerPorc: { type: string }
-        kgPerUnitat: { type: string }
+        unitatsPerPorc: { type: string, example: '2.00' }
+        kgPerUnitat: { type: string, example: '3.500' }
 
     OrigenComanda:
       type: object

@@ -3,10 +3,12 @@ import type { FastifyInstance } from 'fastify';
 import { pool } from '../../../db/pool.js';
 import {
   construirPaginacio,
+  enviarConflicte,
   enviarNoTrobat,
   enviarValidacio,
   parsearIdPublic,
   parsearPaginacio,
+  resolverCategoriaUuid,
 } from './comu.js';
 
 type AgrupacioRendiment = 'KG' | 'MAGRE' | 'PAQ';
@@ -14,6 +16,21 @@ const AGRUPACIONS_RENDIMENT: readonly AgrupacioRendiment[] = ['KG', 'MAGRE', 'PA
 
 function esAgrupacioRendimentValida(valor: unknown): valor is AgrupacioRendiment {
   return typeof valor === 'string' && AGRUPACIONS_RENDIMENT.includes(valor as AgrupacioRendiment);
+}
+
+/**
+ * Regla de negoci (no és un CHECK de base, ver migració 0011):
+ * agrupacioRendiment només té sentit quan elaboratPorc és true. Compartida
+ * entre POST (elaboratPorc ve al mateix cos) i PATCH (elaboratPorc pot no
+ * venir — el valor EFECTIU s'ha de resoldre contra la fila actual abans de
+ * cridar aquesta funció).
+ */
+function esCombinacioRendimentValida(
+  elaboratPorcEfectiu: boolean,
+  agrupacioRendiment: AgrupacioRendiment | null | undefined,
+): boolean {
+  if (agrupacioRendiment === undefined || agrupacioRendiment === null) return true;
+  return elaboratPorcEfectiu;
 }
 
 interface FilaCategoria {
@@ -49,6 +66,60 @@ export function registrarRutesCategories(fastify: FastifyInstance): void {
     };
   });
 
+  fastify.post('/categories', async (req, reply) => {
+    const cos = req.body as Partial<{
+      nom: string;
+      elaboratPorc: boolean;
+      agrupacioRendiment: AgrupacioRendiment | null;
+    }>;
+
+    if (!cos.nom || cos.nom.trim() === '') {
+      return enviarValidacio(reply, 'El nom és obligatori', [
+        { camp: 'nom', missatge: 'és obligatori' },
+      ]);
+    }
+    if (
+      cos.agrupacioRendiment !== undefined &&
+      cos.agrupacioRendiment !== null &&
+      !esAgrupacioRendimentValida(cos.agrupacioRendiment)
+    ) {
+      return enviarValidacio(
+        reply,
+        `agrupacioRendiment ha de ser ${AGRUPACIONS_RENDIMENT.join(', ')} o null`,
+        [
+          {
+            camp: 'agrupacioRendiment',
+            missatge: `ha de ser ${AGRUPACIONS_RENDIMENT.join(', ')} o null`,
+          },
+        ],
+      );
+    }
+
+    const elaboratPorc = cos.elaboratPorc ?? false;
+    if (!esCombinacioRendimentValida(elaboratPorc, cos.agrupacioRendiment)) {
+      return enviarValidacio(
+        reply,
+        'agrupacioRendiment només es pot indicar quan elaboratPorc és true',
+        [
+          {
+            camp: 'agrupacioRendiment',
+            missatge: 'només aplica quan elaboratPorc és true',
+          },
+        ],
+      );
+    }
+
+    const inserit = await pool.query<FilaCategoria>(
+      `INSERT INTO categoria_producte (nom, elaborat_porc, agrupacio_rendiment)
+       VALUES ($1, $2, $3)
+       RETURNING id_seq, nom, elaborat_porc, agrupacio_rendiment`,
+      [cos.nom.trim(), elaboratPorc, cos.agrupacioRendiment ?? null],
+    );
+
+    reply.code(201);
+    return aApi(inserit.rows[0]!);
+  });
+
   fastify.patch('/categories/:id', async (req, reply) => {
     const idPublic = parsearIdPublic((req.params as { id: string }).id);
     if (idPublic === null) return enviarNoTrobat(reply);
@@ -81,8 +152,6 @@ export function registrarRutesCategories(fastify: FastifyInstance): void {
       );
     }
 
-    // Regla de negocio (no es un CHECK de base, ver migración 0011):
-    // agrupacioRendiment sólo tiene sentido cuando elaboratPorc es true.
     // Hace falta el valor EFECTIVO tras este PATCH — si elaboratPorc no
     // viene en el cuerpo, se compara contra el actual; de paso, esta
     // consulta resuelve si la categoría existe.
@@ -94,7 +163,7 @@ export function registrarRutesCategories(fastify: FastifyInstance): void {
       if (!actual.rows[0]) return enviarNoTrobat(reply, 'Categoria no trobada');
 
       const elaboratPorcEfectiu = cos.elaboratPorc ?? actual.rows[0].elaborat_porc;
-      if (!elaboratPorcEfectiu) {
+      if (!esCombinacioRendimentValida(elaboratPorcEfectiu, cos.agrupacioRendiment)) {
         return enviarValidacio(
           reply,
           'agrupacioRendiment només es pot indicar quan elaboratPorc és true',
@@ -126,5 +195,31 @@ export function registrarRutesCategories(fastify: FastifyInstance): void {
 
     if (!resultat.rows[0]) return enviarNoTrobat(reply, 'Categoria no trobada');
     return aApi(resultat.rows[0]);
+  });
+
+  fastify.delete('/categories/:id', async (req, reply) => {
+    const idPublic = parsearIdPublic((req.params as { id: string }).id);
+    if (idPublic === null) return enviarNoTrobat(reply);
+
+    const categoriaUuid = await resolverCategoriaUuid(pool, idPublic);
+    if (categoriaUuid === null) return enviarNoTrobat(reply, 'Categoria no trobada');
+
+    // Borrado protegido: si algún producto activo todavía la usa, borrar la
+    // categoría lo dejaría con una referencia rota — mejor 409 con el
+    // recuento que un DELETE que silenciosamente desconecta productos.
+    const enUs = await pool.query<{ count: string }>(
+      'SELECT count(*) FROM producte WHERE categoria_id = $1 AND actiu = true',
+      [categoriaUuid],
+    );
+    const total = Number(enUs.rows[0]?.count ?? 0);
+    if (total > 0) {
+      return enviarConflicte(
+        reply,
+        `No es pot eliminar: ${total} producte(s) actiu(s) fan servir aquesta categoria`,
+      );
+    }
+
+    await pool.query('DELETE FROM categoria_producte WHERE id_seq = $1', [idPublic]);
+    reply.code(204);
   });
 }

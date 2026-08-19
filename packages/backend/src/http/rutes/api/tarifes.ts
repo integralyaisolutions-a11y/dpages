@@ -3,8 +3,10 @@ import type { FastifyInstance } from 'fastify';
 import { pool } from '../../../db/pool.js';
 import {
   construirPaginacio,
+  enviarConflicte,
   enviarNoTrobat,
   enviarValidacio,
+  esViolacioCodiUnic,
   parsearIdPublic,
   parsearPaginacio,
   resolverCategoriaUuid,
@@ -125,5 +127,36 @@ export function registrarRutesTarifes(fastify: FastifyInstance): void {
     );
 
     return { tarifaId: tarifaIdPublic, producteId: producteIdPublic, preu: cos.preu };
+  });
+
+  fastify.post('/tarifes', async (req, reply) => {
+    const cos = req.body as Partial<{ codi: string; nom: string }>;
+
+    if (!cos.codi || cos.codi.trim() === '') {
+      return enviarValidacio(reply, 'El codi és obligatori', [
+        { camp: 'codi', missatge: 'és obligatori' },
+      ]);
+    }
+    if (!cos.nom || cos.nom.trim() === '') {
+      return enviarValidacio(reply, 'El nom és obligatori', [
+        { camp: 'nom', missatge: 'és obligatori' },
+      ]);
+    }
+
+    try {
+      const inserit = await pool.query<{ id_seq: string; codi: string | null; nom: string }>(
+        `INSERT INTO tarifa (codi, nom) VALUES ($1, $2) RETURNING id_seq, codi, nom`,
+        [cos.codi.trim(), cos.nom.trim()],
+      );
+      const fila = inserit.rows[0]!;
+      const tarifaApi: TarifaResumApi = { id: Number(fila.id_seq), codi: fila.codi, nom: fila.nom };
+      reply.code(201);
+      return tarifaApi;
+    } catch (err) {
+      if (esViolacioCodiUnic(err)) {
+        return enviarConflicte(reply, `Ja existeix una tarifa amb el codi "${cos.codi}"`);
+      }
+      throw err;
+    }
   });
 }

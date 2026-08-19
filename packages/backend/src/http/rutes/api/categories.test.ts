@@ -71,4 +71,84 @@ describe('API negoci — /categories (Postgres real, esquema aislado)', () => {
 
     await fastify.close();
   });
+
+  it('POST /categories crea una categoria nueva', async () => {
+    const fastify = construirServidor();
+    const res = await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/categories',
+      payload: { nom: 'Elaborats', elaboratPorc: true, agrupacioRendiment: 'MAGRE' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const cuerpo = cuerpoJson<CategoriaApi>(res);
+    expect(cuerpo).toMatchObject({
+      nom: 'Elaborats',
+      elaboratPorc: true,
+      agrupacioRendiment: 'MAGRE',
+    });
+
+    await fastify.close();
+  });
+
+  it('POST /categories con agrupacioRendiment y elaboratPorc false da 400 VALIDACIO', async () => {
+    const fastify = construirServidor();
+    const res = await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/categories',
+      payload: { nom: 'Sense elaborar', elaboratPorc: false, agrupacioRendiment: 'KG' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+    await fastify.close();
+  });
+
+  it('DELETE /categories/:id con productes actius associats da 409 CONFLICTE', async () => {
+    const categoriaEnUs = await entorn.poolTest.query<{ id: string; id_seq: string }>(
+      `INSERT INTO categoria_producte (nom) VALUES ('En ús') RETURNING id, id_seq`,
+    );
+    await entorn.poolTest.query(
+      `INSERT INTO producte (descripcio, tipus, categoria_id, actiu) VALUES ('Article en ús', 'simple', $1, true)`,
+      [categoriaEnUs.rows[0]!.id],
+    );
+
+    const fastify = construirServidor();
+    const res = await fastify.inject({
+      method: 'DELETE',
+      url: `/api/v1/categories/${categoriaEnUs.rows[0]!.id_seq}`,
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ error: { codi: 'CONFLICTE' } });
+
+    await fastify.close();
+  });
+
+  it('DELETE /categories/:id sense productes associats elimina i respon 204', async () => {
+    const categoriaLliure = await entorn.poolTest.query<{ id_seq: string }>(
+      `INSERT INTO categoria_producte (nom) VALUES ('Sense ús') RETURNING id_seq`,
+    );
+
+    const fastify = construirServidor();
+    const res = await fastify.inject({
+      method: 'DELETE',
+      url: `/api/v1/categories/${categoriaLliure.rows[0]!.id_seq}`,
+    });
+
+    expect(res.statusCode).toBe(204);
+
+    await fastify.close();
+  });
+
+  it('DELETE /categories/:id amb un id inexistent da 404 NO_TROBAT', async () => {
+    const fastify = construirServidor();
+    const res = await fastify.inject({ method: 'DELETE', url: '/api/v1/categories/999999' });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ error: { codi: 'NO_TROBAT' } });
+
+    await fastify.close();
+  });
 });

@@ -1,4 +1,4 @@
-import type { MatriuTarifesApi } from '@dpages/shared';
+import type { MatriuTarifesApi, TarifaResumApi } from '@dpages/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { construirServidor as construirServidorType } from '../../servidor.js';
 import {
@@ -106,6 +106,49 @@ describe('API negoci — /tarifes (Postgres real, esquema aislado)', () => {
     });
     // La tarifa con codi (del beforeAll) sigue apareciendo igual, sin verse afectada.
     expect(cuerpo.tarifes).toContainEqual({ id: tarifaId, codi: 'GEN', nom: 'General' });
+
+    await fastify.close();
+  });
+
+  it('POST /tarifes crea una tarifa nueva', async () => {
+    const fastify = construirServidor();
+    const res = await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/tarifes',
+      payload: { codi: 'VIP', nom: 'Clients VIP' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const cuerpo = cuerpoJson<TarifaResumApi>(res);
+    expect(cuerpo).toMatchObject({ codi: 'VIP', nom: 'Clients VIP' });
+
+    await fastify.close();
+  });
+
+  it('POST /tarifes amb un codi ja existent da 409 CONFLICTE', async () => {
+    const fastify = construirServidor();
+    const res = await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/tarifes',
+      payload: { codi: 'GEN', nom: 'Duplicada' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ error: { codi: 'CONFLICTE' } });
+
+    await fastify.close();
+  });
+
+  it('POST /tarifes sense codi da 400 VALIDACIO', async () => {
+    const fastify = construirServidor();
+    const res = await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/tarifes',
+      payload: { nom: 'Sense codi' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
 
     await fastify.close();
   });

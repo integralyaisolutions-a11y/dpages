@@ -1,5 +1,6 @@
 import type { Paginacio } from '@dpages/shared';
 import type { FastifyReply } from 'fastify';
+import { DatabaseError } from 'pg';
 import type { Pool } from 'pg';
 import { cosError } from '../../error-api.js';
 
@@ -52,6 +53,21 @@ export function enviarConflicte(reply: FastifyReply, missatge: string): void {
 }
 
 /**
+ * `23505` = unique_violation. Sin precedente de "capturar y devolver
+ * CONFLICTE" en las rutas hasta la capa 14 (el único otro lugar del
+ * backend que traduce este código, resolucio-client.ts/ADR-023, resuelve
+ * un caso de negocio distinto — un conflicto de identidad de cliente
+ * durante el sync, no una alta manual por HTTP). Pensado para códigos
+ * únicos definidos por el usuario (transportista.codi, tarifa.codi...):
+ * en vez de dejar caer un 500 genérico, el `catch` de la ruta usa esto
+ * para decidir si el error es "ya existe" (409) o algo inesperado (se
+ * relanza, tal como antes).
+ */
+export function esViolacioCodiUnic(err: unknown): boolean {
+  return err instanceof DatabaseError && err.code === '23505';
+}
+
+/**
  * `:id` de la URL siempre es el entero secuencial público (id_seq), nunca
  * el UUID interno — ver ADR-019. `null` si el parámetro ni siquiera es un
  * entero válido (evita una consulta a la base para algo que ya sabemos que
@@ -84,3 +100,5 @@ export const resolverTransportistaUuid = (pool: Pool, idSeq: number): Promise<st
   resolverUuid(pool, 'transportista', idSeq);
 export const resolverComandaUuid = (pool: Pool, idSeq: number): Promise<string | null> =>
   resolverUuid(pool, 'comanda', idSeq);
+export const resolverRendimentPorcUuid = (pool: Pool, idSeq: number): Promise<string | null> =>
+  resolverUuid(pool, 'rendiments_porcs', idSeq);

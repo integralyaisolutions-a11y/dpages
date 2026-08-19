@@ -10,6 +10,7 @@ import { registrarRutesComandes } from './rutes/api/comandes.js';
 import { registrarRutaLliurament } from './rutes/api/lliurament.js';
 import { registrarRutesPanells } from './rutes/api/panells.js';
 import { registrarRutesProductes } from './rutes/api/productes.js';
+import { registrarRutesRendimentsPorcs } from './rutes/api/rendiments-porcs.js';
 import { registrarRutesTarifes } from './rutes/api/tarifes.js';
 import { registrarRutesTransportistes } from './rutes/api/transportistes.js';
 import { registrarRutaSalut } from './rutes/salut.js';
@@ -98,6 +99,7 @@ export function construirServidor(): FastifyInstance {
       api.addHook('preHandler', crearMiddlewareAuth());
       registrarRutesCategories(api);
       registrarRutesProductes(api);
+      registrarRutesRendimentsPorcs(api);
       registrarRutesTarifes(api);
       registrarRutesClients(api);
       registrarRutesTransportistes(api);

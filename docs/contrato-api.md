@@ -262,7 +262,23 @@ En el orden de prioridad que marcó el cliente.
 }
 ```
 
+**`POST /categories`**
+
+```json
+{ "nom": "Elaborats", "elaboratPorc": true, "agrupacioRendiment": "MAGRE" }
+```
+
+Respuesta `201`, misma forma que una fila de `GET /categories`.
+`elaboratPorc` arranca en `false` si no se manda. Misma validación cruzada
+que el `PATCH` de abajo: `agrupacioRendiment` sólo se acepta si
+`elaboratPorc` es `true`.
+
 **`PATCH /categories/:id`** — cuerpo parcial, sólo los campos a cambiar.
+
+**`DELETE /categories/:id`** — borrado protegido: si algún producto **activo**
+todavía usa esta categoría, responde `409 CONFLICTE` con el recuento en el
+mensaje en vez de dejar productos con una referencia rota. `204` sin cuerpo
+si el borrado se pudo hacer.
 
 > **`agrupacioRendiment`** (confirmado con el cliente el 18/08/2026, ya no
 > pendiente) toma uno de tres valores, y decide cómo esa categoría entra en
@@ -386,9 +402,18 @@ Las claves de `preus` son los identificadores de tarifa en texto. `null` signifi
 que ese artículo no tiene precio en esa tarifa.
 
 > `tarifes[].codi` puede ser `null` en tarifas que todavía no tienen código
-> cargado (el prototipo lo pide como campo separado de `nom` al crear una
-> tarifa, pero hoy no hay endpoint de alta de tarifas — se completa a mano
-> en base mientras tanto).
+> cargado (las que ya existían antes de que el alta empezara a pedirlo como
+> obligatorio).
+
+**`POST /tarifes`**
+
+```json
+{ "codi": "VIP", "nom": "Clients VIP" }
+```
+
+Respuesta `201`, misma forma que una fila de `tarifes[]` de la matriz de
+arriba. `codi` es obligatorio y único — un `codi` repetido responde
+`409 CONFLICTE`.
 
 **`PATCH /tarifes/:tarifaId/preus/:producteId`**
 
@@ -477,11 +502,23 @@ Respuesta `201`, misma forma que una fila de `GET /clients`:
 ```json
 {
   "dades": [
-    { "id": 1, "nom": "DHL", "actiu": true },
-    { "id": 2, "nom": "Recollida a la botiga", "actiu": true }
+    { "id": 1, "codi": "TR-DHL", "nom": "DHL", "actiu": true },
+    { "id": 2, "codi": null, "nom": "Recollida a la botiga", "actiu": true }
   ]
 }
 ```
+
+**`POST /transportistes`**
+
+```json
+{ "nom": "Seur", "codi": "TR-SEUR" }
+```
+
+Respuesta `201`, misma forma que una fila de `GET /transportistes`.
+`codi` es opcional (texto libre, nemotécnico) pero único cuando se manda —
+un `codi` repetido responde `409 CONFLICTE`.
+
+**`PATCH /transportistes/:id`** — cuerpo parcial (`nom` y/o `codi`).
 
 ---
 
@@ -811,7 +848,13 @@ base del cálculo del Panell Producció (sección 4.10).
 
 **`GET /rendiments-porcs`**
 
-Filtros: `?agrupacioRendiment=KG&categoria=Fresc&agrupacioProduccio=Llom&producteId=12`
+Filtros: `?agrupacioRendiment=KG&categoria=Fresc&agrupacioProduccio=Llom&producte=Llom fresc de porc`
+
+`producte` filtra por descripció con **coincidencia exacta** (no
+case-sensitive) — regla 3.1 transversal del proyecto
+(`docs/especificacion-funcional-dpages.md`): buscar "Llom" no debe traer
+"Cap de llom". Igual que `agrupacioRendiment`/`categoria`/`agrupacioProduccio`,
+que también son coincidencia exacta.
 
 ```json
 {
@@ -822,7 +865,7 @@ Filtros: `?agrupacioRendiment=KG&categoria=Fresc&agrupacioProduccio=Llom&product
       "agrupacioRendiment": "KG",
       "categoria": "Fresc",
       "agrupacioProduccio": "Llom",
-      "unitatsPerPorc": "2.000",
+      "unitatsPerPorc": "2.00",
       "kgPerUnitat": "3.500",
       "pesTotal": "7.000"
     }
@@ -835,18 +878,32 @@ Filtros: `?agrupacioRendiment=KG&categoria=Fresc&agrupacioProduccio=Llom&product
 > lectura** acá: se derivan del producto/categoría asociados (secciones 4.1
 > y 4.2), no se editan en este CRUD. `pesTotal` es calculado por el backend
 > (`unitatsPerPorc × kgPerUnitat`), tampoco se envía en las escrituras.
+>
+> Una fila sólo aparece en el listado si el producto asociado pertenece a
+> una categoría con `agrupacioRendiment` definido (no `null`) — si no, no
+> hay con qué rellenar `agrupacioRendiment`/`categoria`, que en este
+> contrato no son nulables. `POST` aplica la misma regla como validación de
+> alta (ver abajo), así que en la práctica una fila nunca debería quedar
+> "invisible" salvo que la categoría del producto cambie _después_ de
+> crearla.
 
 **`POST /rendiments-porcs`**
 
 ```json
-{ "producteId": 12, "unitatsPerPorc": "2.000", "kgPerUnitat": "3.500" }
+{ "producteId": 12, "unitatsPerPorc": "2.00", "kgPerUnitat": "3.500" }
 ```
+
+`unitatsPerPorc` admite hasta 2 decimales, `kgPerUnitat` hasta 3 (mismas
+escalas que la columna en base). Rechaza con `400 VALIDACIO` si el producto
+no existe o si su categoría no tiene `agrupacioRendiment` definido — sin
+esto, la fila creada no podría aparecer nunca en el `GET` (ver nota arriba).
 
 Respuesta `201`, misma forma que una fila de `GET /rendiments-porcs`.
 
 **`PATCH /rendiments-porcs/:id`** — línea por línea, mismo criterio de
 edición en línea que el resto del sistema (sin ventana emergente). Cuerpo
-parcial: `unitatsPerPorc` y/o `kgPerUnitat`.
+parcial: `unitatsPerPorc` y/o `kgPerUnitat`. `producteId` no se edita una vez
+creada la fila.
 
 **`DELETE /rendiments-porcs/:id`** — `204` sin cuerpo.
 
