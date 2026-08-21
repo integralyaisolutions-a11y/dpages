@@ -39,4 +39,16 @@ describe('logger — redacción RGPD', () => {
     const registro = leerUltimaLinea() as { req: { headers: { authorization: string } } };
     expect(registro.req.headers.authorization).toBe('[redactat]');
   });
+
+  it('censura linkEstabliment (POST /usuaris, capa 19 — token de un solo uso para establecer contraseña)', () => {
+    const { logger, leerUltimaLinea } = crearLoggerDePrueba();
+
+    logger.info(
+      { resposta: { linkEstabliment: 'https://firebase.example/__/auth/action?oobCode=secret' } },
+      'alta de usuari',
+    );
+
+    const registro = leerUltimaLinea() as { resposta: { linkEstabliment: string } };
+    expect(registro.resposta.linkEstabliment).toBe('[redactat]');
+  });
 });

@@ -1048,10 +1048,13 @@ no resuelve a nada.
 
 Confirmada con el cliente el 18/08/2026, implementada en la capa 17. Un
 **rol** define qué módulos de la aplicación puede VER el usuario — no
-restringe acciones dentro de un módulo. Ver ADR-021: ningún endpoint de
-negocio bloquea por rol todavía; `modulsPermesos` es lo que el
-**frontend** usa para decidir qué mostrar en el menú, no algo que el
-backend haga cumplir.
+restringe acciones dentro de un módulo. Ver ADR-021: hasta la capa 19,
+ningún endpoint de negocio bloqueaba por rol; `modulsPermesos` era sólo lo
+que el **frontend** usaba para decidir qué mostrar en el menú. La capa 19
+(`POST /usuaris`, más abajo) es la **primera excepción**: el backend
+mismo exige el módulo `"usuaris"` porque dar de alta gente con acceso al
+sistema no puede quedar librado a que el frontend oculte el botón. El
+resto de los endpoints sigue sin restricción de rol.
 
 > **Decisión de negocio ya tomada:** hoy existen dos roles. `"General"`
 > tiene acceso a todos los módulos **operativos** del negocio (lo que
@@ -1152,12 +1155,56 @@ vínculo con el token de Firebase no se reasigna a mano).
 { "nom": "Anna Empaquetat", "rolId": 2 }
 ```
 
-> No hay `POST /usuaris` todavía: los usuarios se crean sólo por
-> auto-provisioning (ver abajo), no hay alta manual — llega cuando exista
-> la pantalla correspondiente en el frontend. Tampoco hay `DELETE
-/usuaris/:id`: para dar de baja a alguien, `PATCH { "actiu": false }`
-> (ver rechazo 403 abajo) — igual que `origen_comanda`, borrar de verdad
-> podría dejar referencias rotas (`comanda_linia.confirmatPer`, auditoría).
+> Tampoco hay `DELETE /usuaris/:id`: para dar de baja a alguien,
+> `PATCH { "actiu": false }` (ver rechazo 403 abajo) — igual que
+> `origen_comanda`, borrar de verdad podría dejar referencias rotas
+> (`comanda_linia.confirmatPer`, auditoría).
+
+**`POST /usuaris`** (capa 19) — alta manual de un usuario, hecha por un
+Administrador. **Sólo accesible para usuarios con `"usuaris"` en su
+`modulsPermesos`**; sin ese módulo, `403 SENSE_PERMIS` (mismo código que
+el rechazo por `actiu = false` de abajo, pero el motivo es otro: acá no es
+que el usuario esté desactivado, es que su rol no incluye este módulo).
+
+```json
+{ "nom": "Marc Empaquetat", "email": "marc@dpages.cat", "rolId": 2 }
+```
+
+Respuesta `201`:
+
+```json
+{
+  "usuari": {
+    "id": 9,
+    "firebaseUid": "xyz789firebase",
+    "nom": "Marc Empaquetat",
+    "email": "marc@dpages.cat",
+    "rol": { "id": 2, "nom": "General", "modulsPermesos": ["categories", "comandes"] },
+    "actiu": true
+  },
+  "linkEstabliment": "https://.../__/auth/action?mode=resetPassword&oobCode=..."
+}
+```
+
+> **No hay envío de email automático — el backend no tiene esa
+> capacidad.** El flujo es: (1) valida que `rolId` exista y que el email
+> no esté ya usado (`409 CONFLICTE` si sí); (2) crea el usuario en
+> Firebase Authentication (sin contraseña utilizable — se genera una
+> aleatoria descartable, nadie la conoce); (3) crea la fila de `usuari`
+> local; (4) genera con el Admin SDK de Firebase un link de "establecé tu
+> contraseña" de **un solo uso** (`generatePasswordResetLink`) y lo
+> devuelve en `linkEstabliment`. **El Administrador que dio de alta a la
+> persona es quien comparte ese link a mano**, por el canal que use
+> (WhatsApp, email personal, lo que sea) — el frontend debe mostrarlo de
+> forma que se pueda copiar fácilmente, porque no hay ninguna otra manera
+> de que la persona nueva lo reciba. Si algo falla después de crear el
+> usuario en Firebase (el alta local o generar el link), el backend
+> revierte borrando el usuario de Firebase — nunca queda un usuario
+> huérfano allá sin fila local acá.
+>
+> El campo `linkEstabliment` nunca debe quedar en un log ni guardarse en
+> ningún sitio más allá de esta respuesta — es un token de un solo uso que
+> da acceso a establecer la contraseña de otra persona.
 
 **`GET /jo`** — devuelve el usuario autenticado (resuelto por el `uid` del
 token de Firebase, sección 2) con su rol y módulos permitidos. Es lo
@@ -1195,10 +1242,12 @@ en el momento**, con:
 - `actiu` = `true`.
 
 Esto es deliberado: no bloquea a nadie con una pantalla de alta de
-usuarios que todavía no existe. **Es temporal** — cuando exista alta
-manual de usuarios en el frontend, revisar si conviene desactivarlo (por
-ejemplo, exigiendo que el usuario ya exista de antemano en vez de
-crearlo solo).
+usuarios que todavía no existe. Sigue activo incluso ahora que existe
+`POST /usuaris` (capa 19) — ambos caminos conviven: alta manual por un
+Administrador de antemano, o auto-provisioning la primera vez que alguien
+se loguea sin haber sido dado de alta. Revisar si conviene desactivarlo
+(exigiendo que el usuario ya exista) es una decisión pendiente, no
+tomada todavía.
 
 **Usuario existente con `actiu = false`:** la petición se rechaza con
 `403 SENSE_PERMIS` antes de llegar a cualquier endpoint — no hay forma de

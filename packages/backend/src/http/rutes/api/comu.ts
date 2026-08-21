@@ -1,5 +1,5 @@
 import type { Paginacio } from '@dpages/shared';
-import type { FastifyReply } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { DatabaseError } from 'pg';
 import type { Pool } from 'pg';
 import { cosError } from '../../error-api.js';
@@ -54,6 +54,24 @@ export function enviarConflicte(reply: FastifyReply, missatge: string): void {
 
 export function enviarSensePermis(reply: FastifyReply, missatge: string): void {
   reply.code(403).send(cosError('SENSE_PERMIS', missatge));
+}
+
+/**
+ * Primer endpoint que restringe por módulo (capa 19, `POST /usuaris`) —
+ * hasta ahora ningún endpoint de negocio lo hacía (ADR-021: el cliente
+ * pidió que nadie quedara bloqueado por rol). `req.usuariResolt` ya está
+ * seteado acá porque `crearMiddlewareResoldreUsuari()` corre antes en el
+ * mismo scope de plugin (ver servidor.ts) — se usa como `preHandler` de
+ * ruta (tercer argumento de `fastify.post/get/...`), no como hook global,
+ * para que sólo bloquee los endpoints que explícitamente lo pidan.
+ */
+export function crearGuardaModul(modul: string) {
+  return function guardaModul(req: FastifyRequest, reply: FastifyReply): void {
+    const usuari = req.usuariResolt;
+    if (!usuari || !usuari.rol.modulsPermesos.includes(modul)) {
+      enviarSensePermis(reply, `Calen permisos del mòdul "${modul}" per a aquesta acció`);
+    }
+  };
 }
 
 /**

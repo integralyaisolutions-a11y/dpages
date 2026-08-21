@@ -503,3 +503,25 @@ export interface UsuariEntradaApi {
   rolId: number;
   actiu?: boolean;
 }
+
+/**
+ * `POST /usuaris` (capa 19) — alta manual por un Administrador. A
+ * diferencia de `UsuariEntradaApi`, no lleva `firebaseUid`: lo genera el
+ * backend al crear el usuario en Firebase, no lo elige quien da de alta.
+ */
+export interface UsuariCreacioApi {
+  nom: string;
+  email: string;
+  rolId: number;
+}
+
+/**
+ * Respuesta de `POST /usuaris`. El backend no envía ningún email — genera
+ * `linkEstabliment` (Firebase `generatePasswordResetLink`, de un solo uso)
+ * y lo devuelve para que el Administrador se lo comparta a mano por el
+ * canal que use (WhatsApp, email personal...).
+ */
+export interface UsuariCreatRespostaApi {
+  usuari: UsuariApi;
+  linkEstabliment: string;
+}

@@ -82,6 +82,45 @@ function extraerToken(header: string | undefined): string | undefined {
 }
 
 /**
+ * Alta manual de usuarios (capa 19, `POST /api/v1/usuaris`) — operaciones
+ * de administración sobre Firebase Auth, distintas de verificar un token.
+ * Inyectable (mismo criterio que `VerificadorToken`): en los tests se
+ * reemplaza por un mock con `vi.fn()`, nunca se llama a Firebase real.
+ */
+export interface GestioUsuarisFirebase {
+  /** Crea el usuario en Firebase con una contraseña aleatoria descartable — nunca la usa, establece la suya vía `generarLinkEstabliment`. */
+  crearUsuari(email: string): Promise<{ uid: string }>;
+  /** Revierte `crearUsuari` — usado cuando algo falla DESPUÉS de crear en Firebase (ver usuaris.ts), para no dejar un usuario huérfano allá. */
+  esborrarUsuari(uid: string): Promise<void>;
+  /** Link de un solo uso para que la persona establezca su propia contraseña — no hay envío de email automático, lo comparte el Administrador a mano. */
+  generarLinkEstabliment(email: string): Promise<string>;
+}
+
+/** Implementación real — nunca se ejecuta en los tests de este repo (se inyecta un mock en su lugar). */
+export const gestioUsuarisFirebase: GestioUsuarisFirebase = {
+  async crearUsuari(email) {
+    const { getAuth } = await import('firebase-admin/auth');
+    const app = await obtenerAppFirebase();
+    // Contraseña descartable: cumple el mínimo de Firebase (6 caracteres),
+    // nadie la conoce ni la necesita — la persona establece la suya propia
+    // a través de generarLinkEstabliment.
+    const { randomUUID } = await import('node:crypto');
+    const userRecord = await getAuth(app).createUser({ email, password: randomUUID() });
+    return { uid: userRecord.uid };
+  },
+  async esborrarUsuari(uid) {
+    const { getAuth } = await import('firebase-admin/auth');
+    const app = await obtenerAppFirebase();
+    await getAuth(app).deleteUser(uid);
+  },
+  async generarLinkEstabliment(email) {
+    const { getAuth } = await import('firebase-admin/auth');
+    const app = await obtenerAppFirebase();
+    return getAuth(app).generatePasswordResetLink(email);
+  },
+};
+
+/**
  * `preHandler` de Fastify para las rutas de negocio (contrato, sección 2).
  * `/salut`, `/webhooks/woocommerce` y `/tasques/*` NO pasan por acá — viven
  * fuera del scope de plugin donde se registra este hook (ver servidor.ts),

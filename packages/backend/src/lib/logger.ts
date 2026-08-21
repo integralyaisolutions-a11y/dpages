@@ -30,6 +30,14 @@ export const configRedaccio = {
     '*.direccion',
     '*.billing',
     '*.shipping',
+    // POST /usuaris (capa 19) devuelve un link de un solo uso para
+    // establecer contraseña (generatePasswordResetLink) — nunca debe
+    // quedar en texto plano en un log. Fastify no loguea el body de la
+    // respuesta por defecto (sólo statusCode/responseTime, ver
+    // servidor.ts), así que esto es una red de seguridad adicional, no la
+    // única barrera — ningún código de la ruta debe pasarle este campo al
+    // logger tampoco.
+    '*.linkEstabliment',
   ],
   censor: '[redactat]',
 };

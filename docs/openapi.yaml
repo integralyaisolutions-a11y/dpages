@@ -963,6 +963,34 @@ paths:
                     type: array
                     items: { $ref: '#/components/schemas/Usuari' }
                   paginacio: { $ref: '#/components/schemas/Paginacio' }
+    post:
+      tags: [Usuaris]
+      summary: >-
+        Alta manual de un usuario, hecha por un Administrador (capa 19).
+      description: >-
+        Restringido: sólo usuarios con "usuaris" en su modulsPermesos
+        (403 SENSE_PERMIS si no). El backend no envía ningún email — crea el
+        usuario en Firebase Authentication (con una contraseña aleatoria
+        descartable), crea la fila local, genera con el Admin SDK de
+        Firebase un link de "establecé tu contraseña" de un solo uso
+        (generatePasswordResetLink) y lo devuelve en linkEstabliment. Quien
+        dio de alta a la persona comparte ese link a mano (WhatsApp, email
+        personal, etc.) — no hay ningún otro mecanismo de entrega. Si algo
+        falla después de crear el usuario en Firebase, se revierte
+        (deleteUser) para no dejar un usuario huérfano allá.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UsuariCreacio' }
+      responses:
+        '201':
+          description: Usuario creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UsuariCreatResposta' }
+        '400': { $ref: '#/components/responses/Validacio' }
+        '403': { $ref: '#/components/responses/SensePermis' }
+        '409': { $ref: '#/components/responses/Conflicte' }
 
   /api/v1/usuaris/{id}:
     patch:
@@ -994,10 +1022,13 @@ paths:
         después de loguearse. Capa 17.
       description: >-
         Auto-provisioning: si es la primera vez que este uid llama a la
-        API, se crea la fila de usuari en el momento, con rol
-        "Administrador" (decisión de negocio: "todos ven todo", ver
-        docs/contrato-api.md sección 4.12) y nom/email tomados de los
-        claims del token. Si el usuario ya existe pero está desactivado
+        API, se crea la fila de usuari en el momento, con rol "General"
+        (decisión de negocio: "todos ven todo" salvo gestión de
+        usuarios/roles, ver docs/contrato-api.md sección 4.12) y nom/email
+        tomados de los claims del token. Nunca "Administrador" por esta vía
+        — alguien ya-Administrador lo promueve a mano después, con PATCH
+        /usuaris/{id}, o lo da de alta directo con ese rol vía POST
+        /usuaris (capa 19). Si el usuario ya existe pero está desactivado
         (actiu=false), responde 403 SENSE_PERMIS.
       responses:
         '200':
@@ -1565,10 +1596,13 @@ components:
     Rol:
       type: object
       description: >-
-        Define qué módulos ve el usuario en el frontend — no restringe
-        acciones (ADR-021, ningún endpoint de negocio bloquea por rol).
-        Capa 17. Hoy sólo existe "Administrador" (con todos los módulos) —
-        parametrizable sin desarrollo si algún día hace falta restringir.
+        Define qué módulos ve el usuario en el frontend. Capa 17. Hoy
+        existen "Administrador" (todos los módulos) y "General" (todos
+        salvo "usuaris"/"rols"). ADR-021: hasta la capa 19 ningún endpoint
+        de negocio restringía por rol — POST /usuaris (capa 19) es la
+        primera excepción, exige "usuaris" en modulsPermesos.
+        Parametrizable sin desarrollo si algún día hace falta más
+        granularidad.
       properties:
         id: { type: integer }
         nom: { type: string }
@@ -1602,8 +1636,9 @@ components:
     Usuari:
       type: object
       description: >-
-        Capa 17. Se crea sólo por auto-provisioning (GET /jo y cualquier
-        otro endpoint de negocio) — no hay alta manual todavía.
+        Capa 17. Se crea por auto-provisioning (GET /jo y cualquier otro
+        endpoint de negocio) o por alta manual de un Administrador
+        (POST /usuaris, capa 19).
       properties:
         id: { type: integer }
         firebaseUid:
@@ -1625,19 +1660,31 @@ components:
               items: { type: string }
         actiu: { type: boolean }
 
-    UsuariEntrada:
+    UsuariCreacio:
       type: object
       description: >-
-        Reservado para cuando exista alta manual de usuarios (POST
-        /usuaris) — hoy ningún endpoint la usa; los usuarios se crean sólo
-        por auto-provisioning.
-      required: [firebaseUid, nom, email, rolId]
+        Cuerpo de POST /usuaris (capa 19). A diferencia del auto-
+        provisioning, no lleva firebaseUid: lo genera el backend al crear
+        el usuario en Firebase, no lo elige quien da de alta.
+      required: [nom, email, rolId]
       properties:
-        firebaseUid: { type: string }
         nom: { type: string }
         email: { type: string }
         rolId: { type: integer }
-        actiu: { type: boolean, default: true }
+
+    UsuariCreatResposta:
+      type: object
+      description: >-
+        Respuesta de POST /usuaris (capa 19). No hay envío de email — el
+        Administrador comparte linkEstabliment a mano por el canal que use.
+      properties:
+        usuari: { $ref: '#/components/schemas/Usuari' }
+        linkEstabliment:
+          type: string
+          description: >-
+            Link de Firebase (generatePasswordResetLink) de un solo uso
+            para que la persona establezca su propia contraseña. Nunca debe
+            loggearse ni guardarse más allá de esta respuesta.
 
     UsuariEdicio:
       type: object
