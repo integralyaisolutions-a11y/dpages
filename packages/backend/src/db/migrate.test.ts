@@ -10,9 +10,11 @@ import { leerMigraciones, migrarArriba, obtenerEstado } from './migrate.js';
 describe('leerMigraciones', () => {
   it('encuentra las migraciones reales del proyecto, ordenadas', () => {
     const migraciones = leerMigraciones();
-    expect(migraciones.map((m) => m.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+    expect(migraciones.map((m) => m.id)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    ]);
     expect(migraciones[0]?.archivo).toBe('0001_infraestructura_sincronizacion.up.sql');
-    expect(migraciones[13]?.archivo).toBe('0014_usuaris_i_rols.up.sql');
+    expect(migraciones[14]?.archivo).toBe('0015_client_codi_unic.up.sql');
   });
 });
 
@@ -36,7 +38,7 @@ describe('runner de migraciones (Postgres real, esquema aislado)', () => {
     await client.end();
   });
 
-  it('aplica las 14 migraciones reales del proyecto', async () => {
+  it('aplica las 15 migraciones reales del proyecto', async () => {
     const { aplicadas } = await migrarArriba(client);
     expect(aplicadas).toEqual([
       '0001_infraestructura_sincronizacion.up.sql',
@@ -53,6 +55,7 @@ describe('runner de migraciones (Postgres real, esquema aislado)', () => {
       '0012_rendiments_i_mantenim.up.sql',
       '0013_correccions_capa15.up.sql',
       '0014_usuaris_i_rols.up.sql',
+      '0015_client_codi_unic.up.sql',
     ]);
 
     const tablas = await client.query<{ table_name: string }>(
@@ -89,9 +92,9 @@ describe('runner de migraciones (Postgres real, esquema aislado)', () => {
     expect(aplicadas).toEqual([]);
   });
 
-  it('status muestra las 14 migraciones aplicadas y el hash en verde', async () => {
+  it('status muestra las 15 migraciones aplicadas y el hash en verde', async () => {
     const estado = await obtenerEstado(client);
-    expect(estado).toHaveLength(14);
+    expect(estado).toHaveLength(15);
     expect(estado.every((e) => e.aplicada)).toBe(true);
     expect(estado.every((e) => e.hashCoincide)).toBe(true);
     expect(estado.every((e) => e.aplicadaEn !== null)).toBe(true);
