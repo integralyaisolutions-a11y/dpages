@@ -14,6 +14,10 @@ import { cosError } from './error-api.js';
 export interface InfoUsuari {
   uid: string;
   rol: string | null;
+  /** Claim `email` del token, si el proveedor lo trae — usado por el auto-provisioning en resoldre-usuari.ts. */
+  email: string | null;
+  /** Claim `name` del token (ej. Google Sign-In lo trae; email/password no). */
+  nom: string | null;
 }
 
 declare module 'fastify' {
@@ -61,7 +65,9 @@ export const verificarTokenFirebase: VerificadorToken = async (token) => {
     const app = await obtenerAppFirebase();
     const decodificado = await getAuth(app).verifyIdToken(token);
     const rol = typeof decodificado.rol === 'string' ? decodificado.rol : null;
-    return { uid: decodificado.uid, rol };
+    const email = typeof decodificado.email === 'string' ? decodificado.email : null;
+    const nom = typeof decodificado.name === 'string' ? decodificado.name : null;
+    return { uid: decodificado.uid, rol, email, nom };
   } catch (err) {
     logger.warn(
       { error: err instanceof Error ? err.message : String(err) },
@@ -88,7 +94,7 @@ function extraerToken(header: string | undefined): string | undefined {
 export function crearMiddlewareAuth(verificador: VerificadorToken = verificarTokenFirebase) {
   return async function middlewareAuth(req: FastifyRequest, reply: FastifyReply): Promise<void> {
     if (env.NODE_ENV !== 'production' && env.AUTH_DISABLED) {
-      req.usuari = { uid: 'dev-sense-auth', rol: null };
+      req.usuari = { uid: 'dev-sense-auth', rol: null, email: null, nom: null };
       return;
     }
 

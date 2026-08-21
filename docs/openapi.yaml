@@ -894,9 +894,7 @@ paths:
   /api/v1/rols:
     get:
       tags: [Rols]
-      summary: >-
-        Listar roles. Nuevo, confirmado 18/08/2026. Todavía no implementado
-        en el backend real.
+      summary: Listar roles (capa 17).
       responses:
         '200':
           description: Listado
@@ -940,23 +938,17 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Rol' }
-        '404': { $ref: '#/components/responses/NoTrobat' }
-    delete:
-      tags: [Rols]
-      summary: Eliminar un rol
-      parameters:
-        - $ref: '#/components/parameters/IdPath'
-      responses:
-        '204': { description: Eliminado }
+        '400': { $ref: '#/components/responses/Validacio' }
         '404': { $ref: '#/components/responses/NoTrobat' }
 
   /api/v1/usuaris:
     get:
       tags: [Usuaris]
-      summary: >-
-        Listar usuarios. Nuevo, confirmado 18/08/2026. Todavía no
-        implementado en el backend real.
+      summary: Listar usuarios (capa 17).
       parameters:
+        - name: actiu
+          in: query
+          schema: { type: boolean }
         - $ref: '#/components/parameters/Pagina'
         - $ref: '#/components/parameters/Mida'
       responses:
@@ -971,46 +963,26 @@ paths:
                     type: array
                     items: { $ref: '#/components/schemas/Usuari' }
                   paginacio: { $ref: '#/components/schemas/Paginacio' }
-    post:
-      tags: [Usuaris]
-      summary: Crear un usuario
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/UsuariEntrada' }
-      responses:
-        '201':
-          description: Usuario creado
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Usuari' }
-        '400': { $ref: '#/components/responses/Validacio' }
 
   /api/v1/usuaris/{id}:
     patch:
       tags: [Usuaris]
-      summary: Actualizar un usuario (parcial)
+      summary: >-
+        Actualizar un usuario (parcial) — sólo nom/rolId/actiu.
+        firebaseUid y email son inmutables una vez creado.
       parameters:
         - $ref: '#/components/parameters/IdPath'
       requestBody:
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/UsuariEntrada' }
+            schema: { $ref: '#/components/schemas/UsuariEdicio' }
       responses:
         '200':
           description: Usuario actualizado
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Usuari' }
-        '404': { $ref: '#/components/responses/NoTrobat' }
-    delete:
-      tags: [Usuaris]
-      summary: Eliminar un usuario
-      parameters:
-        - $ref: '#/components/parameters/IdPath'
-      responses:
-        '204': { description: Eliminado }
+        '400': { $ref: '#/components/responses/Validacio' }
         '404': { $ref: '#/components/responses/NoTrobat' }
 
   /api/v1/jo:
@@ -1019,14 +991,21 @@ paths:
       summary: >-
         Usuario autenticado (resuelto por el uid del token de Firebase) con
         su rol y módulos permitidos. Lo primero que llama el frontend
-        después de loguearse. Nuevo, confirmado 18/08/2026. Todavía no
-        implementado en el backend real.
+        después de loguearse. Capa 17.
+      description: >-
+        Auto-provisioning: si es la primera vez que este uid llama a la
+        API, se crea la fila de usuari en el momento, con rol
+        "Administrador" (decisión de negocio: "todos ven todo", ver
+        docs/contrato-api.md sección 4.12) y nom/email tomados de los
+        claims del token. Si el usuario ya existe pero está desactivado
+        (actiu=false), responde 403 SENSE_PERMIS.
       responses:
         '200':
           description: Usuario autenticado
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Usuari' }
+        '403': { $ref: '#/components/responses/SensePermis' }
 
 components:
   securitySchemes:
@@ -1066,6 +1045,11 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
     Conflicte:
       description: Conflicto (p. ej. pedido congelado)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    SensePermis:
+      description: 'Autenticado pero sin permiso (ej. usuari amb actiu=false)'
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1583,14 +1567,28 @@ components:
       description: >-
         Define qué módulos ve el usuario en el frontend — no restringe
         acciones (ADR-021, ningún endpoint de negocio bloquea por rol).
-        Nuevo, confirmado 18/08/2026.
+        Capa 17. Hoy sólo existe "Administrador" (con todos los módulos) —
+        parametrizable sin desarrollo si algún día hace falta restringir.
       properties:
         id: { type: integer }
         nom: { type: string }
         modulsPermesos:
           type: array
           items: { type: string }
-          example: [categories, catalog, tarifes, clients, comandes, panells]
+          example:
+            [
+              categories,
+              catalog,
+              tarifes,
+              tarifes-clients,
+              comandes,
+              rendiments-porcs,
+              panell-oficina,
+              panell-obrador,
+              panell-empaquetat,
+              panell-produccio,
+              usuaris,
+            ]
 
     RolEntrada:
       type: object
@@ -1603,7 +1601,9 @@ components:
 
     Usuari:
       type: object
-      description: Nuevo, confirmado 18/08/2026. Todavía no implementado en el backend real.
+      description: >-
+        Capa 17. Se crea sólo por auto-provisioning (GET /jo y cualquier
+        otro endpoint de negocio) — no hay alta manual todavía.
       properties:
         id: { type: integer }
         firebaseUid:
@@ -1613,13 +1613,24 @@ components:
         email: { type: string }
         rol:
           type: object
+          description: >-
+            Incluye modulsPermesos acá (no sólo en el schema Rol) porque
+            GET /jo es lo primero que llama el frontend y necesita saberlo
+            sin una segunda llamada a GET /rols/{id}.
           properties:
             id: { type: integer }
             nom: { type: string }
+            modulsPermesos:
+              type: array
+              items: { type: string }
         actiu: { type: boolean }
 
     UsuariEntrada:
       type: object
+      description: >-
+        Reservado para cuando exista alta manual de usuarios (POST
+        /usuaris) — hoy ningún endpoint la usa; los usuarios se crean sólo
+        por auto-provisioning.
       required: [firebaseUid, nom, email, rolId]
       properties:
         firebaseUid: { type: string }
@@ -1627,3 +1638,13 @@ components:
         email: { type: string }
         rolId: { type: integer }
         actiu: { type: boolean, default: true }
+
+    UsuariEdicio:
+      type: object
+      description: >-
+        Cuerpo de PATCH /usuaris/{id} — sólo los campos editables.
+        firebaseUid y email son inmutables, no están acá a propósito.
+      properties:
+        nom: { type: string }
+        rolId: { type: integer }
+        actiu: { type: boolean }

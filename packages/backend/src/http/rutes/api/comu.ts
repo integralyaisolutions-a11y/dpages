@@ -52,6 +52,10 @@ export function enviarConflicte(reply: FastifyReply, missatge: string): void {
   reply.code(409).send(cosError('CONFLICTE', missatge));
 }
 
+export function enviarSensePermis(reply: FastifyReply, missatge: string): void {
+  reply.code(403).send(cosError('SENSE_PERMIS', missatge));
+}
+
 /**
  * `23505` = unique_violation. Sin precedente de "capturar y devolver
  * CONFLICTE" en las rutas hasta la capa 14 (el único otro lugar del
@@ -102,3 +106,7 @@ export const resolverComandaUuid = (pool: Pool, idSeq: number): Promise<string |
   resolverUuid(pool, 'comanda', idSeq);
 export const resolverRendimentPorcUuid = (pool: Pool, idSeq: number): Promise<string | null> =>
   resolverUuid(pool, 'rendiments_porcs', idSeq);
+export const resolverRolUuid = (pool: Pool, idSeq: number): Promise<string | null> =>
+  resolverUuid(pool, 'rol', idSeq);
+export const resolverUsuariUuid = (pool: Pool, idSeq: number): Promise<string | null> =>
+  resolverUuid(pool, 'usuari', idSeq);

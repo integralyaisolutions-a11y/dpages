@@ -69,16 +69,17 @@ export function registrarRutaLliurament(fastify: FastifyInstance): void {
     );
     if (!resultat.rows[0]) return enviarNoTrobat(reply, 'Línia no trobada');
 
-    // Sin tabla de usuarios todavía (capa posterior): `id` queda en 0 como
-    // marcador estructural, `nom` muestra el uid real de Firebase — no es
-    // lindo, pero es honesto (no inventa un nombre que no tenemos).
+    // Capa 17: ya existe la tabla de usuarios — el middleware
+    // (resoldre-usuari.ts) deja el usuario real resuelto en
+    // req.usuariResolt, así que id/nom ya no son un marcador.
+    const usuariResolt = req.usuariResolt!;
     const resposta: LliuramentRespostaApi = {
       liniaId: Number(resultat.rows[0].id_seq),
       comandaId: comandaIdPublic,
       unitatsLliurades: cos.unitatsLliurades!,
       kgLliurats: cos.kgLliurats!,
       confirmatA: formatearDataApi(resultat.rows[0].confirmat_a)!,
-      confirmatPer: { id: 0, nom: usuari.uid },
+      confirmatPer: { id: usuariResolt.id, nom: usuariResolt.nom },
     };
     return resposta;
   });

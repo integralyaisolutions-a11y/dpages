@@ -487,7 +487,12 @@ export interface UsuariApi {
   firebaseUid: string;
   nom: string;
   email: string;
-  rol: { id: number; nom: string };
+  /**
+   * `modulsPermesos` viaja acá (no sólo en RolApi) porque GET /jo (capa 17)
+   * es lo primero que llama el frontend al iniciar sesión, y necesita saber
+   * qué mostrar sin una segunda llamada a GET /rols/:id.
+   */
+  rol: { id: number; nom: string; modulsPermesos: string[] };
   actiu: boolean;
 }
 

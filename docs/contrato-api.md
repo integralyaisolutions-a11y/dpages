@@ -1046,11 +1046,25 @@ no resuelve a nada.
 
 ### 4.12 · Usuaris i rols
 
-Nueva (confirmada con el cliente el 18/08/2026). Un **rol** define qué
-módulos de la aplicación puede VER el usuario — no restringe acciones
-dentro de un módulo. Ver ADR-021: ningún endpoint de negocio bloquea por
-rol todavía; `modulsPermesos` es lo que el **frontend** usa para decidir
-qué mostrar en el menú, no algo que el backend haga cumplir.
+Confirmada con el cliente el 18/08/2026, implementada en la capa 17. Un
+**rol** define qué módulos de la aplicación puede VER el usuario — no
+restringe acciones dentro de un módulo. Ver ADR-021: ningún endpoint de
+negocio bloquea por rol todavía; `modulsPermesos` es lo que el
+**frontend** usa para decidir qué mostrar en el menú, no algo que el
+backend haga cumplir.
+
+> **Decisión de negocio ya tomada:** hoy existen dos roles. `"General"`
+> tiene acceso a todos los módulos **operativos** del negocio (lo que
+> pidió el cliente, "todos ven todo"); `"Administrador"` tiene además la
+> gestión de usuarios y roles (`usuaris`, `rols`). **Todo usuario nuevo se
+> asigna a `"General"` automáticamente** (ver auto-provisioning más
+> abajo) — nadie obtiene gestión de usuarios/roles sólo por loguearse
+> primero. Promover a alguien a `"Administrador"` es una acción manual
+> posterior, hecha por alguien que ya sea Administrador, vía
+> `PATCH /usuaris/:id { "rolId": <id de Administrador> }`. El sistema de
+> roles queda parametrizable sin desarrollo futuro si algún día quieren
+> más granularidad: basta con crear más roles (`POST /rols`) y reasignar
+> usuarios, no hace falta ningún cambio de código.
 
 **`GET /rols`**
 
@@ -1059,25 +1073,56 @@ qué mostrar en el menú, no algo que el backend haga cumplir.
   "dades": [
     {
       "id": 1,
-      "nom": "Oficina",
-      "modulsPermesos": ["categories", "catalog", "tarifes", "clients", "comandes", "panells"]
+      "nom": "Administrador",
+      "modulsPermesos": [
+        "categories",
+        "catalog",
+        "tarifes",
+        "tarifes-clients",
+        "comandes",
+        "rendiments-porcs",
+        "panell-oficina",
+        "panell-obrador",
+        "panell-empaquetat",
+        "panell-produccio",
+        "usuaris",
+        "rols"
+      ]
     },
     {
       "id": 2,
-      "nom": "Obrador",
-      "modulsPermesos": ["panells"]
+      "nom": "General",
+      "modulsPermesos": [
+        "categories",
+        "catalog",
+        "tarifes",
+        "tarifes-clients",
+        "comandes",
+        "rendiments-porcs",
+        "panell-oficina",
+        "panell-obrador",
+        "panell-empaquetat",
+        "panell-produccio"
+      ]
     }
   ]
 }
 ```
 
-**`POST /rols`** · **`PATCH /rols/:id`** (cuerpo parcial) · **`DELETE /rols/:id`**
+**`POST /rols`** · **`PATCH /rols/:id`** (cuerpo parcial)
 
 ```json
-{ "nom": "Producció", "modulsPermesos": ["panells", "produccio"] }
+{ "nom": "Obrador", "modulsPermesos": ["panell-obrador"] }
 ```
 
+> No hay `DELETE /rols/:id` todavía — un rol en uso por algún `usuari` no
+> se puede borrar sin dejarlo sin rol (`usuari.rolId` es obligatorio). Se
+> agrega en una capa posterior si hace falta, con el mismo criterio de
+> borrado protegido que ya usa `DELETE /categories/:id`.
+
 **`GET /usuaris`**
+
+Filtros: `?actiu=true`
 
 ```json
 {
@@ -1087,7 +1132,11 @@ qué mostrar en el menú, no algo que el backend haga cumplir.
       "firebaseUid": "abc123firebase",
       "nom": "Anna Oficina",
       "email": "anna@dpages.cat",
-      "rol": { "id": 1, "nom": "Oficina" },
+      "rol": {
+        "id": 2,
+        "nom": "General",
+        "modulsPermesos": ["categories", "comandes", "panell-produccio"]
+      },
       "actiu": true
     }
   ],
@@ -1095,16 +1144,20 @@ qué mostrar en el menú, no algo que el backend haga cumplir.
 }
 ```
 
-**`POST /usuaris`** · **`PATCH /usuaris/:id`** (cuerpo parcial) · **`DELETE /usuaris/:id`**
+**`PATCH /usuaris/:id`** (cuerpo parcial) — sólo `nom`, `rolId` y `actiu`.
+`firebaseUid` y `email` son **inmutables** una vez creado el usuario (el
+vínculo con el token de Firebase no se reasigna a mano).
 
 ```json
-{
-  "firebaseUid": "xyz789firebase",
-  "nom": "Marc Obrador",
-  "email": "marc@dpages.cat",
-  "rolId": 2
-}
+{ "nom": "Anna Empaquetat", "rolId": 2 }
 ```
+
+> No hay `POST /usuaris` todavía: los usuarios se crean sólo por
+> auto-provisioning (ver abajo), no hay alta manual — llega cuando exista
+> la pantalla correspondiente en el frontend. Tampoco hay `DELETE
+/usuaris/:id`: para dar de baja a alguien, `PATCH { "actiu": false }`
+> (ver rechazo 403 abajo) — igual que `origen_comanda`, borrar de verdad
+> podría dejar referencias rotas (`comanda_linia.confirmatPer`, auditoría).
 
 **`GET /jo`** — devuelve el usuario autenticado (resuelto por el `uid` del
 token de Firebase, sección 2) con su rol y módulos permitidos. Es lo
@@ -1117,10 +1170,40 @@ panel ubicar a la persona por defecto y qué mostrar en el menú.
   "firebaseUid": "abc123firebase",
   "nom": "Anna Oficina",
   "email": "anna@dpages.cat",
-  "rol": { "id": 1, "nom": "Oficina" },
+  "rol": {
+    "id": 2,
+    "nom": "General",
+    "modulsPermesos": ["categories", "comandes", "panell-produccio"]
+  },
   "actiu": true
 }
 ```
+
+#### Auto-provisioning (comportamiento observable, no sólo interno)
+
+**Todo endpoint de negocio (sección 2) resuelve automáticamente un
+`usuari` a partir del `uid` del token de Firebase.** Si es la primera vez
+que ese `uid` llama a la API, el sistema **crea la fila de `usuari`
+en el momento**, con:
+
+- `rolId` = el rol `"General"` (siempre, hoy — ver decisión de negocio
+  arriba). **Nunca** `"Administrador"`: nadie obtiene gestión de usuarios
+  ni roles sólo por loguearse primero. Alguien ya-Administrador tiene que
+  promoverlo a mano después, con `PATCH /usuaris/:id`.
+- `nom`/`email` = los claims `name`/`email` del propio token; si el
+  proveedor de autenticación no trae `name`, se usa el `email`.
+- `actiu` = `true`.
+
+Esto es deliberado: no bloquea a nadie con una pantalla de alta de
+usuarios que todavía no existe. **Es temporal** — cuando exista alta
+manual de usuarios en el frontend, revisar si conviene desactivarlo (por
+ejemplo, exigiendo que el usuario ya exista de antemano en vez de
+crearlo solo).
+
+**Usuario existente con `actiu = false`:** la petición se rechaza con
+`403 SENSE_PERMIS` antes de llegar a cualquier endpoint — no hay forma de
+que un usuario desactivado siga usando el sistema con un token todavía
+válido.
 
 ---
 

@@ -11,11 +11,14 @@ import { registrarRutaLliurament } from './rutes/api/lliurament.js';
 import { registrarRutesPanells } from './rutes/api/panells.js';
 import { registrarRutesProductes } from './rutes/api/productes.js';
 import { registrarRutesRendimentsPorcs } from './rutes/api/rendiments-porcs.js';
+import { registrarRutesRols } from './rutes/api/rols.js';
 import { registrarRutesTarifes } from './rutes/api/tarifes.js';
 import { registrarRutesTransportistes } from './rutes/api/transportistes.js';
+import { registrarRutesUsuaris } from './rutes/api/usuaris.js';
 import { registrarRutaSalut } from './rutes/salut.js';
 import { registrarRutesTasques } from './rutes/tasques.js';
 import { registrarRutaWebhook } from './rutes/webhook.js';
+import { crearMiddlewareResoldreUsuari } from './resoldre-usuari.js';
 
 export function construirServidor(): FastifyInstance {
   const fastify = Fastify({
@@ -97,6 +100,9 @@ export function construirServidor(): FastifyInstance {
   void fastify.register(
     (api, _opts, done) => {
       api.addHook('preHandler', crearMiddlewareAuth());
+      // Corre DESPUÉS de crearMiddlewareAuth() (necesita req.usuari ya
+      // resuelto) — ver resoldre-usuari.ts para el auto-provisioning.
+      api.addHook('preHandler', crearMiddlewareResoldreUsuari());
       registrarRutesCategories(api);
       registrarRutesProductes(api);
       registrarRutesRendimentsPorcs(api);
@@ -106,6 +112,8 @@ export function construirServidor(): FastifyInstance {
       registrarRutesComandes(api);
       registrarRutaLliurament(api);
       registrarRutesPanells(api);
+      registrarRutesUsuaris(api);
+      registrarRutesRols(api);
       done();
     },
     { prefix: '/api/v1' },

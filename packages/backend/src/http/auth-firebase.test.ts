@@ -86,7 +86,12 @@ describe('crearMiddlewareAuth (verificador simulado, sin Firebase real)', () => 
   });
 
   it('token válido: adjunta uid i rol a la request, sense respondre error', async () => {
-    const infoUsuari: InfoUsuari = { uid: 'usuari-real-123', rol: 'oficina' };
+    const infoUsuari: InfoUsuari = {
+      uid: 'usuari-real-123',
+      rol: 'oficina',
+      email: 'anna@dpages.cat',
+      nom: 'Anna',
+    };
     const verificador: VerificadorToken = vi.fn().mockResolvedValue(infoUsuari);
     const req = crearReqFake('Bearer token-valid');
     const reply = crearReplyFake();
@@ -98,7 +103,12 @@ describe('crearMiddlewareAuth (verificador simulado, sin Firebase real)', () => 
   });
 
   it('token válido sense custom claim de rol: rol queda en null, no bloqueja', async () => {
-    const infoUsuari: InfoUsuari = { uid: 'usuari-sense-rol', rol: null };
+    const infoUsuari: InfoUsuari = {
+      uid: 'usuari-sense-rol',
+      rol: null,
+      email: null,
+      nom: null,
+    };
     const verificador: VerificadorToken = vi.fn().mockResolvedValue(infoUsuari);
     const req = crearReqFake('Bearer token-valid');
     const reply = crearReplyFake();

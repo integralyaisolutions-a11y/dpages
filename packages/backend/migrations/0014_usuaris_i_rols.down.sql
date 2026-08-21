@@ -1,0 +1,2 @@
+DROP TABLE usuari;
+DROP TABLE rol;
