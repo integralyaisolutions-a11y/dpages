@@ -747,26 +747,35 @@ paths:
     get:
       tags: [Panells]
       summary: >-
-        Panel de producción (solo lectura). Nuevo, confirmado 18/08/2026.
-        Todavía no implementado en el backend real — las fórmulas
-        numéricas de KG/PAQ/MAGRE quedan pendientes de confirmar, ver
-        docs/contrato-api.md sección 4.10.
+        Panel de producción (solo lectura, capa 16) — calculadora de
+        demanda vs. rendimiento porcino. Ver docs/contrato-api.md sección
+        4.10 para las fórmulas y el ejemplo numérico verificado.
       parameters:
+        - name: nombrePorcs
+          in: query
+          required: true
+          description: >-
+            Obligatorio — sin valor, o con 0/negativo, responde 400
+            VALIDACIO. Es una calculadora interactiva: no hay default
+            silencioso posible sin inducir a error.
+          schema: { type: number }
         - name: agrupacioRendiment
           in: query
           schema: { type: string, enum: [KG, MAGRE, PAQ] }
-        - name: producteId
+        - name: producte
           in: query
-          schema: { type: integer }
+          description: >-
+            Filtra por descripció del producte, coincidencia exacta
+            (case-insensitive) — mismo criterio que GET /rendiments-porcs.
+          schema: { type: string }
         - name: dataDes
           in: query
+          description: 'Default: mañana (hoy + 1 día).'
           schema: { type: string, format: date }
         - name: dataFins
           in: query
+          description: 'Default: hoy + 7 días.'
           schema: { type: string, format: date }
-        - name: nombrePorcs
-          in: query
-          schema: { type: integer }
         - $ref: '#/components/parameters/Pagina'
         - $ref: '#/components/parameters/Mida'
       responses:
@@ -775,6 +784,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PanellProduccio' }
+        '400': { $ref: '#/components/responses/Validacio' }
 
   /api/v1/panells/empaquetat:
     get:
@@ -1526,9 +1536,8 @@ components:
     PanellProduccioFila:
       type: object
       description: >-
-        Nueva, confirmada el 18/08/2026. Todavía no implementada en el
-        backend real — las fórmulas numéricas de KG/PAQ/MAGRE quedan
-        pendientes de confirmar, ver docs/contrato-api.md sección 4.10.
+        Una fila por agrupacioProduccio (capa 16) — ver docs/contrato-api.md
+        sección 4.10 para las fórmulas y el ejemplo numérico verificado.
       properties:
         agrupacioRendiment: { type: string, enum: [KG, MAGRE, PAQ] }
         categoria: { type: string }

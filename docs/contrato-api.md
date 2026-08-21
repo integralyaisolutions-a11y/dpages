@@ -911,13 +911,31 @@ creada la fila.
 
 ### 4.10 · Panell Producció
 
-Nueva (confirmada con el cliente el 18/08/2026). Sólo lectura. Una fila por
-producto con demanda en el rango filtrado, calculada a partir de los
-pedidos y de la ficha de `Rendiments Porcs`.
+Confirmada con el cliente el 18/08/2026, implementada en la capa 16. Sólo
+lectura. Una fila por **agrupació de producció** (no por producte
+individual — varios artículos pueden compartir una misma agrupación) con
+demanda en el rango filtrado, calculada a partir de los pedidos y de la
+ficha de `Rendiments Porcs`.
 
 **`GET /panells/produccio`**
 
-Filtros: `?agrupacioRendiment=KG&producteId=12&dataDes=2026-08-01&dataFins=2026-08-31&nombrePorcs=5`
+Filtros: `?nombrePorcs=5&agrupacioRendiment=KG&producte=Llom fresc de porc&dataDes=2026-08-01&dataFins=2026-08-31`
+
+- **`nombrePorcs` es obligatorio.** Sin él, o con `0`/negativo, responde
+  `400 VALIDACIO` — es una calculadora interactiva, un default silencioso
+  podría hacer pensar que un número inventado es el resultado real.
+- `producte` filtra por descripció con **coincidencia exacta**
+  (case-insensitive), igual que `GET /rendiments-porcs` (regla 3.1
+  transversal del proyecto).
+- `dataDes`/`dataFins` son opcionales — default `dataDes` = mañana (hoy +
+  1 día), `dataFins` = hoy + 7 días.
+
+> **`producte` en la fila de respuesta** (`{ id, descripcio }`) es sólo UN
+> artículo representativo de la agrupación — el de `id` más chico entre los
+> que la componen — no una lista. Si varios artículos comparten
+> `agrupacioProduccio`, el resto no aparece ahí (el contrato no admite más
+> de un producte por fila). No afecta al cálculo, que siempre opera sobre
+> la agrupación completa.
 
 ```json
 {

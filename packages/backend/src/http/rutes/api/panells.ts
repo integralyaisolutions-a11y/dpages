@@ -2,6 +2,7 @@ import type {
   FilaPanellEmpaquetatApi,
   FilaPanellObradorApi,
   FilaPanellOficinaApi,
+  PanellProduccioFilaApi,
 } from '@dpages/shared';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { pool } from '../../../db/pool.js';
@@ -30,6 +31,20 @@ async function resolverFiltreEntitat(
   }
   const uuid = await resolver(idPublic);
   return uuid ?? '00000000-0000-0000-0000-000000000000';
+}
+
+type AgrupacioRendiment = 'KG' | 'MAGRE' | 'PAQ';
+const AGRUPACIONS_RENDIMENT: readonly AgrupacioRendiment[] = ['KG', 'MAGRE', 'PAQ'];
+
+function esAgrupacioRendimentValida(valor: unknown): valor is AgrupacioRendiment {
+  return typeof valor === 'string' && AGRUPACIONS_RENDIMENT.includes(valor as AgrupacioRendiment);
+}
+
+/** `YYYY-MM-DD`, día actual del servidor + offset — para los defaults de dataDes/dataFins. */
+function dataIsoAmbOffset(diesOffset: number): string {
+  const data = new Date();
+  data.setUTCDate(data.getUTCDate() + diesOffset);
+  return data.toISOString().slice(0, 10);
 }
 
 export function registrarRutesPanells(fastify: FastifyInstance): void {
@@ -407,6 +422,177 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       },
       dades,
       paginacio: construirPaginacio(pagina, mida, totalLinies),
+    };
+  });
+
+  // ── 4.10 · Panell Producció ──────────────────────────────────────────
+  fastify.get('/panells/produccio', async (req, reply) => {
+    const query = req.query as Record<string, unknown>;
+    const { pagina, mida, offset } = parsearPaginacio(query);
+
+    // Calculadora interactiva: sin nombrePorcs no hay nada que calcular —
+    // un default silencioso podría hacer pensar al usuario que un número
+    // inventado es el resultado real. Se exige explícito, siempre.
+    const nombrePorcs = typeof query.nombrePorcs === 'string' ? Number(query.nombrePorcs) : NaN;
+    if (!Number.isFinite(nombrePorcs) || nombrePorcs <= 0) {
+      return enviarValidacio(reply, 'nombrePorcs és obligatori i ha de ser més gran que zero', [
+        { camp: 'nombrePorcs', missatge: 'és obligatori i ha de ser més gran que zero' },
+      ]);
+    }
+
+    if (
+      query.agrupacioRendiment !== undefined &&
+      query.agrupacioRendiment !== '' &&
+      !esAgrupacioRendimentValida(query.agrupacioRendiment)
+    ) {
+      return enviarValidacio(
+        reply,
+        `agrupacioRendiment ha de ser ${AGRUPACIONS_RENDIMENT.join(', ')}`,
+      );
+    }
+
+    const dataDes =
+      typeof query.dataDes === 'string' && query.dataDes !== ''
+        ? query.dataDes
+        : dataIsoAmbOffset(1);
+    const dataFins =
+      typeof query.dataFins === 'string' && query.dataFins !== ''
+        ? query.dataFins
+        : dataIsoAmbOffset(7);
+
+    const condicions: string[] = [
+      `c.estat = 'oberta'`,
+      'cat.elaborat_porc = true',
+      'NOT cl.esborrat',
+      // ::date descarta la hora — dataDes/dataFins son fechas, no instantes,
+      // y así funciona sin importar si vienen como "YYYY-MM-DD" o un
+      // timestamp completo.
+      `cl.data_produccio::date BETWEEN $${1}::date AND $${2}::date`,
+      // agrupacioProduccio/agrupacioRendiment son NO nulables en
+      // PanellProduccioFilaApi (contrato) — una línia cuyo producte no
+      // tiene agrupació de producció, o cuya categoria no tiene agrupació
+      // de rendiment, no tiene con qué rellenar esos campos. Mismo
+      // criterio que rendiments-porcs.ts (capa 14): queda fuera en vez de
+      // romper el contrato con un null donde no lo admite.
+      'p.agrupacio_produccio IS NOT NULL',
+      'cat.agrupacio_rendiment IS NOT NULL',
+    ];
+    const valors: unknown[] = [dataDes, dataFins];
+
+    if (query.agrupacioRendiment !== undefined && query.agrupacioRendiment !== '') {
+      condicions.push(`cat.agrupacio_rendiment = $${valors.length + 1}`);
+      valors.push(query.agrupacioRendiment);
+    }
+    if (typeof query.producte === 'string' && query.producte.trim() !== '') {
+      // Coincidencia EXACTA por descripción, no substring — mismo criterio
+      // corregido en rendiments-porcs.ts (capa 14).
+      condicions.push(`LOWER(p.descripcio) = LOWER($${valors.length + 1})`);
+      valors.push(query.producte.trim());
+    }
+    const where = `WHERE ${condicions.join(' AND ')}`;
+
+    // Agrupado por agrupacio_produccio + agrupacio_rendiment (no por
+    // producte_id): varios artículos pueden compartir una misma agrupación
+    // de producción. El representante de "producte"/rendiments_porcs de
+    // cada grupo es el de menor id_seq — decisión de criterio (el contrato
+    // sólo admite UN producte por fila; ver resumen para el detalle).
+    const filas = await pool.query<{
+      agrupacio_produccio: string;
+      agrupacio_rendiment: AgrupacioRendiment;
+      categoria_nom: string;
+      producte_id_seq: string;
+      producte_descripcio: string;
+      unitats_per_porc: string | null;
+      kg_per_unitat: string | null;
+      kg_a_elaborar: string;
+      paq_pedido: string;
+    }>(
+      `SELECT p.agrupacio_produccio, cat.agrupacio_rendiment,
+              (array_agg(cat.nom ORDER BY p.id_seq))[1] AS categoria_nom,
+              (array_agg(p.id_seq ORDER BY p.id_seq))[1] AS producte_id_seq,
+              (array_agg(p.descripcio ORDER BY p.id_seq))[1] AS producte_descripcio,
+              (array_agg(rp.unitats_per_porc ORDER BY p.id_seq))[1] AS unitats_per_porc,
+              (array_agg(rp.kg_per_unitat ORDER BY p.id_seq))[1] AS kg_per_unitat,
+              SUM(cl.pes_calculat_kg)::numeric(14,3) AS kg_a_elaborar,
+              SUM(cl.unitats_demanades) AS paq_pedido
+       FROM comanda_linia cl
+       JOIN comanda c ON c.id = cl.comanda_id
+       JOIN producte p ON p.id = cl.producte_id
+       JOIN categoria_producte cat ON cat.id = p.categoria_id
+       LEFT JOIN rendiments_porcs rp ON rp.producte_id = p.id
+       ${where}
+       GROUP BY p.agrupacio_produccio, cat.agrupacio_rendiment
+       ORDER BY p.agrupacio_produccio ASC`,
+      valors,
+    );
+
+    let totalKgAElaborarNum = 0;
+    let totalKgMagroNum = 0;
+    const dadesCompletes: PanellProduccioFilaApi[] = filas.rows.map((f) => {
+      const unitatsPerPorc = f.unitats_per_porc !== null ? Number(f.unitats_per_porc) : null;
+      const kgPerUnitat = f.kg_per_unitat !== null ? Number(f.kg_per_unitat) : null;
+
+      if (f.agrupacio_rendiment === 'PAQ') {
+        let rendiment: string | null = null;
+        let diferencia: string | null = null;
+        if (unitatsPerPorc !== null) {
+          const rendimentNum = unitatsPerPorc * nombrePorcs;
+          rendiment = rendimentNum.toFixed(2);
+          diferencia = (rendimentNum - Number(f.paq_pedido)).toFixed(2);
+        }
+        return {
+          agrupacioRendiment: f.agrupacio_rendiment,
+          categoria: f.categoria_nom,
+          agrupacioProduccio: f.agrupacio_produccio,
+          producte: { id: Number(f.producte_id_seq), descripcio: f.producte_descripcio },
+          paqPedido: Number(f.paq_pedido).toFixed(2),
+          kgAElaborar: null,
+          rendiment,
+          diferencia,
+        };
+      }
+
+      // KG o MAGRE: kgAElaborar cuenta para el total de cabecera siempre
+      // (nunca para PAQ, ver totals.totalKgAElaborar más abajo).
+      totalKgAElaborarNum += Number(f.kg_a_elaborar);
+
+      let rendiment: string | null = null;
+      let diferencia: string | null = null;
+      if (f.agrupacio_rendiment === 'KG') {
+        if (unitatsPerPorc !== null && kgPerUnitat !== null) {
+          const rendimentNum = unitatsPerPorc * kgPerUnitat * nombrePorcs;
+          rendiment = rendimentNum.toFixed(3);
+          diferencia = (rendimentNum - Number(f.kg_a_elaborar)).toFixed(3);
+        }
+      } else if (kgPerUnitat !== null) {
+        // MAGRE: no hay cálculo por fila — el rendimiento potencial de
+        // esta agrupación va al total global (totals.totalKgMagro), una
+        // sola vez por agrupación, no por línia individual.
+        totalKgMagroNum += kgPerUnitat * nombrePorcs;
+      }
+
+      return {
+        agrupacioRendiment: f.agrupacio_rendiment,
+        categoria: f.categoria_nom,
+        agrupacioProduccio: f.agrupacio_produccio,
+        producte: { id: Number(f.producte_id_seq), descripcio: f.producte_descripcio },
+        paqPedido: null,
+        kgAElaborar: f.kg_a_elaborar,
+        rendiment,
+        diferencia,
+      };
+    });
+
+    const dades = dadesCompletes.slice(offset, offset + mida);
+
+    return {
+      totals: {
+        totalKgAElaborar: totalKgAElaborarNum.toFixed(3),
+        totalKgMagro: totalKgMagroNum.toFixed(3),
+        diferencia: (totalKgMagroNum - totalKgAElaborarNum).toFixed(3),
+      },
+      dades,
+      paginacio: construirPaginacio(pagina, mida, dadesCompletes.length),
     };
   });
 }
