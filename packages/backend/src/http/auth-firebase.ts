@@ -1,4 +1,4 @@
-import type { App } from 'firebase-admin/app';
+import type { App, ServiceAccount } from 'firebase-admin/app';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { env } from '../config/env.js';
 import { logger } from '../lib/logger.js';
@@ -53,6 +53,58 @@ async function obtenerAppFirebase(): Promise<App> {
   return appFirebase;
 }
 
+const NOM_APP_FIREBASE_ADMIN = 'admin-usuaris';
+
+let appFirebaseAdmin: App | null = null;
+
+/**
+ * App de Firebase SEPARADA de `obtenerAppFirebase()`, sólo para las
+ * operaciones de gestión de usuarios (capa 19: `crearUsuari`,
+ * `esborrarUsuari`, `generarLinkEstabliment`). NO la usa el middleware de
+ * autenticación (`verificarTokenFirebase` sigue con `obtenerAppFirebase()`
+ * y credenciales por defecto, sin cambios).
+ *
+ * Motivo de la app separada: Identity Toolkit (el servicio detrás de
+ * `createUser`/`generatePasswordResetLink`/`deleteUser`) gestiona sus
+ * propios permisos por fuera de IAM de GCP — la cuenta de servicio de
+ * Cloud Run (`dpages-backend@...`) nunca tuvo acceso real ahí pese a sus
+ * roles de IAM a nivel de proyecto (encontrado probando este endpoint
+ * contra Firebase real). La única cuenta que sí tiene el rol
+ * "Administrador de Firebase Authentication" aplicado de verdad es la que
+ * el propio Firebase genera automáticamente
+ * (`firebase-adminsdk-fbsvc@...`) — de ahí que esta app use una clave de
+ * servicio explícita (`credential.cert`) en vez de las credenciales por
+ * defecto de la instancia. El Admin SDK permite varias apps nombradas en
+ * el mismo proceso, así que esto no interfiere con la app por defecto.
+ *
+ * Perezoso, mismo criterio que `obtenerAppFirebase()`: la ausencia de
+ * `FIREBASE_ADMIN_SDK_KEY_JSON` no debe impedir que el proceso arranque
+ * (ningún otro endpoint la necesita) — recién falla cuando alguien
+ * efectivamente llama a `POST /usuaris`.
+ */
+async function obtenerAppFirebaseAdmin(): Promise<App> {
+  if (appFirebaseAdmin !== null) return appFirebaseAdmin;
+
+  if (!env.FIREBASE_ADMIN_SDK_KEY_JSON) {
+    throw new Error(
+      'FIREBASE_ADMIN_SDK_KEY_JSON no está configurada — hace falta para crear/borrar ' +
+        'usuarios de Firebase y generar el link de establecimiento de contraseña ' +
+        '(POST /usuaris, capa 19). Ver docs/contrato-api.md sección 4.12.',
+    );
+  }
+
+  const { getApps, initializeApp, cert } = await import('firebase-admin/app');
+  const existente = getApps().find((app) => app.name === NOM_APP_FIREBASE_ADMIN);
+  if (existente) {
+    appFirebaseAdmin = existente;
+    return appFirebaseAdmin;
+  }
+
+  const credencial = JSON.parse(env.FIREBASE_ADMIN_SDK_KEY_JSON) as ServiceAccount;
+  appFirebaseAdmin = initializeApp({ credential: cert(credencial) }, NOM_APP_FIREBASE_ADMIN);
+  return appFirebaseAdmin;
+}
+
 /**
  * Implementación real — nunca se ejecuta en los tests de este repo (se
  * inyecta un `VerificadorToken` simulado en su lugar, o `AUTH_DISABLED` la
@@ -96,11 +148,30 @@ export interface GestioUsuarisFirebase {
   generarLinkEstabliment(email: string): Promise<string>;
 }
 
+/**
+ * TODO(capa 19 / frontend): actualizar `url` a la pantalla real de
+ * establecimiento de contraseña en cuanto Michel la tenga lista — hoy
+ * apunta al backend sólo como placeholder, nadie ve esta URL (Firebase
+ * redirige acá DESPUÉS de que la persona ya estableció su contraseña).
+ *
+ * Obligatorio pasarlo explícito a `generatePasswordResetLink`: sin esto,
+ * el Admin SDK intenta generar un link corto vía Firebase Dynamic Links,
+ * que Google dio de baja — la llamada queda colgada esperando una
+ * respuesta que nunca llega, sin lanzar error (encontrado probando este
+ * endpoint contra Firebase real, ver consola: "finalizó el período de
+ * baja de Firebase Dynamic Links"). `handleCodeInApp: false` evita que
+ * intente generar un deep link a una app móvil, que tampoco existe.
+ */
+const ACTION_CODE_SETTINGS_ESTABLIMENT = {
+  url: 'https://dpages-backend-493716972967.europe-west1.run.app',
+  handleCodeInApp: false,
+};
+
 /** Implementación real — nunca se ejecuta en los tests de este repo (se inyecta un mock en su lugar). */
 export const gestioUsuarisFirebase: GestioUsuarisFirebase = {
   async crearUsuari(email) {
     const { getAuth } = await import('firebase-admin/auth');
-    const app = await obtenerAppFirebase();
+    const app = await obtenerAppFirebaseAdmin();
     // Contraseña descartable: cumple el mínimo de Firebase (6 caracteres),
     // nadie la conoce ni la necesita — la persona establece la suya propia
     // a través de generarLinkEstabliment.
@@ -110,13 +181,13 @@ export const gestioUsuarisFirebase: GestioUsuarisFirebase = {
   },
   async esborrarUsuari(uid) {
     const { getAuth } = await import('firebase-admin/auth');
-    const app = await obtenerAppFirebase();
+    const app = await obtenerAppFirebaseAdmin();
     await getAuth(app).deleteUser(uid);
   },
   async generarLinkEstabliment(email) {
     const { getAuth } = await import('firebase-admin/auth');
-    const app = await obtenerAppFirebase();
-    return getAuth(app).generatePasswordResetLink(email);
+    const app = await obtenerAppFirebaseAdmin();
+    return getAuth(app).generatePasswordResetLink(email, ACTION_CODE_SETTINGS_ESTABLIMENT);
   },
 };
 

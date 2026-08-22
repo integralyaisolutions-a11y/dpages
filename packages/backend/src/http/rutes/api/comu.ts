@@ -64,13 +64,30 @@ export function enviarSensePermis(reply: FastifyReply, missatge: string): void {
  * mismo scope de plugin (ver servidor.ts) — se usa como `preHandler` de
  * ruta (tercer argumento de `fastify.post/get/...`), no como hook global,
  * para que sólo bloquee los endpoints que explícitamente lo pidan.
+ *
+ * Callback-style explícito (tercer parámetro `done`), no async/Promise:
+ * Fastify siempre invoca un preHandler como `fn(req, reply, done)` —
+ * si el hook no es `async` ni devuelve una Promise, TIENE que llamar a
+ * `done()` él mismo, o Fastify se queda esperando esa señal para siempre
+ * (nunca avanza al handler, sin error ni timeout — así se manifestó este
+ * bug real la primera vez que un Administrador pasaba el guard: el 403
+ * "funcionaba" porque `reply.send()` corta la cadena por otro camino,
+ * pero el paso a través nunca llamaba a nada que le dijera a Fastify que
+ * podía seguir). En el rechazo, `reply.send()` ya deja `reply.sent = true`
+ * — NO llamar a `done()` también ahí (sería un doble envío de respuesta).
  */
 export function crearGuardaModul(modul: string) {
-  return function guardaModul(req: FastifyRequest, reply: FastifyReply): void {
+  return function guardaModul(
+    req: FastifyRequest,
+    reply: FastifyReply,
+    done: (err?: Error) => void,
+  ): void {
     const usuari = req.usuariResolt;
     if (!usuari || !usuari.rol.modulsPermesos.includes(modul)) {
       enviarSensePermis(reply, `Calen permisos del mòdul "${modul}" per a aquesta acció`);
+      return;
     }
+    done();
   };
 }
 

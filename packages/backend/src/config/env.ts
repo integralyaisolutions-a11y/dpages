@@ -99,6 +99,21 @@ const esquemaEnv = z
     // Opcional a propósito: si falta en producción, CORS queda cerrado
     // (ninguna petición cross-origin pasa), no abierto a cualquiera.
     CORS_ORIGIN: z.string().url('debe ser una URL válida, ej. https://app.dpages.cat').optional(),
+
+    // Capa 19 — POST /usuaris (crear/borrar usuario de Firebase, generar el
+    // link de establecimiento de contraseña). Identity Toolkit gestiona sus
+    // propios permisos por fuera de IAM de GCP: la cuenta de servicio de
+    // Cloud Run (dpages-backend@...) nunca tuvo permiso real ahí pese a sus
+    // roles de IAM a nivel de proyecto. Contenido COMPLETO del JSON de la
+    // cuenta de servicio que Firebase genera automáticamente
+    // (firebase-adminsdk-fbsvc@..., la única con el rol "Administrador de
+    // Firebase Authentication" aplicado de verdad) — no una ruta de archivo,
+    // no hay volúmenes montados en Cloud Run. Opcional acá a propósito: la
+    // ausencia se valida perezosamente, recién cuando algo intenta usarla
+    // (ver obtenerAppFirebaseAdmin en auth-firebase.ts), no al arrancar el
+    // proceso — el resto del sistema (verificación de tokens, Cloud SQL)
+    // sigue con las credenciales por defecto de la instancia, sin cambios.
+    FIREBASE_ADMIN_SDK_KEY_JSON: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.NODE_ENV === 'production') {
