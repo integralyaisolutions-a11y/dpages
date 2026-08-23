@@ -207,6 +207,17 @@ export interface ComandaResumApi {
   adrecaLliurament: string | null;
   dataComanda: string;
   dataProduccio: string | null;
+  /**
+   * Capa 21 — fechas de producción DISTINTAS entre las líneas del pedido
+   * (`comanda_linia.dataProduccio`, ver `ComandaLiniaApi.dataProduccio`),
+   * ordenadas cronológicamente, sin nulls. Array vacío si ninguna línea
+   * tiene fecha de producción propia. Distinto de `dataProduccio` (arriba,
+   * la de la CABECERA del pedido) — un pedido puede mostrar varias fechas
+   * acá si sus líneas se producen en días distintos (visto en el demo:
+   * "20/08/2026, 21/08/2026"). ISO-8601 UTC, igual que el resto de las
+   * fechas del contrato — el formateo/unión con coma lo hace el frontend.
+   */
+  datesProduccioLinies: string[];
   dataExpedicio: string | null;
   dataLliurament: string | null;
   bultos: number | null;

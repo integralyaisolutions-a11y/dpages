@@ -395,6 +395,162 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
     });
   });
 
+  describe('capa 21 — datesProduccioLinies (GET /comandes) i filtros de data nous', () => {
+    it('datesProduccioLinies: un pedido con TODAS sus líneas en la misma fecha trae un único valor', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [
+            { producteId: producteFitxaId, unitatsDemanades: 1 },
+            { producteId: producteAMidaId, unitatsDemanades: 2, kgDemanats: '1.000' },
+          ],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      await entorn.poolTest.query(
+        `UPDATE comanda_linia SET data_produccio = '2026-08-20T07:00:00Z' WHERE comanda_id = (SELECT id FROM comanda WHERE id_seq = $1)`,
+        [comandaCreada.id],
+      );
+
+      const llistat = cuerpoJson<RespostaPaginada<ComandaResumApi>>(
+        await fastify.inject({ method: 'GET', url: '/api/v1/comandes' }),
+      );
+      const resum = llistat.dades.find((c) => c.id === comandaCreada.id);
+      expect(resum?.datesProduccioLinies).toEqual(['2026-08-20T07:00:00Z']);
+
+      await fastify.close();
+    });
+
+    it('datesProduccioLinies: líneas con fechas distintas traen todas, ordenadas cronológicamente y sin repetir', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [
+            { producteId: producteFitxaId, unitatsDemanades: 1 },
+            { producteId: producteAMidaId, unitatsDemanades: 2, kgDemanats: '1.000' },
+          ],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      const liniaA = comandaCreada.linies[0]!;
+      const liniaB = comandaCreada.linies[1]!;
+
+      // Cargadas en orden inverso a propósito — verifica que el backend
+      // ordena, no que devuelve el orden de inserción.
+      await entorn.poolTest.query(
+        `UPDATE comanda_linia SET data_produccio = '2026-08-21T00:00:00Z' WHERE id_seq = $1`,
+        [liniaA.id],
+      );
+      await entorn.poolTest.query(
+        `UPDATE comanda_linia SET data_produccio = '2026-08-20T00:00:00Z' WHERE id_seq = $1`,
+        [liniaB.id],
+      );
+
+      const llistat = cuerpoJson<RespostaPaginada<ComandaResumApi>>(
+        await fastify.inject({ method: 'GET', url: '/api/v1/comandes' }),
+      );
+      const resum = llistat.dades.find((c) => c.id === comandaCreada.id);
+      expect(resum?.datesProduccioLinies).toEqual(['2026-08-20T00:00:00Z', '2026-08-21T00:00:00Z']);
+
+      await fastify.close();
+    });
+
+    it('datesProduccioLinies: array vacío (no null) si ninguna línea tiene fecha de producción', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const llistat = cuerpoJson<RespostaPaginada<ComandaResumApi>>(
+        await fastify.inject({ method: 'GET', url: '/api/v1/comandes' }),
+      );
+      const resum = llistat.dades.find((c) => c.id === comandaCreada.id);
+      expect(resum?.datesProduccioLinies).toEqual([]);
+
+      await fastify.close();
+    });
+
+    it('GET /comandes?dataProduccioDes=&dataProduccioFins=: matchea si AL MENOS UNA línea cae en el rango', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      await entorn.poolTest.query(
+        `UPDATE comanda_linia SET data_produccio = '2026-08-20T07:00:00Z' WHERE id_seq = $1`,
+        [comandaCreada.linies[0]!.id],
+      );
+
+      const dinsDelRang = cuerpoJson<RespostaPaginada<ComandaResumApi>>(
+        await fastify.inject({
+          method: 'GET',
+          url: '/api/v1/comandes?dataProduccioDes=2026-08-19&dataProduccioFins=2026-08-21',
+        }),
+      );
+      expect(dinsDelRang.dades.some((c) => c.id === comandaCreada.id)).toBe(true);
+
+      const foraDelRang = cuerpoJson<RespostaPaginada<ComandaResumApi>>(
+        await fastify.inject({
+          method: 'GET',
+          url: '/api/v1/comandes?dataProduccioDes=2026-09-01&dataProduccioFins=2026-09-30',
+        }),
+      );
+      expect(foraDelRang.dades.some((c) => c.id === comandaCreada.id)).toBe(false);
+      expect(foraDelRang.dades).toEqual([]);
+
+      await fastify.close();
+    });
+
+    it('GET /comandes?dataLliuramentDes=&dataLliuramentFins=: filtra por la fecha de entrega de la cabecera', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          dataLliurament: '2026-08-20T00:00:00Z',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const dinsDelRang = cuerpoJson<RespostaPaginada<ComandaResumApi>>(
+        await fastify.inject({
+          method: 'GET',
+          url: '/api/v1/comandes?dataLliuramentDes=2026-08-19&dataLliuramentFins=2026-08-21',
+        }),
+      );
+      expect(dinsDelRang.dades.some((c) => c.id === comandaCreada.id)).toBe(true);
+
+      const foraDelRang = cuerpoJson<RespostaPaginada<ComandaResumApi>>(
+        await fastify.inject({
+          method: 'GET',
+          url: '/api/v1/comandes?dataLliuramentDes=2026-09-01&dataLliuramentFins=2026-09-30',
+        }),
+      );
+      expect(foraDelRang.dades).toEqual([]);
+
+      await fastify.close();
+    });
+  });
+
   describe('capa 15 — cascada de resolució de preu de línia', () => {
     it('amb tarifa assignada al client i preu definit per aquest producte: fa servir el preu de la tarifa', async () => {
       const tarifa = await entorn.poolTest.query<{ id: string }>(

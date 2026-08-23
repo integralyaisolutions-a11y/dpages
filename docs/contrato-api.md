@@ -526,7 +526,7 @@ un `codi` repetido responde `409 CONFLICTE`.
 
 **`GET /comandes`**
 
-Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-08-31&cerca=142`
+Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-08-31&dataProduccioDes=&dataProduccioFins=&dataLliuramentDes=&dataLliuramentFins=&cerca=142`
 
 ```json
 {
@@ -543,6 +543,7 @@ Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-
       "adrecaLliurament": "Carrer Major, 12, 3r 2a",
       "dataComanda": "2026-08-14T09:12:00Z",
       "dataProduccio": "2026-08-16T00:00:00Z",
+      "datesProduccioLinies": ["2026-08-20T00:00:00Z", "2026-08-21T00:00:00Z"],
       "dataExpedicio": "2026-08-17T00:00:00Z",
       "dataLliurament": "2026-08-18T00:00:00Z",
       "bultos": 3,
@@ -566,6 +567,36 @@ Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-
 > queda `null` y hay que abrir el detalle (`GET /comandes/:id`) para ver de
 > qué se trata. El detalle completo de motivos está en `incidencies` de esa
 > misma respuesta — ver abajo.
+>
+> **`datesProduccioLinies`** (capa 21): las fechas de producción DISTINTAS
+> entre las líneas del pedido (`linies[].dataProduccio`, ver más abajo),
+> ordenadas cronológicamente, sin nulls — **array vacío** si ninguna línea
+> tiene fecha de producción cargada, nunca `null`. Distinto de
+> `dataProduccio` (el campo de arriba, a nivel de CABECERA del pedido): un
+> pedido puede tener varias líneas con fechas de producción distintas entre
+> sí (visto en el demo: la columna "Fecha producción" de la pantalla
+> Pedidos mostraba `20/08/2026, 21/08/2026` para un mismo pedido). Viaja en
+> ISO-8601 UTC como cualquier otra fecha del contrato (sección 2) — el
+> frontend arma el string separado por comas y lo formatea a fecha local,
+> en el mismo punto único donde ya hace esa conversión para el resto de las
+> fechas. No hay una razón para que este campo rompa esa convención.
+>
+> **`dataDes`/`dataFins`** filtran por `dataComanda` (cuándo entró el
+> pedido al sistema — `comanda.creat_en`), sin cambios. Los tres pares
+> nuevos son independientes entre sí y de éste:
+>
+> - **`dataProduccioDes`/`dataProduccioFins`** — mismo nombre que ya usa
+>   `GET /panells/obrador` (sección 4.7), pero acá filtra por el PEDIDO
+>   completo: matchea si **al menos una** de sus líneas tiene
+>   `dataProduccio` dentro del rango (la misma línea cumple ambos extremos
+>   a la vez, no dos líneas distintas cumpliendo cada una un extremo).
+>   Pensado para planificación ("qué pedidos tienen algo que producir esta
+>   semana").
+> - **`dataLliuramentDes`/`dataLliuramentFins`** — mismo patrón de nombres
+>   (`<campo>Des`/`<campo>Fins`) que ya usan `dataExpedicioDes`/`Fins` en
+>   `GET /panells/oficina`/`GET /panells/empaquetat`, aplicado acá a
+>   `dataLliurament` (fecha de entrega de la cabecera) — coincidencia
+>   simple `>=`/`<=`, sin la semántica de "al menos una línea" de arriba.
 
 **`GET /comandes/:id`** — incluye las líneas:
 

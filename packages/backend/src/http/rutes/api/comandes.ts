@@ -37,6 +37,7 @@ interface FilaComandaResum {
   adreca_lliurament: string | null;
   data_comanda: Date;
   data_produccio: Date | null;
+  dates_produccio_linies: Date[];
   data_expedicio: Date | null;
   data_lliurament: Date | null;
   bultos: number | null;
@@ -72,6 +73,7 @@ function aApiResum(fila: FilaComandaResum): ComandaResumApi {
     adrecaLliurament: fila.adreca_lliurament,
     dataComanda: formatearDataApi(fila.data_comanda)!,
     dataProduccio: formatearDataApi(fila.data_produccio),
+    datesProduccioLinies: fila.dates_produccio_linies.map((d) => formatearDataApi(d)!),
     dataExpedicio: formatearDataApi(fila.data_expedicio),
     dataLliurament: formatearDataApi(fila.data_lliurament),
     bultos: fila.bultos,
@@ -97,7 +99,8 @@ const SELECT_COMANDA_RESUM = `
          cl.id_seq AS client_id_seq, cl.nom AS client_nom, cl.poblacio AS client_poblacio,
          t.id_seq AS tarifa_id_seq, t.nom AS tarifa_nom,
          tr.id_seq AS transportista_id_seq, tr.nom AS transportista_nom,
-         c.poblacio_desti, c.adreca_lliurament, c.creat_en AS data_comanda, c.data_produccio, c.data_expedicio,
+         c.poblacio_desti, c.adreca_lliurament, c.creat_en AS data_comanda, c.data_produccio,
+         COALESCE(dp.dates, '{}') AS dates_produccio_linies, c.data_expedicio,
          c.data_lliurament, c.bultos, c.congelat_a, c.obs_produccio, c.obs_lliurament,
          COALESCE(agg.total_linies, 0) AS total_linies,
          COALESCE(agg.total_kg, 0)::numeric(14,3) AS total_kg,
@@ -119,6 +122,13 @@ const SELECT_COMANDA_RESUM = `
            CASE WHEN count(DISTINCT tipus) = 1 THEN min(tipus) END AS tipus_incidencia
     FROM incidencia_comanda WHERE comanda_id = c.id
   ) inc ON true
+  -- Capa 21: fechas de producción DISTINTAS entre las líneas del pedido,
+  -- ordenadas — ver ComandaResumApi.datesProduccioLinies.
+  LEFT JOIN LATERAL (
+    SELECT array_agg(DISTINCT data_produccio ORDER BY data_produccio) AS dates
+    FROM comanda_linia
+    WHERE comanda_id = c.id AND NOT esborrat AND data_produccio IS NOT NULL
+  ) dp ON true
 `;
 
 interface FilaComandaLinia {
@@ -309,6 +319,36 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
     if (typeof query.dataFins === 'string' && query.dataFins !== '') {
       condicions.push(`c.creat_en <= $${valors.length + 1}`);
       valors.push(query.dataFins);
+    }
+    // Capa 21 — filtra "el pedido tiene AL MENOS UNA línea cuya
+    // dataProduccio cae en el rango" (caso de uso: planificación de
+    // obrador). Las dos condiciones van en el MISMO EXISTS para que sea
+    // una sola línea la que cumpla ambos extremos a la vez — dos EXISTS
+    // separados matchearían igual si una línea cumple sólo "des" y otra
+    // distinta cumple sólo "fins", sin que ninguna caiga realmente en el
+    // rango pedido.
+    const condicionsLiniaProduccio: string[] = [];
+    if (typeof query.dataProduccioDes === 'string' && query.dataProduccioDes !== '') {
+      condicionsLiniaProduccio.push(`cl2.data_produccio >= $${valors.length + 1}`);
+      valors.push(query.dataProduccioDes);
+    }
+    if (typeof query.dataProduccioFins === 'string' && query.dataProduccioFins !== '') {
+      condicionsLiniaProduccio.push(`cl2.data_produccio <= $${valors.length + 1}`);
+      valors.push(query.dataProduccioFins);
+    }
+    if (condicionsLiniaProduccio.length > 0) {
+      condicions.push(
+        `EXISTS (SELECT 1 FROM comanda_linia cl2 WHERE cl2.comanda_id = c.id ` +
+          `AND NOT cl2.esborrat AND ${condicionsLiniaProduccio.join(' AND ')})`,
+      );
+    }
+    if (typeof query.dataLliuramentDes === 'string' && query.dataLliuramentDes !== '') {
+      condicions.push(`c.data_lliurament >= $${valors.length + 1}`);
+      valors.push(query.dataLliuramentDes);
+    }
+    if (typeof query.dataLliuramentFins === 'string' && query.dataLliuramentFins !== '') {
+      condicions.push(`c.data_lliurament <= $${valors.length + 1}`);
+      valors.push(query.dataLliuramentFins);
     }
     if (typeof query.cerca === 'string' && query.cerca.trim() !== '') {
       condicions.push(`c.num ILIKE $${valors.length + 1}`);

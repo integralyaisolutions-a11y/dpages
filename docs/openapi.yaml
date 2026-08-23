@@ -526,9 +526,31 @@ paths:
           schema: { type: string }
         - name: dataDes
           in: query
+          description: Filtra por dataComanda (comanda.creat_en) — sin cambios.
           schema: { type: string, format: date }
         - name: dataFins
           in: query
+          description: Filtra por dataComanda (comanda.creat_en) — sin cambios.
+          schema: { type: string, format: date }
+        - name: dataProduccioDes
+          in: query
+          description: >-
+            Capa 21. Matchea si AL MENOS UNA línea del pedido tiene
+            dataProduccio dentro del rango (la misma línea cumple
+            dataProduccioDes Y dataProduccioFins a la vez, no dos líneas
+            distintas cumpliendo cada una un extremo).
+          schema: { type: string, format: date }
+        - name: dataProduccioFins
+          in: query
+          description: Ver dataProduccioDes.
+          schema: { type: string, format: date }
+        - name: dataLliuramentDes
+          in: query
+          description: Capa 21. Filtra por comanda.dataLliurament (cabecera).
+          schema: { type: string, format: date }
+        - name: dataLliuramentFins
+          in: query
+          description: Ver dataLliuramentDes.
           schema: { type: string, format: date }
         - name: cerca
           in: query
@@ -1320,6 +1342,15 @@ components:
         poblacioDesti: { type: string, nullable: true }
         dataComanda: { type: string, format: date-time }
         dataProduccio: { type: string, format: date-time, nullable: true }
+        datesProduccioLinies:
+          type: array
+          items: { type: string, format: date-time }
+          description: >-
+            Capa 21. Fechas de producción DISTINTAS entre las líneas del
+            pedido (ComandaLinia.dataProduccio), ordenadas
+            cronológicamente, sin nulls. Array vacío (nunca null) si
+            ninguna línea tiene fecha de producción. Distinto de
+            dataProduccio (arriba, a nivel de cabecera).
         dataExpedicio: { type: string, format: date-time, nullable: true }
         dataLliurament: { type: string, format: date-time, nullable: true }
         bultos: { type: integer, nullable: true }
