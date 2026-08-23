@@ -157,4 +157,72 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
 
     await fastify.close();
   });
+
+  // Capa 20 — filtros nuevos de Obrador (producte/format/envasat), pedidos
+  // por el demo de Lovable. Al final del describe por el mismo motivo que
+  // el test anterior: no debe alterar los totales que asumen los tests de
+  // oficina/empaquetat de más arriba.
+  it('GET /panells/obrador: filtros producte/format/envasat (capa 20)', async () => {
+    const fastify = construirServidor();
+
+    const producteFiltrat = await entorn.poolTest.query<{ id_seq: string }>(
+      `INSERT INTO producte (codi, descripcio, pes_kg, preu_venda, tipus, format, envasat)
+       VALUES ('BOT01', 'Botifarra crua', '0.500', '6.20', 'simple', 'TALLAT', 'ESPECIAL')
+       RETURNING id_seq`,
+    );
+    const producteFiltratId = Number(producteFiltrat.rows[0]!.id_seq);
+    await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/comandes',
+      payload: {
+        origen: 'manual',
+        linies: [{ producteId: producteFiltratId, unitatsDemanades: 1 }],
+      },
+    });
+
+    // producte: coincidencia EXACTA case-insensitive (regla 3.1 transversal,
+    // mismo criterio que /panells/produccio) — no substring.
+    const perProducteMayus = cuerpoJson<PanellObradorApi>(
+      await fastify.inject({
+        method: 'GET',
+        url: '/api/v1/panells/obrador?producte=BOTIFARRA%20CRUA',
+      }),
+    );
+    expect(perProducteMayus.dades).toHaveLength(1);
+    expect(perProducteMayus.dades[0]?.producte.descripcio).toBe('Botifarra crua');
+
+    const perProducteParcial = cuerpoJson<PanellObradorApi>(
+      await fastify.inject({ method: 'GET', url: '/api/v1/panells/obrador?producte=Botifarra' }),
+    );
+    expect(perProducteParcial.dades).toHaveLength(0); // substring no matchea
+
+    const perProducteSenseMatch = cuerpoJson<PanellObradorApi>(
+      await fastify.inject({
+        method: 'GET',
+        url: '/api/v1/panells/obrador?producte=No%20Existeix',
+      }),
+    );
+    expect(perProducteSenseMatch.dades).toEqual([]);
+    expect(perProducteSenseMatch.totals.linies).toBe(0);
+
+    // format/envasat: coincidencia exacta.
+    const perFormat = cuerpoJson<PanellObradorApi>(
+      await fastify.inject({ method: 'GET', url: '/api/v1/panells/obrador?format=TALLAT' }),
+    );
+    expect(perFormat.dades.map((f) => f.liniaId)).toContain(perProducteMayus.dades[0]?.liniaId);
+    expect(perFormat.dades.every((f) => f.format === 'TALLAT')).toBe(true);
+
+    const perEnvasat = cuerpoJson<PanellObradorApi>(
+      await fastify.inject({ method: 'GET', url: '/api/v1/panells/obrador?envasat=ESPECIAL' }),
+    );
+    expect(perEnvasat.dades.map((f) => f.liniaId)).toContain(perProducteMayus.dades[0]?.liniaId);
+    expect(perEnvasat.dades.every((f) => f.envasat === 'ESPECIAL')).toBe(true);
+
+    const perFormatSenseMatch = cuerpoJson<PanellObradorApi>(
+      await fastify.inject({ method: 'GET', url: '/api/v1/panells/obrador?format=LLESCAT' }),
+    );
+    expect(perFormatSenseMatch.dades).toEqual([]);
+
+    await fastify.close();
+  });
 });

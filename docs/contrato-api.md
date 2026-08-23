@@ -596,6 +596,9 @@ Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-
       "id": 981,
       "ordinal": 1,
       "producte": { "id": 12, "codi": "LLF01", "descripcio": "Llom fresc de porc" },
+      "categoria": "Fresc",
+      "format": "SENCER",
+      "envasat": "NORMAL (pes)",
       "unitatsDemanades": 10,
       "kgDemanats": "12.500",
       "kgEditable": false,
@@ -612,6 +615,9 @@ Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-
       "id": 982,
       "ordinal": 2,
       "producte": { "id": 13, "codi": "PIC01", "descripcio": "Picada de porc" },
+      "categoria": "Fresc",
+      "format": null,
+      "envasat": "NORMAL",
       "unitatsDemanades": 4,
       "kgDemanats": "0.000",
       "kgEditable": true,
@@ -651,6 +657,13 @@ Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-
 > particular, distinta de `dataProduccio` a nivel de cabecera (la de arriba,
 > que es del pedido completo). El prototipo muestra ambas como editables por
 > separado.
+>
+> **`linies[].categoria`/`format`/`envasat`** (capa 20): mismos tres campos
+> que ya devuelve `GET /panells/obrador` para esta misma línea (sección
+> 4.7), resueltos igual — `categoria` es el nombre de la categoría del
+> artículo, `format`/`envasat` vienen tal cual de la ficha del producto.
+> `null` cuando la línea no tiene artículo resuelto, o cuando el artículo
+> no tiene esos campos cargados.
 
 **`POST /comandes`** — alta manual. Es el camino de los pedidos por teléfono,
 correo y WhatsApp, que son la mayoría del volumen real.
@@ -748,7 +761,7 @@ líneas individuales visibles.
 
 **`GET /panells/obrador`**
 
-Filtros: `?dataProduccioDes=&dataProduccioFins=&categoriaId=&tipus=`
+Filtros: `?dataProduccioDes=&dataProduccioFins=&categoriaId=&tipus=&producte=&format=&envasat=`
 
 ```json
 {
@@ -793,6 +806,20 @@ Filtros: `?dataProduccioDes=&dataProduccioFins=&categoriaId=&tipus=`
 > identifican de qué pedido viene, por si obrador necesita volver al
 > detalle. `dataProduccio` es la de la LÍNEA (ver sección 4.5), no la de la
 > cabecera del pedido.
+
+> **Filtros nuevos (capa 20), pedidos por el demo de Lovable:**
+>
+> - **`producte`** filtra por `producte.descripcio` — coincidencia EXACTA,
+>   sin distinguir mayúsculas/minúsculas (no substring). Mismo criterio que
+>   `GET /rendiments-porcs` y `GET /panells/produccio` (sección 4.10) — es
+>   una regla transversal del proyecto: el frontend pasa la descripción
+>   completa tal como aparece en un desplegable, no un texto de búsqueda
+>   libre.
+> - **`format`**/**`envasat`** filtran por `producte.format`/`producte.envasat`
+>   — coincidencia exacta.
+>
+> Ningún filtro nuevo devuelve error si no matchea nada: `dades` queda
+> vacío y `totals` en cero, igual que cualquier otro filtro de este panel.
 
 ---
 

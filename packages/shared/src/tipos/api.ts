@@ -224,6 +224,15 @@ export interface ComandaLiniaApi {
   id: number;
   ordinal: number;
   producte: { id: number; codi: string | null; descripcio: string } | null;
+  /**
+   * Capa 20 — mismos tres campos que ya devuelve `FilaPanellObradorApi`
+   * para esta misma línea (`GET /panells/obrador`), resueltos igual
+   * (join contra `producte`/`categoria_producte`): consistencia entre
+   * ambos endpoints. `null` cuando `producte` también es `null`.
+   */
+  categoria: string | null;
+  format: string | null;
+  envasat: string | null;
   unitatsDemanades: number;
   kgDemanats: string;
   kgEditable: boolean;

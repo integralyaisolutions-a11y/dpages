@@ -722,6 +722,21 @@ paths:
         - name: tipus
           in: query
           schema: { type: string }
+        - name: producte
+          in: query
+          description: >-
+            Filtra por producte.descripcio — coincidencia EXACTA,
+            case-insensitive (no substring). Capa 20, mismo criterio que
+            GET /rendiments-porcs y GET /panells/produccio.
+          schema: { type: string }
+        - name: format
+          in: query
+          description: Filtra por producte.format — coincidencia exacta. Capa 20.
+          schema: { type: string }
+        - name: envasat
+          in: query
+          description: Filtra por producte.envasat — coincidencia exacta. Capa 20.
+          schema: { type: string }
         - $ref: '#/components/parameters/Pagina'
         - $ref: '#/components/parameters/Mida'
       responses:
@@ -1333,6 +1348,21 @@ components:
             id: { type: integer }
             codi: { type: string }
             descripcio: { type: string }
+        categoria:
+          type: string
+          nullable: true
+          description: >-
+            Capa 20 — mismo campo que FilaPanellObrador para esta misma
+            línea (GET /panells/obrador), resuelto igual. Null si producte
+            también es null, o si el artículo no tiene categoria asignada.
+        format:
+          type: string
+          nullable: true
+          description: Capa 20 — igual que FilaPanellObrador.format.
+        envasat:
+          type: string
+          nullable: true
+          description: Capa 20 — igual que FilaPanellObrador.envasat.
         unitatsDemanades: { type: integer }
         kgDemanats: { type: string }
         kgEditable:

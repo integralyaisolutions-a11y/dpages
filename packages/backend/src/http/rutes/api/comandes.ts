@@ -127,6 +127,9 @@ interface FilaComandaLinia {
   producte_id_seq: string | null;
   producte_codi: string | null;
   producte_descripcio: string | null;
+  categoria_nom: string | null;
+  format: string | null;
+  envasat: string | null;
   unitats_demanades: number;
   kg_demanats: string;
   pes_editable: boolean;
@@ -152,6 +155,9 @@ function aApiLinia(fila: FilaComandaLinia): ComandaLiniaApi {
             descripcio: fila.producte_descripcio,
           }
         : null,
+    categoria: fila.categoria_nom,
+    format: fila.format,
+    envasat: fila.envasat,
     unitatsDemanades: fila.unitats_demanades,
     kgDemanats: fila.kg_demanats,
     kgEditable: fila.pes_editable,
@@ -168,12 +174,14 @@ function aApiLinia(fila: FilaComandaLinia): ComandaLiniaApi {
 
 const SELECT_COMANDA_LINIA = `
   SELECT cl.id_seq, cl.ordinal, p.id_seq AS producte_id_seq, p.codi AS producte_codi,
-         p.descripcio AS producte_descripcio, cl.unitats_demanades, cl.pes_calculat_kg AS kg_demanats,
+         p.descripcio AS producte_descripcio, cat.nom AS categoria_nom, p.format, p.envasat,
+         cl.unitats_demanades, cl.pes_calculat_kg AS kg_demanats,
          cl.pes_editable, cl.unitats_lliurades, cl.kg_lliurats, cl.confirmat_a, cl.preu_unitari,
          (cl.unitats_demanades * cl.preu_unitari)::numeric(14,2) AS total_linia,
          cl.data_produccio, cl.obs_produccio, cl.esborrat
   FROM comanda_linia cl
   LEFT JOIN producte p ON p.id = cl.producte_id
+  LEFT JOIN categoria_producte cat ON cat.id = p.categoria_id
   WHERE cl.comanda_id = $1
   ORDER BY cl.ordinal ASC
 `;

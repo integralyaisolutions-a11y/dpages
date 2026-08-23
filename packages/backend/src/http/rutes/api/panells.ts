@@ -219,6 +219,21 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       condicions.push(`p.tipus = $${valors.length + 1}`);
       valors.push(query.tipus);
     }
+    if (typeof query.producte === 'string' && query.producte.trim() !== '') {
+      // Coincidencia EXACTA por descripción, case-insensitive — mismo
+      // criterio que /panells/produccio y /rendiments-porcs (regla 3.1
+      // transversal), no substring.
+      condicions.push(`LOWER(p.descripcio) = LOWER($${valors.length + 1})`);
+      valors.push(query.producte.trim());
+    }
+    if (typeof query.format === 'string' && query.format.trim() !== '') {
+      condicions.push(`p.format = $${valors.length + 1}`);
+      valors.push(query.format.trim());
+    }
+    if (typeof query.envasat === 'string' && query.envasat.trim() !== '') {
+      condicions.push(`p.envasat = $${valors.length + 1}`);
+      valors.push(query.envasat.trim());
+    }
     const where = `WHERE ${condicions.join(' AND ')}`;
 
     // INNER JOIN a producte: igual que antes de esta reescritura, una línia

@@ -245,6 +245,60 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
     await fastify.close();
   });
 
+  it('GET /comandes/:id: la línea incluye categoria/format/envasat, igual que /panells/obrador (capa 20)', async () => {
+    const fastify = construirServidor();
+
+    const categoria = await entorn.poolTest.query<{ id: string }>(
+      `INSERT INTO categoria_producte (nom) VALUES ('Embotits frescos') RETURNING id`,
+    );
+    const producte = await entorn.poolTest.query<{ id_seq: string }>(
+      `INSERT INTO producte (codi, descripcio, pes_kg, preu_venda, tipus, categoria_id, format, envasat)
+       VALUES ('BOT01', 'Botifarra crua', '0.500', '6.20', 'simple', $1, 'TALLAT', 'NORMAL')
+       RETURNING id_seq`,
+      [categoria.rows[0]!.id],
+    );
+    const producteAmbCategoriaId = Number(producte.rows[0]!.id_seq);
+
+    const creada = await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/comandes',
+      payload: {
+        origen: 'manual',
+        linies: [{ producteId: producteAmbCategoriaId, unitatsDemanades: 2 }],
+      },
+    });
+    const comandaId = cuerpoJson<ComandaDetallApi>(creada).id;
+
+    const detall = cuerpoJson<ComandaDetallApi>(
+      await fastify.inject({ method: 'GET', url: `/api/v1/comandes/${comandaId}` }),
+    );
+    const linia = detall.linies[0]!;
+
+    expect(linia.categoria).toBe('Embotits frescos');
+    expect(linia.format).toBe('TALLAT');
+    expect(linia.envasat).toBe('NORMAL');
+
+    // El producte de fitxa del beforeAll no tiene categoria/format/envasat
+    // asignados — deben resolver a null, no romper ni quedar undefined.
+    const sense = await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/comandes',
+      payload: {
+        origen: 'manual',
+        linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+      },
+    });
+    const comandaSenseId = cuerpoJson<ComandaDetallApi>(sense).id;
+    const detallSense = cuerpoJson<ComandaDetallApi>(
+      await fastify.inject({ method: 'GET', url: `/api/v1/comandes/${comandaSenseId}` }),
+    );
+    expect(detallSense.linies[0]?.categoria).toBeNull();
+    expect(detallSense.linies[0]?.format).toBeNull();
+    expect(detallSense.linies[0]?.envasat).toBeNull();
+
+    await fastify.close();
+  });
+
   it('resumen de incidencies: cuando todas comparten el mismo tipus, tipusIncidencia lo trae (no queda null)', async () => {
     const fastify = construirServidor();
 
