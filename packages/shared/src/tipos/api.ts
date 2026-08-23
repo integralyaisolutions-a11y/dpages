@@ -90,10 +90,15 @@ export interface ProducteApi {
  * PAQ, MAGRE). `agrupacioRendiment`, `categoria` y `agrupacioProduccio`
  * son de sólo lectura acá: se derivan del producto/categoría asociados,
  * no se editan en este CRUD.
+ *
+ * BREAKING (capa 22): ya no trae `producte` — Francesc sacó esa columna de
+ * la pantalla (con datos reales, no aporta nada que `agrupacioProduccio`
+ * no diga mejor). `producteId` sigue existiendo como campo de ENTRADA del
+ * alta/edición (`POST /rendiments-porcs`, ver más abajo) — sólo se sacó de
+ * la respuesta.
  */
 export interface RendimentPorcApi {
   id: number;
-  producte: { id: number; codi: string | null; descripcio: string };
   /** Derivado de producte.categoria.agrupacioRendiment — sólo lectura. */
   agrupacioRendiment: string;
   /** Derivado de producte.categoria.nom — sólo lectura. */
@@ -455,12 +460,18 @@ export interface PanellEmpaquetatApi {
  * - `agrupacioRendiment: "PAQ"` → sólo `paqPedido` (kgAElaborar null).
  * - `agrupacioRendiment: "MAGRE"` → `rendiment`/`diferencia` van al total
  *   global de `PanellProduccioApi.totals`, no por línea (ambos null acá).
+ *
+ * BREAKING (capa 22): ya no trae `producte` — cada fila es una AGRUPACIÓN
+ * de producción, que puede tener varios artículos asociados; mostrar sólo
+ * uno (el de `id` más chico, elegido de forma determinística) confundía
+ * más de lo que ayudaba con datos reales. Francesc lo sacó de la pantalla.
+ * El filtro `?producte=` de `GET /panells/produccio` sigue existiendo —
+ * esto sólo afecta la RESPUESTA, no la capacidad de filtrar por artículo.
  */
 export interface PanellProduccioFilaApi {
   agrupacioRendiment: string;
   categoria: string;
   agrupacioProduccio: string;
-  producte: { id: number; descripcio: string };
   /** Null cuando la agrupación es KG o MAGRE (no aplica). */
   paqPedido: string | null;
   /** Null cuando la agrupación es PAQ. */

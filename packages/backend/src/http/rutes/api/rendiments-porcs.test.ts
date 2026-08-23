@@ -53,11 +53,9 @@ describe('API negoci — /rendiments-porcs (Postgres real, esquema aislado)', ()
 
     expect(res.statusCode).toBe(201);
     const cuerpo = cuerpoJson<RendimentPorcApi>(res);
-    expect(cuerpo.producte).toEqual({
-      id: producteLlomId,
-      codi: 'LLF01',
-      descripcio: 'Llom fresc de porc',
-    });
+    // Capa 22 (BREAKING): producte ya NO viaja en la respuesta — confirmado
+    // en runtime, no sólo por el tipo (que ya ni lo declara).
+    expect(cuerpo).not.toHaveProperty('producte');
     expect(cuerpo.agrupacioRendiment).toBe('KG');
     expect(cuerpo.categoria).toBe('Fresc');
     expect(cuerpo.agrupacioProduccio).toBe('Llom');
@@ -121,7 +119,8 @@ describe('API negoci — /rendiments-porcs (Postgres real, esquema aislado)', ()
     });
     const cuerpoExacte = cuerpoJson<RespostaPaginada<RendimentPorcApi>>(exacte);
     expect(cuerpoExacte.dades).toHaveLength(1);
-    expect(cuerpoExacte.dades[0]?.producte.codi).toBe('LLF01');
+    expect(cuerpoExacte.dades[0]?.id).toBe(rendimentId);
+    expect(cuerpoExacte.dades[0]).not.toHaveProperty('producte');
 
     const substring = await fastify.inject({
       method: 'GET',

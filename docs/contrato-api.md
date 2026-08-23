@@ -919,7 +919,6 @@ que también son coincidencia exacta.
   "dades": [
     {
       "id": 1,
-      "producte": { "id": 12, "codi": "LLF01", "descripcio": "Llom fresc de porc" },
       "agrupacioRendiment": "KG",
       "categoria": "Fresc",
       "agrupacioProduccio": "Llom",
@@ -931,6 +930,13 @@ que también son coincidencia exacta.
   "paginacio": { "pagina": 1, "mida": 50, "total": 42, "totalPagines": 1 }
 }
 ```
+
+> **BREAKING (capa 22):** la fila ya NO trae `producte` — Francesc sacó esa
+> columna de la pantalla (ver nota de Panell Producció más abajo, mismo
+> motivo). `producteId` sigue existiendo como campo de ENTRADA de
+> `POST /rendiments-porcs` (el alta/edición sigue necesitando elegir el
+> producto) — esto sólo afecta lo que se devuelve. El filtro `?producte=`
+> tampoco cambia.
 
 > `agrupacioRendiment`, `categoria` y `agrupacioProduccio` son de **sólo
 > lectura** acá: se derivan del producto/categoría asociados (secciones 4.1
@@ -988,12 +994,15 @@ Filtros: `?nombrePorcs=5&agrupacioRendiment=KG&producte=Llom fresc de porc&dataD
 - `dataDes`/`dataFins` son opcionales — default `dataDes` = mañana (hoy +
   1 día), `dataFins` = hoy + 7 días.
 
-> **`producte` en la fila de respuesta** (`{ id, descripcio }`) es sólo UN
-> artículo representativo de la agrupación — el de `id` más chico entre los
-> que la componen — no una lista. Si varios artículos comparten
-> `agrupacioProduccio`, el resto no aparece ahí (el contrato no admite más
-> de un producte por fila). No afecta al cálculo, que siempre opera sobre
-> la agrupación completa.
+> **BREAKING (capa 22):** la fila de respuesta ya NO trae `producte`.
+> Anteriormente traía sólo UN artículo representativo de la agrupación (el
+> de `id` más chico entre los que la componen, elegido de forma
+> determinística) — con datos reales, una agrupación de producción suele
+> tener varios SKUs asociados, y mostrar sólo uno confundía más de lo que
+> ayudaba. Francesc lo sacó de las dos pantallas afectadas (esta y
+> Rendiments Porcs, sección 4.9). El filtro `?producte=` sigue existiendo
+> — esto sólo afecta la respuesta, no la capacidad de filtrar. No afecta al
+> cálculo, que siempre opera sobre la agrupación completa.
 
 ```json
 {

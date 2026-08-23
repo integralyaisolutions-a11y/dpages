@@ -328,7 +328,11 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
 
     const cuerpo = cuerpoJson<PanellProduccioApi>(res);
     expect(cuerpo.dades).toHaveLength(1);
-    expect(cuerpo.dades[0]?.producte.descripcio).toBe('LLOM');
+    // producteCodi/descripcio y agrupacioProduccio valen 'LLOM' los tres en
+    // este fixture (ver crearAgrupacio) — agrupacioProduccio confirma que
+    // matcheó la fila correcta ahora que producte ya no viaja (capa 22).
+    expect(cuerpo.dades[0]?.agrupacioProduccio).toBe('LLOM');
+    expect(cuerpo.dades[0]).not.toHaveProperty('producte');
 
     const exacte = await fastify.inject({
       method: 'GET',

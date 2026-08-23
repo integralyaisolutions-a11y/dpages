@@ -1550,15 +1550,13 @@ components:
         Ficha de rendimiento por producto — base del cálculo de Panell
         Producció. Nueva, confirmada el 18/08/2026. Sólo aparece si el
         producto pertenece a una categoría con agrupacioRendiment definido
-        (ver GET /rendiments-porcs).
+        (ver GET /rendiments-porcs). BREAKING (capa 22): ya no trae
+        producte en la respuesta — Francesc lo sacó de la pantalla.
+        producteId sigue existiendo como campo de ENTRADA de
+        RendimentPorcEntrada (el alta/edición sigue necesitando elegir el
+        producto).
       properties:
         id: { type: integer }
-        producte:
-          type: object
-          properties:
-            id: { type: integer }
-            codi: { type: string, nullable: true }
-            descripcio: { type: string }
         agrupacioRendiment:
           type: string
           description: Derivado de producte.categoria.agrupacioRendiment — sólo lectura.
@@ -1614,15 +1612,15 @@ components:
       description: >-
         Una fila por agrupacioProduccio (capa 16) — ver docs/contrato-api.md
         sección 4.10 para las fórmulas y el ejemplo numérico verificado.
+        BREAKING (capa 22): ya no trae producte — una agrupación de
+        producción puede tener varios artículos asociados; mostrar sólo
+        uno (el de id más chico) confundía más de lo que ayudaba con datos
+        reales. El filtro ?producte= de GET /panells/produccio no cambia,
+        esto sólo afecta la respuesta.
       properties:
         agrupacioRendiment: { type: string, enum: [KG, MAGRE, PAQ] }
         categoria: { type: string }
         agrupacioProduccio: { type: string }
-        producte:
-          type: object
-          properties:
-            id: { type: integer }
-            descripcio: { type: string }
         paqPedido:
           type: string
           nullable: true

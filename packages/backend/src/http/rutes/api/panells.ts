@@ -508,15 +508,17 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
 
     // Agrupado por agrupacio_produccio + agrupacio_rendiment (no por
     // producte_id): varios artículos pueden compartir una misma agrupación
-    // de producción. El representante de "producte"/rendiments_porcs de
-    // cada grupo es el de menor id_seq — decisión de criterio (el contrato
-    // sólo admite UN producte por fila; ver resumen para el detalle).
+    // de producción — por eso, capa 22, `producte` YA NO viaja en la
+    // respuesta (ver PanellProduccioFilaApi, BREAKING). `ORDER BY p.id_seq`
+    // dentro de los array_agg se mantiene igual: sigue haciendo falta un
+    // criterio determinístico para elegir categoria_nom/unitats_per_porc/
+    // kg_per_unitat cuando varios productos de la agrupación traen valores
+    // distintos — ya no es "cuál producte mostrar", es "qué fila de
+    // rendiments_porcs usar para el cálculo".
     const filas = await pool.query<{
       agrupacio_produccio: string;
       agrupacio_rendiment: AgrupacioRendiment;
       categoria_nom: string;
-      producte_id_seq: string;
-      producte_descripcio: string;
       unitats_per_porc: string | null;
       kg_per_unitat: string | null;
       kg_a_elaborar: string;
@@ -524,8 +526,6 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
     }>(
       `SELECT p.agrupacio_produccio, cat.agrupacio_rendiment,
               (array_agg(cat.nom ORDER BY p.id_seq))[1] AS categoria_nom,
-              (array_agg(p.id_seq ORDER BY p.id_seq))[1] AS producte_id_seq,
-              (array_agg(p.descripcio ORDER BY p.id_seq))[1] AS producte_descripcio,
               (array_agg(rp.unitats_per_porc ORDER BY p.id_seq))[1] AS unitats_per_porc,
               (array_agg(rp.kg_per_unitat ORDER BY p.id_seq))[1] AS kg_per_unitat,
               SUM(cl.pes_calculat_kg)::numeric(14,3) AS kg_a_elaborar,
@@ -559,7 +559,6 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
           agrupacioRendiment: f.agrupacio_rendiment,
           categoria: f.categoria_nom,
           agrupacioProduccio: f.agrupacio_produccio,
-          producte: { id: Number(f.producte_id_seq), descripcio: f.producte_descripcio },
           paqPedido: Number(f.paq_pedido).toFixed(2),
           kgAElaborar: null,
           rendiment,
@@ -590,7 +589,6 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
         agrupacioRendiment: f.agrupacio_rendiment,
         categoria: f.categoria_nom,
         agrupacioProduccio: f.agrupacio_produccio,
-        producte: { id: Number(f.producte_id_seq), descripcio: f.producte_descripcio },
         paqPedido: null,
         kgAElaborar: f.kg_a_elaborar,
         rendiment,

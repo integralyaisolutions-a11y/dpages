@@ -14,9 +14,6 @@ const REGEX_KG_PER_UNITAT = /^\d+(\.\d{1,3})?$/;
 
 interface FilaRendimentPorc {
   id_seq: string;
-  producte_id_seq: string;
-  producte_codi: string | null;
-  producte_descripcio: string;
   agrupacio_rendiment: string;
   categoria_nom: string;
   agrupacio_produccio: string | null;
@@ -25,14 +22,14 @@ interface FilaRendimentPorc {
   pes_total: string;
 }
 
+// producte (capa 22, BREAKING): ya no viaja en la respuesta — ver la nota
+// en RendimentPorcApi (packages/shared). p.codi/p.descripcio ya no hacen
+// falta en el SELECT; producte_id sigue siendo la FK que sustenta el join
+// (no se toca la tabla ni la columna, sólo se saca del SELECT lo que ya no
+// se expone).
 function aApi(fila: FilaRendimentPorc): RendimentPorcApi {
   return {
     id: Number(fila.id_seq),
-    producte: {
-      id: Number(fila.producte_id_seq),
-      codi: fila.producte_codi,
-      descripcio: fila.producte_descripcio,
-    },
     agrupacioRendiment: fila.agrupacio_rendiment,
     categoria: fila.categoria_nom,
     agrupacioProduccio: fila.agrupacio_produccio,
@@ -49,8 +46,7 @@ function aApi(fila: FilaRendimentPorc): RendimentPorcApi {
 // rendiments_porcs cuyo producto no cumple esto queda fuera del listado en
 // vez de romper el contrato con un `null` donde el tipo no lo admite.
 const SELECT_RENDIMENT = `
-  SELECT r.id_seq, p.id_seq AS producte_id_seq, p.codi AS producte_codi,
-         p.descripcio AS producte_descripcio, cat.agrupacio_rendiment,
+  SELECT r.id_seq, cat.agrupacio_rendiment,
          cat.nom AS categoria_nom, p.agrupacio_produccio,
          r.unitats_per_porc, r.kg_per_unitat,
          (r.unitats_per_porc * r.kg_per_unitat)::NUMERIC(10,3) AS pes_total
