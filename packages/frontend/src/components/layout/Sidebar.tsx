@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState, type ComponentType } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   Boxes,
   ChevronLeft,
@@ -14,8 +14,11 @@ import {
   Menu,
   Package,
   Tag,
+  Users,
   X,
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { isRouteAllowed } from "@/lib/roles";
 
 type NavItem = {
   label: string;
@@ -34,7 +37,73 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Panell Producció", href: "/production", icon: LayoutGrid },
   { label: "Panell Obrador", href: "/workshop", icon: LayoutGrid },
   { label: "Panell Empaquetat", href: "/packaging", icon: LayoutGrid },
+  { label: "Administració d'usuaris", href: "/users", icon: Users },
 ];
+
+function UserMenu({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
+  const { user, logout } = useAuth();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) setOpen(false);
+    }
+
+    window.addEventListener("mousedown", handleClickOutside);
+    return () => window.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  if (!user) return null;
+
+  const initial = user.name.trim().charAt(0).toUpperCase() || "?";
+
+  return (
+    <div ref={containerRef} className="relative">
+      {open && (
+        <div className="absolute bottom-full left-0 z-10 mb-2 w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+          <Link
+            href="/profile"
+            onClick={() => {
+              setOpen(false);
+              onNavigate?.();
+            }}
+            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            Veure perfil
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onNavigate?.();
+              logout();
+              router.replace("/login");
+            }}
+            className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+          >
+            Tancar sessió
+          </button>
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className={`flex w-full items-center gap-2.5 rounded-lg px-1 py-1.5 hover:bg-gray-100 ${collapsed ? "justify-center" : ""}`}
+      >
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink text-sm font-semibold text-white">
+          {initial}
+        </span>
+        {!collapsed && (
+          <span className="min-w-0 flex-1 truncate text-left text-sm font-medium text-gray-900">{user.name}</span>
+        )}
+      </button>
+    </div>
+  );
+}
 
 function SidebarContent({
   collapsed,
@@ -48,6 +117,8 @@ function SidebarContent({
   onClose?: () => void;
 }) {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const visibleItems = user ? NAV_ITEMS.filter((item) => isRouteAllowed(user.role, item.href)) : [];
 
   return (
     <div className="flex h-full flex-col justify-between">
@@ -82,7 +153,7 @@ function SidebarContent({
         </div>
 
         <nav className="flex flex-col gap-1 px-3">
-          {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
+          {visibleItems.map(({ label, href, icon: Icon }) => {
             const active = pathname === href;
             return (
               <Link
@@ -102,8 +173,9 @@ function SidebarContent({
         </nav>
       </div>
 
-      <div className="px-3 pb-6">
-        {!collapsed && <p className="px-1 text-xs text-gray-400">v0.1 · Sense autenticació</p>}
+      <div className="border-t border-gray-100 px-3 pt-3 pb-6">
+        <UserMenu collapsed={collapsed} onNavigate={onNavigate} />
+        {!collapsed && <p className="mt-3 px-1 text-xs text-gray-400">v0.1</p>}
       </div>
     </div>
   );

@@ -81,6 +81,20 @@ export type PigYieldApi = {
   kgPerUnit: number;
 };
 
+export type UserRole = "office" | "workshop" | "packaging" | "production";
+
+export type UserApi = {
+  id: string;
+  name: string;
+  email: string;
+  // Mock en texto plano, solo para simular el login localmente; nunca se
+  // expone en listados. TODO: eliminar este campo cuando la autenticación
+  // pase a Firebase Auth real.
+  password: string;
+  role: UserRole;
+  status: "active" | "inactive";
+};
+
 export type OrderApi = {
   number: string;
   status: "Oberta" | "Incidència";
