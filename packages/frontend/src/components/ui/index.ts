@@ -1,5 +1,6 @@
 ﻿export * from "./Badge";
 export * from "./ConfirmDialog";
+export * from "./DataCard";
 export * from "./DataTable";
 export * from "./DateInput";
 export * from "./DateRangeInput";

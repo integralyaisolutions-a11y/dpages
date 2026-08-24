@@ -14,19 +14,26 @@ import { TariffFormModal } from "./TariffFormModal";
 const ALL = "Tots";
 const ALL_FEM = "Totes";
 
-const CATEGORIA_WIDTH = 11;
-const FORMAT_WIDTH = 9;
-const CODI_WIDTH = 9;
-const DESCRIPCIO_WIDTH = 14;
-const GUARDAR_WIDTH = 9;
-const FIXED_WIDTH = CATEGORIA_WIDTH + FORMAT_WIDTH + CODI_WIDTH + DESCRIPCIO_WIDTH + GUARDAR_WIDTH;
+// Columnes fixes (esquerra) queden "sticky": no es desplacen amb el scroll
+// horitzontal, que només afecta les columnes de tarifa i Guardar (poden
+// créixer amb "Nova tarifa"). És l'únic lloc del projecte on el scroll
+// horitzontal contingut és la solució correcta en lloc de tarjetes, perquè
+// el nombre de columnes és dinàmic.
+const CATEGORIA_WIDTH = 110;
+const FORMAT_WIDTH = 90;
+const CODI_WIDTH = 100;
+const DESCRIPCIO_WIDTH = 160;
+const GUARDAR_WIDTH = 90;
+const TARIFF_COLUMN_WIDTH = 110;
+
+const FORMAT_LEFT = CATEGORIA_WIDTH;
+const CODI_LEFT = FORMAT_LEFT + FORMAT_WIDTH;
+const DESCRIPCIO_LEFT = CODI_LEFT + CODI_WIDTH;
+
+const STICKY_LEFT_SHADOW = "shadow-[4px_0_6px_-4px_rgba(0,0,0,0.15)]";
 
 function distinct(values: string[]) {
   return Array.from(new Set(values));
-}
-
-function tariffColumnWidth(tariffCount: number) {
-  return (100 - FIXED_WIDTH) / Math.max(tariffCount, 1);
 }
 
 function RateProductRow({
@@ -50,18 +57,30 @@ function RateProductRow({
 
   return (
     <tr className="border-b border-gray-100 last:border-0">
-      <td className="px-2 py-3 break-words text-gray-900">{product.category}</td>
-      <td className="px-2 py-3 break-words text-gray-900">{product.format}</td>
-      <td className="px-2 py-3 break-words">
+      <td
+        className="sticky left-0 z-10 bg-white px-2 py-3 break-words text-gray-900"
+        style={{ width: CATEGORIA_WIDTH }}
+      >
+        {product.category}
+      </td>
+      <td className="sticky z-10 bg-white px-2 py-3 break-words text-gray-900" style={{ left: FORMAT_LEFT, width: FORMAT_WIDTH }}>
+        {product.format}
+      </td>
+      <td className="sticky z-10 bg-white px-2 py-3 break-words" style={{ left: CODI_LEFT, width: CODI_WIDTH }}>
         <span className="font-semibold text-gray-900">{product.productCode}</span>
       </td>
-      <td className="px-2 py-3 break-words text-gray-900">{product.description}</td>
+      <td
+        className={`sticky z-10 bg-white px-2 py-3 break-words text-gray-900 ${STICKY_LEFT_SHADOW}`}
+        style={{ left: DESCRIPCIO_LEFT, width: DESCRIPCIO_WIDTH }}
+      >
+        {product.description}
+      </td>
       {tariffColumns.map((tariff) => (
-        <td key={tariff.code} className="px-1 py-3 text-right">
+        <td key={tariff.code} className="px-1 py-3 text-right" style={{ width: TARIFF_COLUMN_WIDTH }}>
           <EditableCell value={draft[tariff.code] ?? null} onChange={(value) => setField(tariff.code, value)} />
         </td>
       ))}
-      <td className="px-2 py-3 text-center">
+      <td className="px-2 py-3 text-center" style={{ width: GUARDAR_WIDTH }}>
         <button
           type="button"
           onClick={save}
@@ -83,6 +102,9 @@ export default function RatesPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState(ALL_FEM);
   const [format, setFormat] = useState(ALL);
+
+  const tableWidth =
+    CATEGORIA_WIDTH + FORMAT_WIDTH + CODI_WIDTH + DESCRIPCIO_WIDTH + tariffColumns.length * TARIFF_COLUMN_WIDTH + GUARDAR_WIDTH;
 
   const categoryOptions = useMemo(() => [ALL_FEM, ...distinct(data.map((product) => product.category))], [data]);
   const formatOptions = useMemo(() => [ALL, ...distinct(data.map((product) => product.format))], [data]);
@@ -113,21 +135,30 @@ export default function RatesPage() {
 
       {!isLoading && !error && (
         <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-          <table className="w-full table-fixed text-sm">
+          <table className="text-sm" style={{ width: tableWidth, tableLayout: "fixed", borderCollapse: "collapse" }}>
             <thead className="border-b border-gray-200">
               <tr>
-                <th className="px-2 py-2 text-left font-medium text-gray-500" style={{ width: `${CATEGORIA_WIDTH}%` }}>
+                <th
+                  className="sticky left-0 z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words"
+                  style={{ width: CATEGORIA_WIDTH }}
+                >
                   Categoria
                 </th>
-                <th className="px-2 py-2 text-left font-medium text-gray-500" style={{ width: `${FORMAT_WIDTH}%` }}>
+                <th
+                  className="sticky z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words"
+                  style={{ left: FORMAT_LEFT, width: FORMAT_WIDTH }}
+                >
                   Format
                 </th>
-                <th className="px-2 py-2 text-left font-medium text-gray-500" style={{ width: `${CODI_WIDTH}%` }}>
+                <th
+                  className="sticky z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words"
+                  style={{ left: CODI_LEFT, width: CODI_WIDTH }}
+                >
                   Codi Producte
                 </th>
                 <th
-                  className="px-2 py-2 text-left font-medium text-gray-500"
-                  style={{ width: `${DESCRIPCIO_WIDTH}%` }}
+                  className={`sticky z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words ${STICKY_LEFT_SHADOW}`}
+                  style={{ left: DESCRIPCIO_LEFT, width: DESCRIPCIO_WIDTH }}
                 >
                   Descripció
                 </th>
@@ -135,12 +166,15 @@ export default function RatesPage() {
                   <th
                     key={tariff.code}
                     className="px-1 py-2 text-right font-medium text-gray-500 break-words"
-                    style={{ width: `${tariffColumnWidth(tariffColumns.length)}%` }}
+                    style={{ width: TARIFF_COLUMN_WIDTH }}
                   >
                     {tariff.name}
                   </th>
                 ))}
-                <th className="px-2 py-2 text-center font-medium text-gray-500" style={{ width: `${GUARDAR_WIDTH}%` }}>
+                <th
+                  className="px-2 py-2 text-center font-medium text-gray-500 break-words"
+                  style={{ width: GUARDAR_WIDTH }}
+                >
                   Guardar
                 </th>
               </tr>

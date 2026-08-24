@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
+import { DataCard, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
 import { DateRangeInput } from "@/components/ui/DateRangeInput";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -13,6 +14,7 @@ import { useCarriers } from "@/hooks/useCarriers";
 import { useClientTariffs } from "@/hooks/useClientTariffs";
 import { useOrders } from "@/hooks/useOrders";
 import { useRates } from "@/hooks/useRates";
+import type { CarrierApi, ClientTariffApi, OrderApi, TariffApi } from "@/lib/api";
 import { sumOrderedWeightKg } from "@/lib/orderCalculations";
 
 const ALL = "Tots";
@@ -25,6 +27,70 @@ function formatKg(value: number) {
 function formatDateShort(isoDate: string) {
   const [, month, day] = isoDate.split("-");
   return `${day}/${month}`;
+}
+
+function OfficeOrderCard({
+  order,
+  client,
+  tariff,
+  carrier,
+  onClick,
+}: {
+  order: OrderApi;
+  client?: ClientTariffApi;
+  tariff?: TariffApi;
+  carrier?: CarrierApi;
+  onClick: () => void;
+}) {
+  return (
+    <DataCard onClick={onClick}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-semibold text-gray-900">{order.number}</p>
+          <p className="text-sm text-gray-500">{client?.name ?? order.clientCode}</p>
+        </div>
+        <Badge variant={order.status === "Incidència" ? "negative" : "info"}>{order.status}</Badge>
+      </div>
+
+      <div className="mt-3">
+        <DataCardGrid>
+          <DataCardField label="Població de destí">{order.poblacioDesti || "—"}</DataCardField>
+          <DataCardField label="Tarifa">{tariff?.name ?? "—"}</DataCardField>
+          <DataCardField label="Transportista">{carrier?.name ?? "—"}</DataCardField>
+          <DataCardField label="Total kg demanats">{formatKg(sumOrderedWeightKg(order.lines))}</DataCardField>
+          <DataCardField label="Data comanda">{formatDateShort(order.orderDate)}</DataCardField>
+          <DataCardField label="Data expedició">
+            {order.shippingDate ? formatDateShort(order.shippingDate) : "—"}
+          </DataCardField>
+          <DataCardField label="Data lliurament">
+            {order.deliveryDate ? formatDateShort(order.deliveryDate) : "—"}
+          </DataCardField>
+          <DataCardField label="Núm. bultos">{order.packageCount}</DataCardField>
+        </DataCardGrid>
+      </div>
+
+      <div className="mt-3 flex gap-6 border-t border-gray-100 pt-3">
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={order.productionNotes.trim().length > 0}
+            disabled
+            className="h-4 w-4 rounded border-gray-300 text-ink"
+          />
+          Obs. producció
+        </label>
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={order.deliveryNotes.trim().length > 0}
+            disabled
+            className="h-4 w-4 rounded border-gray-300 text-ink"
+          />
+          Obs. lliurament
+        </label>
+      </div>
+    </DataCard>
+  );
 }
 
 export default function OfficePage() {
@@ -142,77 +208,102 @@ export default function OfficePage() {
       {error && <p className="text-sm text-red-600">No s&apos;han pogut carregar les comandes.</p>}
 
       {!isLoading && !error && (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-          <table className="w-full table-fixed text-sm">
-            <thead className="border-b border-gray-200">
-              <tr>
-                <th className="w-[7%] px-2 py-2 text-left font-medium text-gray-500">Núm.</th>
-                <th className="w-[12%] px-2 py-2 text-left font-medium text-gray-500">Client</th>
-                <th className="w-[9%] px-2 py-2 text-left font-medium text-gray-500">Població de destí</th>
-                <th className="w-[6%] px-2 py-2 text-left font-medium text-gray-500">Tarifa</th>
-                <th className="w-[8%] px-2 py-2 text-left font-medium text-gray-500 break-words">Transportista</th>
-                <th className="w-[8%] px-2 py-2 text-left font-medium text-gray-500">Estat</th>
-                <th className="w-[6%] px-2 py-2 text-left font-medium text-gray-500 break-words">Data comanda</th>
-                <th className="w-[6%] px-2 py-2 text-left font-medium text-gray-500 break-words">Data expedició</th>
-                <th className="w-[6%] px-2 py-2 text-left font-medium text-gray-500 break-words">Data lliurament</th>
-                <th className="w-[9%] px-2 py-2 text-right font-medium text-gray-500">Total kg demanats</th>
-                <th className="w-[6%] px-2 py-2 text-right font-medium text-gray-500">Núm. bultos</th>
-                <th className="w-[8%] px-2 py-2 text-center font-medium text-gray-500 break-words">Obs. producció</th>
-                <th className="w-[9%] px-2 py-2 text-center font-medium text-gray-500 break-words">Obs. lliurament</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((order) => {
-                const client = clients.find((item) => item.code === order.clientCode);
-                const tariff = tariffColumns.find((item) => item.code === order.tariffCode);
-                const carrier = carriers.find((item) => item.code === order.carrierCode);
-                return (
-                  <tr
-                    key={order.number}
-                    onClick={() => router.push(`/office/${order.number}`)}
-                    className="cursor-pointer border-b border-gray-100 last:border-0 hover:bg-gray-50"
-                  >
-                    <td className="px-2 py-3">
-                      <span className="font-semibold text-gray-900">{order.number}</span>
-                    </td>
-                    <td className="px-2 py-3 break-words text-gray-900">{client?.name ?? order.clientCode}</td>
-                    <td className="px-2 py-3 break-words text-gray-900">{order.poblacioDesti || "—"}</td>
-                    <td className="px-2 py-3 text-gray-900">{tariff?.name ?? "—"}</td>
-                    <td className="px-2 py-3 break-words text-gray-900">{carrier?.name ?? "—"}</td>
-                    <td className="px-2 py-3">
-                      <Badge variant={order.status === "Incidència" ? "negative" : "info"}>{order.status}</Badge>
-                    </td>
-                    <td className="px-2 py-3 text-gray-900">{formatDateShort(order.orderDate)}</td>
-                    <td className="px-2 py-3 text-gray-900">
-                      {order.shippingDate ? formatDateShort(order.shippingDate) : "—"}
-                    </td>
-                    <td className="px-2 py-3 text-gray-900">
-                      {order.deliveryDate ? formatDateShort(order.deliveryDate) : "—"}
-                    </td>
-                    <td className="px-2 py-3 text-right text-gray-900">{formatKg(sumOrderedWeightKg(order.lines))}</td>
-                    <td className="px-2 py-3 text-right text-gray-900">{order.packageCount}</td>
-                    <td className="px-2 py-3 text-center">
-                      <input
-                        type="checkbox"
-                        checked={order.productionNotes.trim().length > 0}
-                        disabled
-                        className="h-4 w-4 rounded border-gray-300 text-ink"
-                      />
-                    </td>
-                    <td className="px-2 py-3 text-center">
-                      <input
-                        type="checkbox"
-                        checked={order.deliveryNotes.trim().length > 0}
-                        disabled
-                        className="h-4 w-4 rounded border-gray-300 text-ink"
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="flex flex-col gap-3 xl:hidden">
+            {filtered.map((order) => (
+              <OfficeOrderCard
+                key={order.number}
+                order={order}
+                client={clients.find((item) => item.code === order.clientCode)}
+                tariff={tariffColumns.find((item) => item.code === order.tariffCode)}
+                carrier={carriers.find((item) => item.code === order.carrierCode)}
+                onClick={() => router.push(`/office/${order.number}`)}
+              />
+            ))}
+          </div>
+
+          <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white xl:block">
+            <table className="w-full table-fixed text-sm">
+              <thead className="border-b border-gray-200">
+                <tr>
+                  <th className="w-[7%] px-2 py-2 text-left font-medium text-gray-500 break-words">Núm.</th>
+                  <th className="w-[12%] px-2 py-2 text-left font-medium text-gray-500 break-words">Client</th>
+                  <th className="w-[9%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                    Població de destí
+                  </th>
+                  <th className="w-[6%] px-2 py-2 text-left font-medium text-gray-500 break-words">Tarifa</th>
+                  <th className="w-[8%] px-2 py-2 text-left font-medium text-gray-500 break-words">Transportista</th>
+                  <th className="w-[8%] px-2 py-2 text-left font-medium text-gray-500 break-words">Estat</th>
+                  <th className="w-[6%] px-2 py-2 text-left font-medium text-gray-500 break-words">Data comanda</th>
+                  <th className="w-[6%] px-2 py-2 text-left font-medium text-gray-500 break-words">Data expedició</th>
+                  <th className="w-[6%] px-2 py-2 text-left font-medium text-gray-500 break-words">Data lliurament</th>
+                  <th className="w-[9%] px-2 py-2 text-right font-medium text-gray-500 break-words">
+                    Total kg demanats
+                  </th>
+                  <th className="w-[6%] px-2 py-2 text-right font-medium text-gray-500 break-words">Núm. bultos</th>
+                  <th className="w-[8%] px-2 py-2 text-center font-medium text-gray-500 break-words">
+                    Obs. producció
+                  </th>
+                  <th className="w-[9%] px-2 py-2 text-center font-medium text-gray-500 break-words">
+                    Obs. lliurament
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((order) => {
+                  const client = clients.find((item) => item.code === order.clientCode);
+                  const tariff = tariffColumns.find((item) => item.code === order.tariffCode);
+                  const carrier = carriers.find((item) => item.code === order.carrierCode);
+                  return (
+                    <tr
+                      key={order.number}
+                      onClick={() => router.push(`/office/${order.number}`)}
+                      className="cursor-pointer border-b border-gray-100 last:border-0 hover:bg-gray-50"
+                    >
+                      <td className="px-2 py-3 break-words">
+                        <span className="font-semibold text-gray-900">{order.number}</span>
+                      </td>
+                      <td className="px-2 py-3 break-words text-gray-900">{client?.name ?? order.clientCode}</td>
+                      <td className="px-2 py-3 break-words text-gray-900">{order.poblacioDesti || "—"}</td>
+                      <td className="px-2 py-3 break-words text-gray-900">{tariff?.name ?? "—"}</td>
+                      <td className="px-2 py-3 break-words text-gray-900">{carrier?.name ?? "—"}</td>
+                      <td className="px-2 py-3">
+                        <Badge variant={order.status === "Incidència" ? "negative" : "info"}>{order.status}</Badge>
+                      </td>
+                      <td className="px-2 py-3 break-words text-gray-900">{formatDateShort(order.orderDate)}</td>
+                      <td className="px-2 py-3 break-words text-gray-900">
+                        {order.shippingDate ? formatDateShort(order.shippingDate) : "—"}
+                      </td>
+                      <td className="px-2 py-3 break-words text-gray-900">
+                        {order.deliveryDate ? formatDateShort(order.deliveryDate) : "—"}
+                      </td>
+                      <td className="px-2 py-3 text-right text-gray-900">
+                        {formatKg(sumOrderedWeightKg(order.lines))}
+                      </td>
+                      <td className="px-2 py-3 text-right text-gray-900">{order.packageCount}</td>
+                      <td className="px-2 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={order.productionNotes.trim().length > 0}
+                          disabled
+                          className="h-4 w-4 rounded border-gray-300 text-ink"
+                        />
+                      </td>
+                      <td className="px-2 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={order.deliveryNotes.trim().length > 0}
+                          disabled
+                          className="h-4 w-4 rounded border-gray-300 text-ink"
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

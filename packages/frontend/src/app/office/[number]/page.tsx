@@ -5,11 +5,13 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/Badge";
+import { DataCard, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
 import { useCarriers } from "@/hooks/useCarriers";
 import { useCatalog } from "@/hooks/useCatalog";
 import { useClientTariffs } from "@/hooks/useClientTariffs";
 import { useOrders } from "@/hooks/useOrders";
 import { useRates } from "@/hooks/useRates";
+import type { OrderLineApi, ProductApi } from "@/lib/api";
 import { formatDateDisplay } from "@/lib/orderCalculations";
 
 function formatPrice(value: number) {
@@ -22,6 +24,50 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
       <p className="text-xs font-medium text-gray-500">{label}</p>
       <p className="mt-1 text-sm text-gray-900">{value}</p>
     </div>
+  );
+}
+
+function OrderLineCard({
+  line,
+  product,
+  unitPrice,
+  subtotal,
+}: {
+  line: OrderLineApi;
+  product?: ProductApi;
+  unitPrice: number | null;
+  subtotal: number | null;
+}) {
+  return (
+    <DataCard>
+      <p className="font-semibold text-gray-900">
+        {product ? `${product.code} · ${product.description}` : line.productCode}
+      </p>
+      <p className="text-sm text-gray-500">{product?.format ?? "—"}</p>
+
+      <div className="mt-3">
+        <DataCardGrid>
+          <DataCardField label="Unitats demanades">{line.orderedUnits}</DataCardField>
+          <DataCardField label="Unitats lliurades">{line.deliveredUnits}</DataCardField>
+          <DataCardField label="Pes demanat (kg)">{line.orderedWeightKg.toFixed(3).replace(".", ",")}</DataCardField>
+          <DataCardField label="Pes lliurat (kg)">{line.deliveredWeightKg.toFixed(3).replace(".", ",")}</DataCardField>
+          <DataCardField label="Preu unitari">{unitPrice !== null ? formatPrice(unitPrice) : "—"}</DataCardField>
+          <DataCardField label="Subtotal">
+            <span className="font-semibold">{subtotal !== null ? formatPrice(subtotal) : "—"}</span>
+          </DataCardField>
+        </DataCardGrid>
+      </div>
+
+      <label className="mt-3 flex items-center gap-2 border-t border-gray-100 pt-3 text-sm text-gray-700">
+        <input
+          type="checkbox"
+          checked={line.productionNotes.trim().length > 0}
+          disabled
+          className="h-4 w-4 rounded border-gray-300 text-ink"
+        />
+        Obs. producció
+      </label>
+    </DataCard>
   );
 }
 
@@ -101,19 +147,32 @@ export default function OfficeOrderDetailPage() {
 
           <div className="rounded-xl border border-gray-200 bg-white p-6">
             <h2 className="mb-4 text-base font-bold text-gray-900">Línies</h2>
-            <div className="overflow-x-auto rounded-lg border border-gray-200">
+
+            <div className="flex flex-col gap-3 xl:hidden">
+              {order.lines.map((line) => {
+                const product = products.find((item) => item.code === line.productCode);
+                const rate = rates.find((item) => item.productCode === line.productCode);
+                const unitPrice = order.tariffCode ? (rate?.prices[order.tariffCode] ?? null) : null;
+                const subtotal = unitPrice !== null ? line.orderedUnits * unitPrice : null;
+                return (
+                  <OrderLineCard key={line.id} line={line} product={product} unitPrice={unitPrice} subtotal={subtotal} />
+                );
+              })}
+            </div>
+
+            <div className="hidden overflow-x-auto rounded-lg border border-gray-200 xl:block">
               <table className="w-full text-sm">
                 <thead className="border-b border-gray-200">
                   <tr>
-                    <th className="px-3 py-2 text-left font-medium text-gray-500">Producte</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-500">Format</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-500">Unitats demanades</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-500">Unitats lliurades</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-500">Pes demanat (kg)</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-500">Pes lliurat (kg)</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-500">Preu unitari</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-500">Subtotal</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-500">Obs. producció</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500 break-words">Producte</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500 break-words">Format</th>
+                    <th className="px-3 py-2 text-right font-medium text-gray-500 break-words">Unitats demanades</th>
+                    <th className="px-3 py-2 text-right font-medium text-gray-500 break-words">Unitats lliurades</th>
+                    <th className="px-3 py-2 text-right font-medium text-gray-500 break-words">Pes demanat (kg)</th>
+                    <th className="px-3 py-2 text-right font-medium text-gray-500 break-words">Pes lliurat (kg)</th>
+                    <th className="px-3 py-2 text-right font-medium text-gray-500 break-words">Preu unitari</th>
+                    <th className="px-3 py-2 text-right font-medium text-gray-500 break-words">Subtotal</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500 break-words">Obs. producció</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -124,10 +183,10 @@ export default function OfficeOrderDetailPage() {
                     const subtotal = unitPrice !== null ? line.orderedUnits * unitPrice : null;
                     return (
                       <tr key={line.id} className="border-b border-gray-100 last:border-0">
-                        <td className="px-3 py-2 text-gray-900">
+                        <td className="px-3 py-2 break-words text-gray-900">
                           {product ? `${product.code} · ${product.description}` : line.productCode}
                         </td>
-                        <td className="px-3 py-2 text-gray-500">{product?.format ?? "—"}</td>
+                        <td className="px-3 py-2 break-words text-gray-500">{product?.format ?? "—"}</td>
                         <td className="px-3 py-2 text-right text-gray-900">{line.orderedUnits}</td>
                         <td className="px-3 py-2 text-right text-gray-900">{line.deliveredUnits}</td>
                         <td className="px-3 py-2 text-right text-gray-900">

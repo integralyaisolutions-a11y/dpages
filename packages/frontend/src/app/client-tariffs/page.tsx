@@ -8,7 +8,6 @@ import { IconButton } from "@/components/ui/IconButton";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { SelectFilter } from "@/components/ui/SelectFilter";
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/DataTable";
 import { useClientTariffs } from "@/hooks/useClientTariffs";
 import { useRates } from "@/hooks/useRates";
 import type { ClientTariffApi } from "@/lib/api";
@@ -67,41 +66,45 @@ export default function ClientTariffsPage() {
       {error && <p className="text-sm text-red-600">No s&apos;han pogut carregar els clients.</p>}
 
       {!isLoading && !error && (
-        <Table>
-          <TableHead>
-            <tr>
-              <TableHeaderCell>Codi</TableHeaderCell>
-              <TableHeaderCell>Client</TableHeaderCell>
-              <TableHeaderCell>Població</TableHeaderCell>
-              <TableHeaderCell>Tarifa assignada</TableHeaderCell>
-              <TableHeaderCell align="right">Accions</TableHeaderCell>
-            </tr>
-          </TableHead>
-          <TableBody>
-            {filtered.map((client) => {
-              const tariffName = tariffColumns.find((tariff) => tariff.code === client.tariffCode)?.name;
-              return (
-                <TableRow key={client.code}>
-                  <TableCell>
-                    <span className="font-semibold text-gray-900">{client.code}</span>
-                  </TableCell>
-                  <TableCell>{client.name}</TableCell>
-                  <TableCell>{client.city}</TableCell>
-                  <TableCell>{tariffName ? <Badge>{tariffName}</Badge> : "—"}</TableCell>
-                  <TableCell align="right">
-                    <div className="flex justify-end">
-                      <IconButton
-                        variant="edit"
-                        label="Editar client"
-                        onClick={() => setFormState({ mode: "edit", client })}
-                      />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+          <table className="w-full table-fixed text-sm">
+            <thead className="border-b border-gray-200">
+              <tr>
+                <th className="w-[15%] px-2 py-2 text-left font-medium text-gray-500 break-words">Codi</th>
+                <th className="w-[28%] px-2 py-2 text-left font-medium text-gray-500 break-words">Client</th>
+                <th className="w-[20%] px-2 py-2 text-left font-medium text-gray-500 break-words">Població</th>
+                <th className="w-[22%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                  Tarifa assignada
+                </th>
+                <th className="w-[15%] px-2 py-2 text-right font-medium text-gray-500 break-words">Accions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((client) => {
+                const tariffName = tariffColumns.find((tariff) => tariff.code === client.tariffCode)?.name;
+                return (
+                  <tr key={client.code} className="border-b border-gray-100 last:border-0">
+                    <td className="px-2 py-3 break-words">
+                      <span className="font-semibold text-gray-900">{client.code}</span>
+                    </td>
+                    <td className="px-2 py-3 break-words text-gray-900">{client.name}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">{client.city}</td>
+                    <td className="px-2 py-3 break-words">{tariffName ? <Badge>{tariffName}</Badge> : "—"}</td>
+                    <td className="px-2 py-3 text-right">
+                      <div className="flex justify-end">
+                        <IconButton
+                          variant="edit"
+                          label="Editar client"
+                          onClick={() => setFormState({ mode: "edit", client })}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
 
       <ClientFormModal

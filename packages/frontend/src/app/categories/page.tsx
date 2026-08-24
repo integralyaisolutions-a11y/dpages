@@ -5,7 +5,6 @@ import { useState } from "react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { IconButton } from "@/components/ui/IconButton";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/DataTable";
 import { useCategories, type CategoryFormValues } from "@/hooks/useCategories";
 import type { CategoryApi } from "@/lib/api";
 import { CategoryFormModal } from "./CategoryFormModal";
@@ -40,41 +39,45 @@ export default function CategoriesPage() {
       {error && <p className="text-sm text-red-600">No s&apos;han pogut carregar les categories.</p>}
 
       {!isLoading && !error && (
-        <Table>
-          <TableHead>
-            <tr>
-              <TableHeaderCell>Categoria</TableHeaderCell>
-              <TableHeaderCell>Elaborat Porc</TableHeaderCell>
-              <TableHeaderCell>Agrupació Rendiment</TableHeaderCell>
-              <TableHeaderCell align="right">Accions</TableHeaderCell>
-            </tr>
-          </TableHead>
-          <TableBody>
-            {data.map((category) => (
-              <TableRow key={category.id}>
-                <TableCell>
-                  <span className="font-semibold text-gray-900">{category.name}</span>
-                </TableCell>
-                <TableCell>{category.elaboratPorc ? "Sí" : "No"}</TableCell>
-                <TableCell>{category.agrupacioRendiment ?? "—"}</TableCell>
-                <TableCell align="right">
-                  <div className="flex justify-end gap-1">
-                    <IconButton
-                      variant="edit"
-                      label="Editar categoria"
-                      onClick={() => setFormState({ mode: "edit", category })}
-                    />
-                    <IconButton
-                      variant="delete"
-                      label="Suprimeix categoria"
-                      onClick={() => setCategoryToDelete(category)}
-                    />
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+          <table className="w-full table-fixed text-sm">
+            <thead className="border-b border-gray-200">
+              <tr>
+                <th className="w-[35%] px-3 py-2 text-left font-medium text-gray-500 break-words">Categoria</th>
+                <th className="w-[20%] px-3 py-2 text-left font-medium text-gray-500 break-words">Elaborat Porc</th>
+                <th className="w-[25%] px-3 py-2 text-left font-medium text-gray-500 break-words">
+                  Agrupació Rendiment
+                </th>
+                <th className="w-[20%] px-3 py-2 text-right font-medium text-gray-500 break-words">Accions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((category) => (
+                <tr key={category.id} className="border-b border-gray-100 last:border-0">
+                  <td className="px-3 py-3 break-words">
+                    <span className="font-semibold text-gray-900">{category.name}</span>
+                  </td>
+                  <td className="px-3 py-3 break-words text-gray-900">{category.elaboratPorc ? "Sí" : "No"}</td>
+                  <td className="px-3 py-3 break-words text-gray-900">{category.agrupacioRendiment ?? "—"}</td>
+                  <td className="px-3 py-3 text-right">
+                    <div className="flex justify-end gap-1">
+                      <IconButton
+                        variant="edit"
+                        label="Editar categoria"
+                        onClick={() => setFormState({ mode: "edit", category })}
+                      />
+                      <IconButton
+                        variant="delete"
+                        label="Suprimeix categoria"
+                        onClick={() => setCategoryToDelete(category)}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       <CategoryFormModal

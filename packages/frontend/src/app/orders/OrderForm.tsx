@@ -2,6 +2,7 @@
 
 import { Plus, Trash2 } from "lucide-react";
 import { forwardRef, useImperativeHandle, useState } from "react";
+import { DataCard, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { TextField } from "@/components/ui/TextField";
 import type { CarrierApi, ClientTariffApi, OrderApi, OrderLineApi, ProductApi, TariffApi } from "@/lib/api";
@@ -34,6 +35,129 @@ function createEmptyLine(): LineDraft {
     deliveredWeightKg: 0,
     productionNotes: "",
   };
+}
+
+function LineFormCard({
+  line,
+  products,
+  onUpdate,
+  onRemove,
+}: {
+  line: LineDraft;
+  products: ProductApi[];
+  onUpdate: (patch: Partial<LineDraft>) => void;
+  onRemove: () => void;
+}) {
+  const product = products.find((p) => p.code === line.productCode);
+  const orderedWeight = calculateOrderedWeightKg(line.orderedUnits, product);
+  const productValue = line.productCode
+    ? codeName(line.productCode, product?.description ?? line.productCode)
+    : NO_PRODUCT;
+
+  return (
+    <DataCard>
+      <div className="flex items-start gap-3">
+        <select
+          value={productValue}
+          onChange={(event) =>
+            onUpdate({ productCode: event.target.value === NO_PRODUCT ? "" : parseCode(event.target.value) })
+          }
+          className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
+        >
+          {[NO_PRODUCT, ...products.map((p) => codeName(p.code, p.description))].map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="Eliminar línia"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-red-500 hover:text-red-600"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="mt-3">
+        <DataCardGrid>
+          <DataCardField label="Categoria">{product?.category ?? "—"}</DataCardField>
+          <DataCardField label="Format">{product?.format ?? "—"}</DataCardField>
+          <DataCardField label="Envasat">{product?.packaging ?? "—"}</DataCardField>
+        </DataCardGrid>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-xs text-gray-500">Data producció</span>
+          <input
+            type="date"
+            value={line.productionDate ?? ""}
+            onChange={(event) => onUpdate({ productionDate: event.target.value })}
+            className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-xs text-gray-500">Unitats demanades</span>
+          <input
+            type="number"
+            value={line.orderedUnits}
+            onChange={(event) => onUpdate({ orderedUnits: Number(event.target.value) })}
+            className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-xs text-gray-500">Unitats lliurades</span>
+          <input
+            type="number"
+            value={line.deliveredUnits}
+            onChange={(event) => onUpdate({ deliveredUnits: Number(event.target.value) })}
+            className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-xs text-gray-500">Pes demanat (kg)</span>
+          {orderedWeight.isCalculated ? (
+            <input
+              type="text"
+              value={orderedWeight.value.toFixed(3).replace(".", ",")}
+              disabled
+              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-right text-sm text-gray-400"
+            />
+          ) : (
+            <input
+              type="number"
+              step="0.001"
+              value={line.orderedWeightKg}
+              onChange={(event) => onUpdate({ orderedWeightKg: Number(event.target.value) })}
+              className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
+            />
+          )}
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-xs text-gray-500">Pes lliurat (kg)</span>
+          <input
+            type="number"
+            step="0.001"
+            value={line.deliveredWeightKg}
+            onChange={(event) => onUpdate({ deliveredWeightKg: Number(event.target.value) })}
+            className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
+          />
+        </label>
+      </div>
+
+      <label className="mt-3 flex flex-col gap-1 text-sm">
+        <span className="text-xs text-gray-500">Obs. producció</span>
+        <textarea
+          value={line.productionNotes}
+          onChange={(event) => onUpdate({ productionNotes: event.target.value })}
+          rows={2}
+          className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
+        />
+      </label>
+    </DataCard>
+  );
 }
 
 export type OrderFormHandle = {
@@ -250,20 +374,35 @@ export const OrderForm = forwardRef<
           </button>
         </div>
 
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
+        <div className="flex flex-col gap-3 xl:hidden">
+          {lines.map((line) => (
+            <LineFormCard
+              key={line.id}
+              line={line}
+              products={products}
+              onUpdate={(patch) => updateLine(line.id, patch)}
+              onRemove={() => removeLine(line.id)}
+            />
+          ))}
+          <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-right text-sm font-semibold text-gray-900">
+            Total pes demanat (kg): {totalOrderedWeightKg.toFixed(3).replace(".", ",")}
+          </div>
+        </div>
+
+        <div className="hidden overflow-x-auto rounded-lg border border-gray-200 xl:block">
           <table className="w-full table-fixed text-sm">
             <thead className="border-b border-gray-200">
               <tr>
-                <th className="w-[14%] px-1.5 py-2 text-left font-medium text-gray-500">Producte</th>
-                <th className="w-[9%] px-1.5 py-2 text-left font-medium text-gray-500">Categoria</th>
-                <th className="w-[9%] px-1.5 py-2 text-left font-medium text-gray-500">Format</th>
-                <th className="w-[8%] px-1.5 py-2 text-left font-medium text-gray-500">Envasat</th>
-                <th className="w-[15%] px-1.5 py-2 text-left font-medium text-gray-500">Data producció</th>
-                <th className="w-[9%] px-1.5 py-2 text-right font-medium text-gray-500">Unitats demanades</th>
-                <th className="w-[9%] px-1.5 py-2 text-right font-medium text-gray-500">Unitats lliurades</th>
-                <th className="w-[8%] px-1.5 py-2 text-right font-medium text-gray-500">Pes demanat (kg)</th>
-                <th className="w-[7%] px-1.5 py-2 text-right font-medium text-gray-500">Pes lliurat (kg)</th>
-                <th className="w-[7%] px-1.5 py-2 text-left font-medium text-gray-500">Obs. producció</th>
+                <th className="w-[14%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">Producte</th>
+                <th className="w-[9%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">Categoria</th>
+                <th className="w-[9%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">Format</th>
+                <th className="w-[8%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">Envasat</th>
+                <th className="w-[15%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">Data producció</th>
+                <th className="w-[9%] px-1.5 py-2 text-right font-medium text-gray-500 break-words">Unitats demanades</th>
+                <th className="w-[9%] px-1.5 py-2 text-right font-medium text-gray-500 break-words">Unitats lliurades</th>
+                <th className="w-[8%] px-1.5 py-2 text-right font-medium text-gray-500 break-words">Pes demanat (kg)</th>
+                <th className="w-[7%] px-1.5 py-2 text-right font-medium text-gray-500 break-words">Pes lliurat (kg)</th>
+                <th className="w-[7%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">Obs. producció</th>
                 <th className="w-[5%] px-1.5 py-2" />
               </tr>
             </thead>

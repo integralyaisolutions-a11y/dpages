@@ -2,11 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { ClearFiltersButton, FilterBar } from "@/components/ui/FilterBar";
+import { DataCard, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
 import { DateInput } from "@/components/ui/DateInput";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { StatCard } from "@/components/ui/StatCard";
+import type { ObradorLine } from "@/hooks/useObradorPanell";
 import { useObradorPanell } from "@/hooks/useObradorPanell";
 import { formatDateDisplay } from "@/lib/orderCalculations";
 
@@ -14,6 +16,33 @@ const ALL = "Tots";
 
 function formatKg(value: number) {
   return value.toFixed(3).replace(".", ",");
+}
+
+function WorkshopCard({ line }: { line: ObradorLine }) {
+  return (
+    <DataCard>
+      <p className="font-semibold text-gray-900">{line.productDescription}</p>
+      <p className="text-sm text-gray-500">{line.clientName}</p>
+
+      <div className="mt-3">
+        <DataCardGrid>
+          <DataCardField label="Envasat">{line.packaging}</DataCardField>
+          <DataCardField label="Format">{line.format}</DataCardField>
+          <DataCardField label="Data producció">
+            {line.productionDate ? formatDateDisplay(line.productionDate) : "—"}
+          </DataCardField>
+          <DataCardField label="Unitats">{line.units}</DataCardField>
+          <DataCardField label="Pes (kg)">{formatKg(line.weightKg)}</DataCardField>
+        </DataCardGrid>
+      </div>
+
+      {line.productionNotes && (
+        <div className="mt-3 border-t border-gray-100 pt-3">
+          <DataCardField label="Obs. producció">{line.productionNotes}</DataCardField>
+        </div>
+      )}
+    </DataCard>
+  );
 }
 
 export default function WorkshopPage() {
@@ -79,40 +108,52 @@ export default function WorkshopPage() {
       {error && <p className="text-sm text-red-600">No s&apos;han pogut carregar les línies.</p>}
 
       {!isLoading && !error && (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-          <table className="w-full table-fixed text-sm">
-            <thead className="border-b border-gray-200">
-              <tr>
-                <th className="w-[16%] px-3 py-2 text-left font-medium text-gray-500">Producte</th>
-                <th className="w-[11%] px-3 py-2 text-left font-medium text-gray-500">Envasat</th>
-                <th className="w-[9%] px-3 py-2 text-left font-medium text-gray-500">Format</th>
-                <th className="w-[15%] px-3 py-2 text-left font-medium text-gray-500">Client</th>
-                <th className="w-[11%] px-3 py-2 text-left font-medium text-gray-500">Data producció</th>
-                <th className="w-[8%] px-3 py-2 text-right font-medium text-gray-500">Unitats</th>
-                <th className="w-[10%] px-3 py-2 text-right font-medium text-gray-500">Pes (kg)</th>
-                <th className="w-[20%] px-3 py-2 text-left font-medium text-gray-500">Obs. producció</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((line) => (
-                <tr key={line.id} className="border-b border-gray-100 last:border-0">
-                  <td className="px-3 py-3 break-words">
-                    <span className="font-semibold text-gray-900">{line.productDescription}</span>
-                  </td>
-                  <td className="px-3 py-3 break-words text-gray-900">{line.packaging}</td>
-                  <td className="px-3 py-3 break-words text-gray-900">{line.format}</td>
-                  <td className="px-3 py-3 break-words text-gray-900">{line.clientName}</td>
-                  <td className="px-3 py-3 text-gray-900">
-                    {line.productionDate ? formatDateDisplay(line.productionDate) : "—"}
-                  </td>
-                  <td className="px-3 py-3 text-right text-gray-900">{line.units}</td>
-                  <td className="px-3 py-3 text-right text-gray-900">{formatKg(line.weightKg)}</td>
-                  <td className="px-3 py-3 break-words text-gray-900">{line.productionNotes || ""}</td>
+        <>
+          <div className="flex flex-col gap-3 xl:hidden">
+            {filtered.map((line) => (
+              <WorkshopCard key={line.id} line={line} />
+            ))}
+          </div>
+
+          <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white xl:block">
+            <table className="w-full table-fixed text-sm">
+              <thead className="border-b border-gray-200">
+                <tr>
+                  <th className="w-[16%] px-3 py-2 text-left font-medium text-gray-500 break-words">Producte</th>
+                  <th className="w-[11%] px-3 py-2 text-left font-medium text-gray-500 break-words">Envasat</th>
+                  <th className="w-[9%] px-3 py-2 text-left font-medium text-gray-500 break-words">Format</th>
+                  <th className="w-[15%] px-3 py-2 text-left font-medium text-gray-500 break-words">Client</th>
+                  <th className="w-[11%] px-3 py-2 text-left font-medium text-gray-500 break-words">
+                    Data producció
+                  </th>
+                  <th className="w-[8%] px-3 py-2 text-right font-medium text-gray-500 break-words">Unitats</th>
+                  <th className="w-[10%] px-3 py-2 text-right font-medium text-gray-500 break-words">Pes (kg)</th>
+                  <th className="w-[20%] px-3 py-2 text-left font-medium text-gray-500 break-words">
+                    Obs. producció
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filtered.map((line) => (
+                  <tr key={line.id} className="border-b border-gray-100 last:border-0">
+                    <td className="px-3 py-3 break-words">
+                      <span className="font-semibold text-gray-900">{line.productDescription}</span>
+                    </td>
+                    <td className="px-3 py-3 break-words text-gray-900">{line.packaging}</td>
+                    <td className="px-3 py-3 break-words text-gray-900">{line.format}</td>
+                    <td className="px-3 py-3 break-words text-gray-900">{line.clientName}</td>
+                    <td className="px-3 py-3 break-words text-gray-900">
+                      {line.productionDate ? formatDateDisplay(line.productionDate) : "—"}
+                    </td>
+                    <td className="px-3 py-3 text-right text-gray-900">{line.units}</td>
+                    <td className="px-3 py-3 text-right text-gray-900">{formatKg(line.weightKg)}</td>
+                    <td className="px-3 py-3 break-words text-gray-900">{line.productionNotes || ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

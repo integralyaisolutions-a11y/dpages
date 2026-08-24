@@ -4,13 +4,14 @@ import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
+import { DataCard, DataCardActions, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { IconButton } from "@/components/ui/IconButton";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { SelectFilter } from "@/components/ui/SelectFilter";
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/DataTable";
 import { useCatalog } from "@/hooks/useCatalog";
+import type { ProductApi } from "@/lib/api";
 
 const ALL = "Tots";
 const ALL_FEM = "Totes";
@@ -25,6 +26,41 @@ function formatWeight(value: number) {
 
 function distinct(values: string[]) {
   return Array.from(new Set(values));
+}
+
+function CatalogCard({ product, onEdit }: { product: ProductApi; onEdit: () => void }) {
+  return (
+    <DataCard>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-semibold text-gray-900">{product.code}</p>
+          <p className="text-sm text-gray-500">{product.description}</p>
+        </div>
+        <Badge variant={product.status === "Actiu" ? "positive" : "neutral"}>{product.status}</Badge>
+      </div>
+
+      <div className="mt-3">
+        <DataCardGrid>
+          <DataCardField label="Categoria">{product.category}</DataCardField>
+          <DataCardField label="Agrupació producció">{product.productionGroup}</DataCardField>
+          <DataCardField label="Format">{product.format}</DataCardField>
+          <DataCardField label="Envasat">{product.packaging}</DataCardField>
+          <DataCardField label="Pes (kg)">{formatWeight(product.weightKg)}</DataCardField>
+          <DataCardField label="Preu base">{formatPrice(product.basePrice)}</DataCardField>
+        </DataCardGrid>
+      </div>
+
+      <DataCardActions>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="w-full rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Editar producte
+        </button>
+      </DataCardActions>
+    </DataCard>
+  );
 }
 
 export default function CatalogPage() {
@@ -87,50 +123,66 @@ export default function CatalogPage() {
       {error && <p className="text-sm text-red-600">No s&apos;ha pogut carregar el catàleg.</p>}
 
       {!isLoading && !error && (
-        <Table>
-          <TableHead>
-            <tr>
-              <TableHeaderCell>Categoria</TableHeaderCell>
-              <TableHeaderCell>Agrupació producció</TableHeaderCell>
-              <TableHeaderCell>Codi</TableHeaderCell>
-              <TableHeaderCell>Descripció</TableHeaderCell>
-              <TableHeaderCell>Format</TableHeaderCell>
-              <TableHeaderCell>Envasat</TableHeaderCell>
-              <TableHeaderCell align="right">Pes (kg)</TableHeaderCell>
-              <TableHeaderCell align="right">Preu base</TableHeaderCell>
-              <TableHeaderCell>Estat</TableHeaderCell>
-              <TableHeaderCell align="right">Accions</TableHeaderCell>
-            </tr>
-          </TableHead>
-          <TableBody>
+        <>
+          <div className="flex flex-col gap-3 xl:hidden">
             {filtered.map((product) => (
-              <TableRow key={product.code}>
-                <TableCell>{product.category}</TableCell>
-                <TableCell>{product.productionGroup}</TableCell>
-                <TableCell>
-                  <span className="font-semibold text-gray-900">{product.code}</span>
-                </TableCell>
-                <TableCell>{product.description}</TableCell>
-                <TableCell>{product.format}</TableCell>
-                <TableCell>{product.packaging}</TableCell>
-                <TableCell align="right">{formatWeight(product.weightKg)}</TableCell>
-                <TableCell align="right">{formatPrice(product.basePrice)}</TableCell>
-                <TableCell>
-                  <Badge variant={product.status === "Actiu" ? "positive" : "neutral"}>{product.status}</Badge>
-                </TableCell>
-                <TableCell align="right">
-                  <div className="flex justify-end">
-                    <IconButton
-                      variant="edit"
-                      label="Editar producte"
-                      onClick={() => router.push(`/catalog/${product.code}/edit`)}
-                    />
-                  </div>
-                </TableCell>
-              </TableRow>
+              <CatalogCard
+                key={product.code}
+                product={product}
+                onEdit={() => router.push(`/catalog/${product.code}/edit`)}
+              />
             ))}
-          </TableBody>
-        </Table>
+          </div>
+
+          <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white xl:block">
+            <table className="w-full table-fixed text-sm">
+              <thead className="border-b border-gray-200">
+                <tr>
+                  <th className="w-[12%] px-2 py-2 text-left font-medium text-gray-500 break-words">Categoria</th>
+                  <th className="w-[12%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                    Agrupació producció
+                  </th>
+                  <th className="w-[10%] px-2 py-2 text-left font-medium text-gray-500 break-words">Codi</th>
+                  <th className="w-[20%] px-2 py-2 text-left font-medium text-gray-500 break-words">Descripció</th>
+                  <th className="w-[8%] px-2 py-2 text-left font-medium text-gray-500 break-words">Format</th>
+                  <th className="w-[9%] px-2 py-2 text-left font-medium text-gray-500 break-words">Envasat</th>
+                  <th className="w-[8%] px-2 py-2 text-right font-medium text-gray-500 break-words">Pes (kg)</th>
+                  <th className="w-[9%] px-2 py-2 text-right font-medium text-gray-500 break-words">Preu base</th>
+                  <th className="w-[7%] px-2 py-2 text-left font-medium text-gray-500 break-words">Estat</th>
+                  <th className="w-[5%] px-2 py-2 text-right font-medium text-gray-500 break-words">Accions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((product) => (
+                  <tr key={product.code} className="border-b border-gray-100 last:border-0">
+                    <td className="px-2 py-3 break-words text-gray-900">{product.category}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">{product.productionGroup}</td>
+                    <td className="px-2 py-3 break-words">
+                      <span className="font-semibold text-gray-900">{product.code}</span>
+                    </td>
+                    <td className="px-2 py-3 break-words text-gray-900">{product.description}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">{product.format}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">{product.packaging}</td>
+                    <td className="px-2 py-3 text-right text-gray-900">{formatWeight(product.weightKg)}</td>
+                    <td className="px-2 py-3 text-right text-gray-900">{formatPrice(product.basePrice)}</td>
+                    <td className="px-2 py-3 break-words">
+                      <Badge variant={product.status === "Actiu" ? "positive" : "neutral"}>{product.status}</Badge>
+                    </td>
+                    <td className="px-2 py-3 text-right">
+                      <div className="flex justify-end">
+                        <IconButton
+                          variant="edit"
+                          label="Editar producte"
+                          onClick={() => router.push(`/catalog/${product.code}/edit`)}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

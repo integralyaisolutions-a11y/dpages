@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ClearFiltersButton, FilterBar } from "@/components/ui/FilterBar";
+import { DataCard, DataCardActions, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
 import { DateInput } from "@/components/ui/DateInput";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
@@ -36,10 +37,10 @@ function PackagingRow({
 
   return (
     <tr className="border-b border-gray-100 last:border-0">
-      <td className="px-3 py-3 text-gray-900">
+      <td className="px-3 py-3 break-words text-gray-900">
         {line.shippingDate ? formatDateDisplay(line.shippingDate) : "—"}
       </td>
-      <td className="px-3 py-3 text-gray-900">
+      <td className="px-3 py-3 break-words text-gray-900">
         {line.deliveryDate ? formatDateDisplay(line.deliveryDate) : "—"}
       </td>
       <td className="px-3 py-3 break-words text-gray-900">{line.carrierName}</td>
@@ -80,6 +81,80 @@ function PackagingRow({
         </button>
       </td>
     </tr>
+  );
+}
+
+function PackagingCard({
+  line,
+  onSave,
+}: {
+  line: PackagingLine;
+  onSave: (orderNumber: string, lineId: string, deliveredUnits: number, deliveredWeightKg: number) => void;
+}) {
+  const { draft, setField, save, isDirty } = useEditableRow(
+    { deliveredUnits: String(line.deliveredUnits), deliveredWeightKg: String(line.deliveredWeightKg) },
+    (values) => {
+      const deliveredUnits = Number(values.deliveredUnits.replace(",", ".")) || 0;
+      const deliveredWeightKg = Number(values.deliveredWeightKg.replace(",", ".")) || 0;
+      onSave(line.orderNumber, line.id, deliveredUnits, deliveredWeightKg);
+    },
+  );
+
+  return (
+    <DataCard>
+      <p className="font-semibold text-gray-900">{line.productDescription}</p>
+      <p className="text-sm text-gray-500">{line.clientName}</p>
+
+      <div className="mt-3">
+        <DataCardGrid>
+          <DataCardField label="Data d'expedició">
+            {line.shippingDate ? formatDateDisplay(line.shippingDate) : "—"}
+          </DataCardField>
+          <DataCardField label="Data de lliurament">
+            {line.deliveryDate ? formatDateDisplay(line.deliveryDate) : "—"}
+          </DataCardField>
+          <DataCardField label="Transportista">{line.carrierName}</DataCardField>
+          <DataCardField label="Unitats demanades">{line.orderedUnits}</DataCardField>
+          <DataCardField label="Kilos demanats">{formatKg(line.orderedWeightKg)}</DataCardField>
+        </DataCardGrid>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-xs text-gray-500">Unitats lliurades</span>
+          <input
+            type="number"
+            step="0.01"
+            value={draft.deliveredUnits}
+            onChange={(event) => setField("deliveredUnits", event.target.value)}
+            className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-xs text-gray-500">Kilos lliurats</span>
+          <input
+            type="number"
+            step="0.001"
+            value={draft.deliveredWeightKg}
+            onChange={(event) => setField("deliveredWeightKg", event.target.value)}
+            className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
+          />
+        </label>
+      </div>
+
+      <DataCardActions>
+        <button
+          type="button"
+          onClick={save}
+          disabled={!isDirty}
+          className={`w-full rounded-full px-3 py-2 text-sm font-semibold ${
+            isDirty ? "bg-ink text-white hover:opacity-90" : "cursor-not-allowed bg-gray-200 text-gray-400"
+          }`}
+        >
+          Guardar
+        </button>
+      </DataCardActions>
+    </DataCard>
   );
 }
 
@@ -143,29 +218,49 @@ export default function PackagingPage() {
       {error && <p className="text-sm text-red-600">No s&apos;han pogut carregar les línies.</p>}
 
       {!isLoading && !error && (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-          <table className="w-full table-fixed text-sm">
-            <thead className="border-b border-gray-200">
-              <tr>
-                <th className="w-[10%] px-3 py-2 text-left font-medium text-gray-500 break-words">Data d&apos;expedició</th>
-                <th className="w-[9%] px-3 py-2 text-left font-medium text-gray-500">Data de lliurament</th>
-                <th className="w-[12%] px-3 py-2 text-left font-medium text-gray-500 break-words">Transportista</th>
-                <th className="w-[12%] px-3 py-2 text-left font-medium text-gray-500">Producte</th>
-                <th className="w-[10%] px-3 py-2 text-left font-medium text-gray-500">Client</th>
-                <th className="w-[10%] px-3 py-2 text-right font-medium text-gray-500 break-words">Unitats demanades</th>
-                <th className="w-[9%] px-3 py-2 text-right font-medium text-gray-500">Unitats lliurades</th>
-                <th className="w-[9%] px-3 py-2 text-right font-medium text-gray-500">Kilos demanats</th>
-                <th className="w-[9%] px-3 py-2 text-right font-medium text-gray-500">Kilos lliurats</th>
-                <th className="w-[10%] px-3 py-2 text-center font-medium text-gray-500">Guardar</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((line) => (
-                <PackagingRow key={line.id} line={line} onSave={saveLineDelivery} />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="flex flex-col gap-3 xl:hidden">
+            {filtered.map((line) => (
+              <PackagingCard key={line.id} line={line} onSave={saveLineDelivery} />
+            ))}
+          </div>
+
+          <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white xl:block">
+            <table className="w-full table-fixed text-sm">
+              <thead className="border-b border-gray-200">
+                <tr>
+                  <th className="w-[10%] px-3 py-2 text-left font-medium text-gray-500 break-words">
+                    Data d&apos;expedició
+                  </th>
+                  <th className="w-[9%] px-3 py-2 text-left font-medium text-gray-500 break-words">
+                    Data de lliurament
+                  </th>
+                  <th className="w-[12%] px-3 py-2 text-left font-medium text-gray-500 break-words">Transportista</th>
+                  <th className="w-[12%] px-3 py-2 text-left font-medium text-gray-500 break-words">Producte</th>
+                  <th className="w-[10%] px-3 py-2 text-left font-medium text-gray-500 break-words">Client</th>
+                  <th className="w-[10%] px-3 py-2 text-right font-medium text-gray-500 break-words">
+                    Unitats demanades
+                  </th>
+                  <th className="w-[9%] px-3 py-2 text-right font-medium text-gray-500 break-words">
+                    Unitats lliurades
+                  </th>
+                  <th className="w-[9%] px-3 py-2 text-right font-medium text-gray-500 break-words">
+                    Kilos demanats
+                  </th>
+                  <th className="w-[9%] px-3 py-2 text-right font-medium text-gray-500 break-words">
+                    Kilos lliurats
+                  </th>
+                  <th className="w-[10%] px-3 py-2 text-center font-medium text-gray-500 break-words">Guardar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((line) => (
+                  <PackagingRow key={line.id} line={line} onSave={saveLineDelivery} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

@@ -18,11 +18,11 @@ const ALL = "Tots";
 const ROLE_OPTIONS = [ALL, ...Object.values(ROLE_LABELS)];
 const STATUS_OPTIONS = [ALL, "Actiu", "Inactiu"];
 
-const NOM_WIDTH = 20;
-const EMAIL_WIDTH = 28;
-const ROL_WIDTH = 15;
-const ESTAT_WIDTH = 15;
-const ACCIONS_WIDTH = 22;
+const NOM_WIDTH = 18;
+const EMAIL_WIDTH = 22;
+const ROL_WIDTH = 24;
+const ESTAT_WIDTH = 16;
+const ACCIONS_WIDTH = 20;
 
 export default function UsersPage() {
   const { data, isLoading, error, createUser, editUser, deleteUser } = useUsers();
@@ -80,19 +80,22 @@ export default function UsersPage() {
           <table className="w-full table-fixed text-sm">
             <thead className="border-b border-gray-200">
               <tr>
-                <th className="px-3 py-2 text-left font-medium text-gray-500" style={{ width: `${NOM_WIDTH}%` }}>
+                <th className="px-3 py-2 text-left font-medium text-gray-500 break-words" style={{ width: `${NOM_WIDTH}%` }}>
                   Nom
                 </th>
-                <th className="px-3 py-2 text-left font-medium text-gray-500" style={{ width: `${EMAIL_WIDTH}%` }}>
+                <th className="px-3 py-2 text-left font-medium text-gray-500 break-words" style={{ width: `${EMAIL_WIDTH}%` }}>
                   Email
                 </th>
-                <th className="px-3 py-2 text-left font-medium text-gray-500" style={{ width: `${ROL_WIDTH}%` }}>
+                <th className="px-3 py-2 text-left font-medium text-gray-500 break-words" style={{ width: `${ROL_WIDTH}%` }}>
                   Rol
                 </th>
-                <th className="px-3 py-2 text-left font-medium text-gray-500" style={{ width: `${ESTAT_WIDTH}%` }}>
+                <th className="px-3 py-2 text-left font-medium text-gray-500 break-words" style={{ width: `${ESTAT_WIDTH}%` }}>
                   Estat
                 </th>
-                <th className="px-3 py-2 text-right font-medium text-gray-500" style={{ width: `${ACCIONS_WIDTH}%` }}>
+                <th
+                  className="px-3 py-2 text-right font-medium text-gray-500 break-words"
+                  style={{ width: `${ACCIONS_WIDTH}%` }}
+                >
                   Accions
                 </th>
               </tr>
@@ -104,10 +107,10 @@ export default function UsersPage() {
                     <span className="font-semibold text-gray-900">{user.name}</span>
                   </td>
                   <td className="px-3 py-3 break-words text-gray-900">{user.email}</td>
-                  <td className="px-3 py-3">
+                  <td className="px-3 py-3 break-words">
                     <Badge variant="info">{ROLE_LABELS[user.role]}</Badge>
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="px-3 py-3 break-words">
                     <Badge variant={user.status === "active" ? "positive" : "negative"}>
                       {user.status === "active" ? "Actiu" : "Inactiu"}
                     </Badge>

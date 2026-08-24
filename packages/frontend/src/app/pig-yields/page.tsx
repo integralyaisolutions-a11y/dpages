@@ -3,7 +3,7 @@
 import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/DataTable";
+import { DataCard, DataCardActions, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
 import { EditableCell } from "@/components/ui/EditableCell";
 import { ClearFiltersButton, FilterBar } from "@/components/ui/FilterBar";
 import { IconButton } from "@/components/ui/IconButton";
@@ -40,33 +40,33 @@ function PigYieldRow({
   );
 
   return (
-    <TableRow>
-      <TableCell>
+    <tr className="border-b border-gray-100 last:border-0">
+      <td className="px-2 py-3 break-words">
         <span className="font-semibold text-gray-900">{item.category}</span>
-      </TableCell>
-      <TableCell>{item.productionGroup}</TableCell>
-      <TableCell align="right">
+      </td>
+      <td className="px-2 py-3 break-words text-gray-900">{item.productionGroup}</td>
+      <td className="px-2 py-3 text-right">
         <EditableCell
           value={draft.unitsPerPig}
           formatValue={formatUnits}
           step="0.01"
           onChange={(value) => setField("unitsPerPig", value ?? 0)}
         />
-      </TableCell>
-      <TableCell align="right">
+      </td>
+      <td className="px-2 py-3 text-right">
         <EditableCell
           value={draft.kgPerUnit}
           formatValue={formatKg}
           step="0.001"
           onChange={(value) => setField("kgPerUnit", value ?? 0)}
         />
-      </TableCell>
-      <TableCell align="right">
+      </td>
+      <td className="px-2 py-3 text-right">
         <span className="font-bold text-gray-900">
           {formatKg(calculatePigYieldTotal(draft.unitsPerPig, draft.kgPerUnit))}
         </span>
-      </TableCell>
-      <TableCell align="right">
+      </td>
+      <td className="px-2 py-3 text-right">
         <div className="flex justify-end gap-1">
           <button
             type="button"
@@ -80,8 +80,75 @@ function PigYieldRow({
           </button>
           <IconButton variant="delete" label="Suprimeix línia" onClick={() => onDelete(item)} />
         </div>
-      </TableCell>
-    </TableRow>
+      </td>
+    </tr>
+  );
+}
+
+function PigYieldCard({
+  item,
+  onSave,
+  onDelete,
+}: {
+  item: PigYieldApi;
+  onSave: (id: string, patch: PigYieldPatch) => void;
+  onDelete: (item: PigYieldApi) => void;
+}) {
+  const { draft, setField, save, isDirty } = useEditableRow(
+    { unitsPerPig: item.unitsPerPig, kgPerUnit: item.kgPerUnit },
+    (values) => onSave(item.id, values),
+  );
+
+  return (
+    <DataCard>
+      <p className="font-semibold text-gray-900">{item.category}</p>
+      <p className="text-sm text-gray-500">{item.productionGroup}</p>
+
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div>
+          <p className="mb-1 text-xs text-gray-500">Unitats per porc</p>
+          <EditableCell
+            value={draft.unitsPerPig}
+            formatValue={formatUnits}
+            step="0.01"
+            onChange={(value) => setField("unitsPerPig", value ?? 0)}
+          />
+        </div>
+        <div>
+          <p className="mb-1 text-xs text-gray-500">Kg per unitat</p>
+          <EditableCell
+            value={draft.kgPerUnit}
+            formatValue={formatKg}
+            step="0.001"
+            onChange={(value) => setField("kgPerUnit", value ?? 0)}
+          />
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <DataCardGrid columns={1}>
+          <DataCardField label="Pes Total">
+            <span className="font-bold text-gray-900">
+              {formatKg(calculatePigYieldTotal(draft.unitsPerPig, draft.kgPerUnit))}
+            </span>
+          </DataCardField>
+        </DataCardGrid>
+      </div>
+
+      <DataCardActions>
+        <button
+          type="button"
+          onClick={save}
+          disabled={!isDirty}
+          className={`flex-1 rounded-full px-3 py-2 text-sm font-semibold ${
+            isDirty ? "bg-ink text-white hover:opacity-90" : "cursor-not-allowed bg-gray-200 text-gray-400"
+          }`}
+        >
+          Guardar
+        </button>
+        <IconButton variant="delete" label="Suprimeix línia" onClick={() => onDelete(item)} />
+      </DataCardActions>
+    </DataCard>
   );
 }
 
@@ -126,28 +193,39 @@ export default function PigYieldsPage() {
       {error && <p className="text-sm text-red-600">No s&apos;han pogut carregar els rendiments.</p>}
 
       {!isLoading && !error && (
-        <Table>
-          <TableHead>
-            <tr>
-              <TableHeaderCell>Categoria</TableHeaderCell>
-              <TableHeaderCell>Agrupació Producció</TableHeaderCell>
-              <TableHeaderCell align="right">Unitats per porc</TableHeaderCell>
-              <TableHeaderCell align="right">Kg per unitat</TableHeaderCell>
-              <TableHeaderCell align="right">Pes Total</TableHeaderCell>
-              <TableHeaderCell align="right">Accions</TableHeaderCell>
-            </tr>
-          </TableHead>
-          <TableBody>
+        <>
+          <div className="flex flex-col gap-3 xl:hidden">
             {filteredData.map((item) => (
-              <PigYieldRow
-                key={item.id}
-                item={item}
-                onSave={updatePigYield}
-                onDelete={setPigYieldToDelete}
-              />
+              <PigYieldCard key={item.id} item={item} onSave={updatePigYield} onDelete={setPigYieldToDelete} />
             ))}
-          </TableBody>
-        </Table>
+          </div>
+
+          <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white xl:block">
+            <table className="w-full table-fixed text-sm">
+              <thead className="border-b border-gray-200">
+                <tr>
+                  <th className="w-[14%] px-2 py-2 text-left font-medium text-gray-500 break-words">Categoria</th>
+                  <th className="w-[22%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                    Agrupació Producció
+                  </th>
+                  <th className="w-[14%] px-2 py-2 text-right font-medium text-gray-500 break-words">
+                    Unitats per porc
+                  </th>
+                  <th className="w-[14%] px-2 py-2 text-right font-medium text-gray-500 break-words">
+                    Kg per unitat
+                  </th>
+                  <th className="w-[14%] px-2 py-2 text-right font-medium text-gray-500 break-words">Pes Total</th>
+                  <th className="w-[22%] px-2 py-2 text-right font-medium text-gray-500 break-words">Accions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredData.map((item) => (
+                  <PigYieldRow key={item.id} item={item} onSave={updatePigYield} onDelete={setPigYieldToDelete} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       <PigYieldFormModal
