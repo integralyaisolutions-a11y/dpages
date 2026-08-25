@@ -67,7 +67,7 @@ function CatalogCard({ product, onEdit }: { product: ProducteApi; onEdit: () => 
 
 export default function CatalogPage() {
   const router = useRouter();
-  const { data, isLoading, error } = useCatalog();
+  const { data, isLoading, error, refetch } = useCatalog();
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState(ALL_FEM);
@@ -128,7 +128,18 @@ export default function CatalogPage() {
       </FilterBar>
 
       {isLoading && <p className="text-sm text-gray-500">Carregant...</p>}
-      {error && <p className="text-sm text-red-600">No s&apos;ha pogut carregar el catàleg.</p>}
+      {error && (
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm text-red-600">No s&apos;ha pogut carregar el catàleg: {error.message}</p>
+          <button
+            type="button"
+            onClick={refetch}
+            className="shrink-0 rounded-full border border-red-300 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
 
       {!isLoading && !error && (
         <>
@@ -137,7 +148,7 @@ export default function CatalogPage() {
               <CatalogCard
                 key={product.id}
                 product={product}
-                onEdit={() => router.push(`/catalog/${product.codi}/edit`)}
+                onEdit={() => router.push(`/catalog/${product.id}/edit`)}
               />
             ))}
           </div>
@@ -183,7 +194,7 @@ export default function CatalogPage() {
                         <IconButton
                           variant="edit"
                           label="Editar producte"
-                          onClick={() => router.push(`/catalog/${product.codi}/edit`)}
+                          onClick={() => router.push(`/catalog/${product.id}/edit`)}
                         />
                       </div>
                     </td>

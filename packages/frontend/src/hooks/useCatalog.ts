@@ -1,33 +1,58 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { ProducteApi } from "@/lib/api";
-import { addMockProduct, getMockCatalog, updateMockProduct } from "@/mocks/catalog";
+import { api, ApiError, type ProducteApi, type RespostaPaginada } from "@/lib/api";
+
+export type ProductFormValues = {
+  codi: string | null;
+  descripcio: string;
+  descripcioVenda: string | null;
+  categoriaId: number | null;
+  agrupacioProduccio: string | null;
+  format: ProducteApi["format"];
+  envasat: ProducteApi["envasat"];
+  pesKg: string | null;
+  preuVenda: string | null;
+  actiu: boolean;
+};
 
 type UseCatalogResult = {
   data: ProducteApi[];
   isLoading: boolean;
-  error: Error | null;
-  createProduct: (values: Omit<ProducteApi, "id">) => void;
-  editProduct: (codi: string, values: ProducteApi) => void;
+  error: ApiError | null;
+  refetch: () => void;
+  createProduct: (values: ProductFormValues) => Promise<void>;
+  editProduct: (id: number, values: ProductFormValues) => Promise<void>;
 };
 
-// TODO: cuando cierre el contrato con el backend, reemplazar getMockCatalog()
-// por api.get<ProducteApi[]>("/productes") sin tocar la forma del hook.
+// El màxim de pàgina del contracte és 200 (comu.ts, MIDA_PAGINA_MAXIMA) — el
+// catàleg real té ~111 articles, així que un sol GET els trau tots i es
+// manté el filtrat client-side que ja fa app/catalog/page.tsx, sense haver
+// de recablejar cada filtre a un paràmetre de query.
+const MIDA_LLISTAT = 200;
+
 export function useCatalog(): UseCatalogResult {
   const [data, setData] = useState<ProducteApi[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setIsLoading(true);
+    setError(null);
 
-    getMockCatalog()
-      .then((products) => {
-        if (!cancelled) setData(products);
+    api
+      .get<RespostaPaginada<ProducteApi>>("/productes", { mida: MIDA_LLISTAT })
+      .then((resposta) => {
+        if (!cancelled) setData(resposta.dades);
       })
       .catch((caught) => {
-        if (!cancelled) setError(caught instanceof Error ? caught : new Error(String(caught)));
+        if (!cancelled) {
+          setError(
+            caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
+          );
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -36,19 +61,43 @@ export function useCatalog(): UseCatalogResult {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadToken]);
 
-  // TODO: sustituir por mutation real (POST /productes) cuando exista backend.
-  const createProduct = useCallback((values: Omit<ProducteApi, "id">) => {
-    console.log("create product", values);
-    addMockProduct(values).then(setData);
-  }, []);
+  const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 
-  // TODO: sustituir por mutation real (PATCH /productes/:id) cuando exista backend.
-  const editProduct = useCallback((codi: string, values: ProducteApi) => {
-    console.log("edit product", codi, values);
-    updateMockProduct(codi, values).then(setData);
-  }, []);
+  // El backend espera categoriaId pla al escriure, no l'objecte categoria
+  // que sí retorna el GET (productes.ts) — es tradueix acá, no al formulari.
+  function aCosApi(values: ProductFormValues) {
+    return {
+      codi: values.codi,
+      descripcio: values.descripcio,
+      descripcioVenda: values.descripcioVenda,
+      categoriaId: values.categoriaId,
+      agrupacioProduccio: values.agrupacioProduccio,
+      format: values.format,
+      envasat: values.envasat,
+      pesKg: values.pesKg,
+      preuVenda: values.preuVenda,
+      actiu: values.actiu,
+    };
+  }
 
-  return { data, isLoading, error, createProduct, editProduct };
+  // Sin edición optimista, mismo criterio que useCategories.ts: refetch tras mutación.
+  const createProduct = useCallback(
+    async (values: ProductFormValues) => {
+      await api.post<ProducteApi>("/productes", aCosApi(values));
+      refetch();
+    },
+    [refetch],
+  );
+
+  const editProduct = useCallback(
+    async (id: number, values: ProductFormValues) => {
+      await api.patch<ProducteApi>(`/productes/${id}`, aCosApi(values));
+      refetch();
+    },
+    [refetch],
+  );
+
+  return { data, isLoading, error, refetch, createProduct, editProduct };
 }

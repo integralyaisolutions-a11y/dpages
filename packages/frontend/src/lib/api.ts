@@ -11,9 +11,9 @@
 // el backend: pasan siempre por un hook de /hooks, que a su vez usa las
 // funciones de este archivo (`api.get`/`api.post`/`api.patch`/`api.delete`).
 //
-// Todavía ningún hook llama a esto de verdad — siguen consumiendo mocks
-// (eso es trabajo pantalla por pantalla, fuera de esta sesión). Esta capa
-// sólo queda lista para que ese trabajo la use.
+// Se conecta pantalla por pantalla. Primera pantalla real: Categories
+// (hooks/useCategories.ts) — el resto sigue consumiendo mocks hasta que le
+// toque su turno.
 
 import type { CodiErrorApi, CosErrorApi, DetallErrorApi } from "@dpages/shared";
 
@@ -31,6 +31,7 @@ export type {
   RendimentPorcApi,
   RendimentPorcEntradaApi,
   UsuariApi,
+  RespostaPaginada,
 } from "@dpages/shared";
 
 // UserApi/UserRole son EXCLUSIVOS del mock de /users (administració

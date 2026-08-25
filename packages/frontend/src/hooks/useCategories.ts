@@ -1,36 +1,47 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { CategoriaApi } from "@/lib/api";
-import { addMockCategory, getMockCategories, removeMockCategory, updateMockCategory } from "@/mocks/categories";
+import { api, ApiError, type CategoriaApi, type RespostaPaginada } from "@/lib/api";
 
 export type CategoryFormValues = Pick<CategoriaApi, "nom" | "elaboratPorc" | "agrupacioRendiment">;
 
 type UseCategoriesResult = {
   data: CategoriaApi[];
   isLoading: boolean;
-  error: Error | null;
-  createCategory: (values: CategoryFormValues) => void;
-  editCategory: (id: number, values: CategoryFormValues) => void;
-  deleteCategory: (id: number) => void;
+  error: ApiError | null;
+  refetch: () => void;
+  createCategory: (values: CategoryFormValues) => Promise<void>;
+  editCategory: (id: number, values: CategoryFormValues) => Promise<void>;
+  deleteCategory: (id: number) => Promise<void>;
 };
 
-// TODO: cuando cierre el contrato con el backend, reemplazar getMockCategories()
-// por api.get<CategoriaApi[]>("/categories") sin tocar la forma del hook.
+// Sin control de paginación en esta pantalla todavía (hoy son 8 categorías,
+// contrato §1 confirma 200 como el máximo permitido) — si el listado de
+// categorías creciera más allá de esto, hace falta agregar paginación real.
+const MIDA_LLISTAT = 200;
+
 export function useCategories(): UseCategoriesResult {
   const [data, setData] = useState<CategoriaApi[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setIsLoading(true);
+    setError(null);
 
-    getMockCategories()
-      .then((categories) => {
-        if (!cancelled) setData(categories);
+    api
+      .get<RespostaPaginada<CategoriaApi>>("/categories", { mida: MIDA_LLISTAT })
+      .then((resposta) => {
+        if (!cancelled) setData(resposta.dades);
       })
       .catch((caught) => {
-        if (!cancelled) setError(caught instanceof Error ? caught : new Error(String(caught)));
+        if (!cancelled) {
+          setError(
+            caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
+          );
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -39,25 +50,36 @@ export function useCategories(): UseCategoriesResult {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadToken]);
 
-  // TODO: sustituir por mutation real (POST /categories) cuando exista backend.
-  const createCategory = useCallback((values: CategoryFormValues) => {
-    console.log("create category", values);
-    addMockCategory(values).then(setData);
-  }, []);
+  const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 
-  // TODO: sustituir por mutation real (PATCH /categories/:id) cuando exista backend.
-  const editCategory = useCallback((id: number, values: CategoryFormValues) => {
-    console.log("edit category", id, values);
-    updateMockCategory(id, { id, ...values }).then(setData);
-  }, []);
+  // Sin edición optimista a propósito: el backend devuelve la fila
+  // creada/editada, no la lista completa (a diferencia del mock viejo) —
+  // más simple y confiable re-pedir la lista que reconstruirla a mano.
+  const createCategory = useCallback(
+    async (values: CategoryFormValues) => {
+      await api.post<CategoriaApi>("/categories", values);
+      refetch();
+    },
+    [refetch],
+  );
 
-  // TODO: sustituir por mutation real (DELETE /categories/:id) contra el backend.
-  const deleteCategory = useCallback((id: number) => {
-    console.log("delete category", id);
-    removeMockCategory(id).then(setData);
-  }, []);
+  const editCategory = useCallback(
+    async (id: number, values: CategoryFormValues) => {
+      await api.patch<CategoriaApi>(`/categories/${id}`, values);
+      refetch();
+    },
+    [refetch],
+  );
 
-  return { data, isLoading, error, createCategory, editCategory, deleteCategory };
+  const deleteCategory = useCallback(
+    async (id: number) => {
+      await api.delete(`/categories/${id}`);
+      refetch();
+    },
+    [refetch],
+  );
+
+  return { data, isLoading, error, refetch, createCategory, editCategory, deleteCategory };
 }

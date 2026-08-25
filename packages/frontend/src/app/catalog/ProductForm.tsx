@@ -4,15 +4,16 @@ import { useState } from "react";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { TextField } from "@/components/ui/TextField";
 import { useCategories } from "@/hooks/useCategories";
-import type { ProducteApi } from "@/lib/api";
+import type { ProductFormValues } from "@/hooks/useCatalog";
+import { ApiError, type ProducteApi } from "@/lib/api";
 import { parseDecimalInput } from "@/lib/decimals";
 
 const STATUS_OPTIONS = ["Actiu", "Inactiu"];
-const FORMAT_OPTIONS = ["SENCER", "TALLAT"];
+const FORMAT_OPTIONS = ["SENCER", "TALLAT", "LLESCAT"];
 const PACKAGING_OPTIONS = ["NORMAL", "ESPECIAL", "NORMAL (web)", "NORMAL (pes)"];
 const NO_CATEGORY = "Selecciona...";
 
-type ProductFormValues = Omit<ProducteApi, "id">;
+type FieldErrors = { descripcio?: string; categoriaId?: string; format?: string; envasat?: string };
 
 export function ProductForm({
   initialData,
@@ -20,7 +21,7 @@ export function ProductForm({
   onCancel,
 }: {
   initialData?: ProducteApi;
-  onSave: (values: ProductFormValues) => void;
+  onSave: (values: ProductFormValues) => Promise<void>;
   onCancel: () => void;
 }) {
   const { data: categories } = useCategories();
@@ -33,25 +34,55 @@ export function ProductForm({
   const [envasat, setEnvasat] = useState<ProducteApi["envasat"]>(initialData?.envasat ?? "NORMAL");
   const [pesKg, setPesKg] = useState(initialData?.pesKg !== null ? (initialData?.pesKg ?? "0") : "0");
   const [preuVenda, setPreuVenda] = useState(initialData?.preuVenda ?? "0");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const canSave = codi.trim() !== "" && descripcio.trim() !== "";
+  const canSave = descripcio.trim() !== "";
 
-  function handleSave() {
+  async function handleSave() {
     if (!canSave) return;
     const categoria = categories.find((item) => item.nom === categoriaNom) ?? null;
-    onSave({
-      codi: codi.trim(),
-      descripcio: descripcio.trim(),
-      descripcioVenda: initialData?.descripcioVenda ?? null,
-      tipus: initialData?.tipus ?? "simple",
-      agrupacioProduccio: agrupacioProduccio.trim() || null,
-      actiu: actiu === "Actiu",
-      categoria: categoria ? { id: categoria.id, nom: categoria.nom } : null,
-      format,
-      envasat,
-      pesKg: Number(pesKg) > 0 ? parseDecimalInput(pesKg, 3) : null,
-      preuVenda: Number(preuVenda) > 0 ? parseDecimalInput(preuVenda, 2) : null,
-    });
+    setFieldErrors({});
+    setFormError(null);
+    setIsSaving(true);
+    try {
+      await onSave({
+        codi: codi.trim() || null,
+        descripcio: descripcio.trim(),
+        descripcioVenda: initialData?.descripcioVenda ?? null,
+        agrupacioProduccio: agrupacioProduccio.trim() || null,
+        actiu: actiu === "Actiu",
+        categoriaId: categoria?.id ?? null,
+        format,
+        envasat,
+        pesKg: Number(pesKg) > 0 ? parseDecimalInput(pesKg, 3) : null,
+        preuVenda: Number(preuVenda) > 0 ? parseDecimalInput(preuVenda, 2) : null,
+      });
+    } catch (caught) {
+      if (caught instanceof ApiError) {
+        const nextFieldErrors: FieldErrors = {};
+        for (const detall of caught.detalls ?? []) {
+          if (
+            detall.camp === "descripcio" ||
+            detall.camp === "categoriaId" ||
+            detall.camp === "format" ||
+            detall.camp === "envasat"
+          ) {
+            nextFieldErrors[detall.camp] = detall.missatge;
+          }
+        }
+        if (Object.keys(nextFieldErrors).length > 0) {
+          setFieldErrors(nextFieldErrors);
+        } else {
+          setFormError(caught.message);
+        }
+      } else {
+        setFormError("No s'ha pogut desar el producte.");
+      }
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
@@ -70,30 +101,44 @@ export function ProductForm({
           <SelectFilter label="Estat" options={STATUS_OPTIONS} value={actiu} onChange={setActiu} />
         </div>
 
-        <TextField label="Descripció" value={descripcio} onChange={(event) => setDescripcio(event.target.value)} />
+        <TextField
+          label="Descripció"
+          value={descripcio}
+          onChange={(event) => setDescripcio(event.target.value)}
+          error={fieldErrors.descripcio}
+        />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <SelectFilter
-            label="Categoria"
-            options={[NO_CATEGORY, ...categories.map((item) => item.nom)]}
-            value={categoriaNom}
-            onChange={setCategoriaNom}
-          />
-          <SelectFilter
-            label="Format"
-            options={FORMAT_OPTIONS}
-            value={format ?? FORMAT_OPTIONS[0]}
-            onChange={(value) => setFormat(value as ProducteApi["format"])}
-          />
+          <div>
+            <SelectFilter
+              label="Categoria"
+              options={[NO_CATEGORY, ...categories.map((item) => item.nom)]}
+              value={categoriaNom}
+              onChange={setCategoriaNom}
+            />
+            {fieldErrors.categoriaId && <p className="mt-1.5 text-xs text-red-600">{fieldErrors.categoriaId}</p>}
+          </div>
+          <div>
+            <SelectFilter
+              label="Format"
+              options={FORMAT_OPTIONS}
+              value={format ?? FORMAT_OPTIONS[0]}
+              onChange={(value) => setFormat(value as ProducteApi["format"])}
+            />
+            {fieldErrors.format && <p className="mt-1.5 text-xs text-red-600">{fieldErrors.format}</p>}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <SelectFilter
-            label="Envasat"
-            options={PACKAGING_OPTIONS}
-            value={envasat ?? PACKAGING_OPTIONS[0]}
-            onChange={(value) => setEnvasat(value as ProducteApi["envasat"])}
-          />
+          <div>
+            <SelectFilter
+              label="Envasat"
+              options={PACKAGING_OPTIONS}
+              value={envasat ?? PACKAGING_OPTIONS[0]}
+              onChange={(value) => setEnvasat(value as ProducteApi["envasat"])}
+            />
+            {fieldErrors.envasat && <p className="mt-1.5 text-xs text-red-600">{fieldErrors.envasat}</p>}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -112,6 +157,8 @@ export function ProductForm({
             onChange={(event) => setPreuVenda(event.target.value)}
           />
         </div>
+
+        {formError && <p className="text-sm text-red-600">{formError}</p>}
       </div>
 
       <div className="mt-6 flex items-center justify-between border-t border-gray-200 pt-6">
@@ -121,12 +168,12 @@ export function ProductForm({
         <button
           type="button"
           onClick={handleSave}
-          disabled={!canSave}
+          disabled={!canSave || isSaving}
           className={`rounded-full px-5 py-2.5 text-sm font-semibold ${
-            canSave ? "bg-ink text-white hover:opacity-90" : "cursor-not-allowed bg-gray-200 text-gray-400"
+            canSave && !isSaving ? "bg-ink text-white hover:opacity-90" : "cursor-not-allowed bg-gray-200 text-gray-400"
           }`}
         >
-          Desar
+          {isSaving ? "Desant..." : "Desar"}
         </button>
       </div>
     </div>
