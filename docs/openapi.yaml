@@ -1258,7 +1258,14 @@ components:
       type: object
       properties:
         id: { type: integer }
-        codi: { type: string }
+        codi:
+          type: string
+          description: >-
+            Capa 25: nunca vacío. Los clientes resueltos por el sync de
+            WooCommerce reciben uno autogenerado ("CLI" + id, SIN ancho
+            fijo — CLI45, CLI4916 — un padding fijo a 3 dígitos truncaba
+            en vez de ensanchar con ids de 4+ cifras); POST /clients (alta
+            manual) sigue pidiéndolo explícito.
         nom: { type: string }
         nif: { type: string, nullable: true }
         email: { type: string, nullable: true }

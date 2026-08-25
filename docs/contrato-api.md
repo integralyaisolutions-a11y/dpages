@@ -443,7 +443,7 @@ Filtros: `?cerca=nom&tarifaId=2&actiu=true`
   "dades": [
     {
       "id": 45,
-      "codi": "CLI045",
+      "codi": "CLI45",
       "nom": "Restaurant Example",
       "nif": "B12345678",
       "email": "exemple@example.com",
@@ -457,6 +457,19 @@ Filtros: `?cerca=nom&tarifaId=2&actiu=true`
   "paginacio": { "pagina": 1, "mida": 50, "total": 1222, "totalPagines": 25 }
 }
 ```
+
+> **`codi` (capa 25):** ya no queda vacío para ningún cliente. Los clientes
+> resueltos por el sync de WooCommerce (`resolverOCrearClient`) reciben uno
+> autogenerado, `CLI` + `id` (el mismo `id` público de este mismo objeto),
+> **sin ancho fijo** — `CLI45`, `CLI4916`, `CLI15118`, lo que corresponda.
+> (Un intento inicial rellenaba con ceros a 3 dígitos como en el ejemplo de
+> arriba; se descartó porque TRUNCABA en vez de ensanchar en cuanto el id
+> llegaba a 4 cifras — dos clientes reales con id 4916 y 4918 generaban el
+> mismo código y chocaban contra el índice único.) Los clientes existentes
+> de antes de la capa 25 se completaron una sola vez con un script de
+> backfill. `POST /clients` (alta manual, más abajo) sigue pidiendo `codi`
+> explícito — nunca se autogenera ahí, es decisión de quien carga el
+> pedido.
 
 **`PATCH /clients/:id`** — para asignar tarifa o transportista.
 

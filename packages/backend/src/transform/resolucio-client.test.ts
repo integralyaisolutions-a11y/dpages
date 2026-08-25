@@ -45,12 +45,19 @@ describe('resolverOCrearClient (Postgres real, esquema aislado)', () => {
       nif: string | null;
       email: string | null;
       nom: string | null;
-    }>('SELECT nif, email, nom FROM client WHERE id = $1', [clientId]);
-    expect(fila.rows[0]).toEqual({
+      codi: string | null;
+      id_seq: string;
+    }>('SELECT nif, email, nom, codi, id_seq FROM client WHERE id = $1', [clientId]);
+    expect(fila.rows[0]).toMatchObject({
       nif: '[redactat]',
       email: 'restaurant.example@example.com',
       nom: 'Restaurant Example',
     });
+    // Capa 25: el sync asigna codi automáticamente — CLI + id_seq, SIN
+    // padding fijo (un ancho fijo truncaba en vez de ensanchar con id_seq
+    // de 4+ cifras — bug real, ver el comentario en resolucio-client.ts).
+    // Único camino de alta de client sin codi obligatorio.
+    expect(fila.rows[0]?.codi).toBe(`CLI${fila.rows[0]!.id_seq}`);
 
     const total = await client.query<{ count: string }>('SELECT count(*) FROM client');
     expect(total.rows[0]?.count).toBe('1');
@@ -87,10 +94,13 @@ describe('resolverOCrearClient (Postgres real, esquema aislado)', () => {
     // El criterio de prioridad (NIF gana) resuelve la ambigüedad de forma
     // consistente: mismo NIF -> mismo cliente, y el email del PRIMER
     // pedido que lo creó se conserva (COALESCE, no se pisa).
-    const fila = await client.query<{ email: string }>('SELECT email FROM client WHERE id = $1', [
-      primeraVez,
-    ]);
+    const fila = await client.query<{ email: string; codi: string | null }>(
+      'SELECT email, codi FROM client WHERE id = $1',
+      [primeraVez],
+    );
     expect(fila.rows[0]?.email).toBe('restaurant.example@example.com');
+    // El re-uso vía ON CONFLICT no regenera ni toca el codi ya asignado.
+    expect(fila.rows[0]?.codi).toBe('CLI1');
 
     // No sumó un cliente nuevo: reutilizó el de "con NIF nuevo" (quedan los
     // mismos 2 de antes de este test — ese y el del invitado de "_billing_myfield5").
@@ -214,5 +224,41 @@ describe('resolverOCrearClient (Postgres real, esquema aislado)', () => {
       );
       expect(total.rows[0]?.count).toBe('0');
     });
+  });
+
+  it('regresión: id_seq de 4+ cifras no trunca el codi (bug real: 4916/4918 colisionaban en "CLI491" con padding fijo a 3 dígitos)', async () => {
+    // Fuerza el próximo id_seq a 4916 sin insertar miles de filas —
+    // reproduce EXACTO el escenario real que disparó el 23505 contra
+    // idx_client_codi. Al final del describe a propósito, con NIF/customer_id
+    // exclusivos de este test, para no interferir con los conteos
+    // acumulados que asumen los tests anteriores.
+    await client.query('ALTER TABLE client ALTER COLUMN id_seq RESTART WITH 4916');
+
+    const pedidoE: WooOrder = {
+      ...comandaSimple,
+      id: 777105,
+      customer_id: 491601,
+      meta_data: [{ id: 5, key: 'nif', value: 'NIF-REGRESSIO-E' }],
+      billing: { ...comandaSimple.billing, email: 'regressio.e@example.com' },
+    };
+    const pedidoF: WooOrder = {
+      ...comandaSimple,
+      id: 777106,
+      customer_id: 491701,
+      meta_data: [{ id: 6, key: 'nif', value: 'NIF-REGRESSIO-F' }],
+      billing: { ...comandaSimple.billing, email: 'regressio.f@example.com' },
+    };
+
+    await client.query('BEGIN');
+    const idE = await resolverOCrearClient(client, pedidoE);
+    const idF = await resolverOCrearClient(client, pedidoF);
+    await client.query('COMMIT');
+
+    const files = await client.query<{ id_seq: string; codi: string | null }>(
+      'SELECT id_seq, codi FROM client WHERE id IN ($1, $2) ORDER BY id_seq ASC',
+      [idE, idF],
+    );
+    expect(files.rows[0]).toEqual({ id_seq: '4916', codi: 'CLI4916' });
+    expect(files.rows[1]).toEqual({ id_seq: '4917', codi: 'CLI4917' });
   });
 });
