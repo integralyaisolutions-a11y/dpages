@@ -1031,12 +1031,29 @@ Filtros: `?nombrePorcs=5&agrupacioRendiment=KG&producte=Llom fresc de porc&dataD
   "totals": {
     "totalKgAElaborar": "0.000",
     "totalKgMagro": "0.000",
-    "diferencia": "0.000"
+    "diferencia": "0.000",
+    "kgJamon": "60.000",
+    "kgRecortes": "30.000",
+    "kgPaletillas": "35.000"
   },
   "dades": [],
   "paginacio": { "pagina": 1, "mida": 50, "total": 0, "totalPagines": 0 }
 }
 ```
+
+> **`kgJamon`/`kgRecortes`/`kgPaletillas`** (capa 24) — rendimiento fijo por
+> cerdo, confirmado por Francesc: de un cerdo salen en promedio 12 kg de
+> jamón, 6 kg de recortes y 7 kg de paletillas. Son **constantes de
+> negocio**, NO calculadas desde `Rendiments Porcs` (no hay artículos de
+> catálogo individuales para "jamón"/"recortes"/"paletillas" con esos
+> rendimientos cargados) — simplemente `constante × nombrePorcs`. Ejemplo
+> del ejemplo de arriba con `nombrePorcs = 5`: `12 × 5 = 60,000`,
+> `6 × 5 = 30,000`, `7 × 5 = 35,000`. Con `nombrePorcs = 10` (el caso
+> confirmado por Francesc): `120,000` / `60,000` / `70,000`. Siempre traen
+> un valor — nunca `null` — porque `nombrePorcs` ya es obligatorio para
+> todo el endpoint (ver arriba). Si estos valores cambian en el futuro
+> (por ejemplo con datos reales de rendimiento porcino), están pendientes
+> de exponerse como configuración en vez de una constante en el código.
 
 **Las tres fórmulas**, según `agrupacioRendiment` de la categoría de cada
 producto — cada agrupación calcula un par distinto de campos, el resto

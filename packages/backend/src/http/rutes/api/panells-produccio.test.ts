@@ -273,7 +273,39 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
       totalKgAElaborar: '512.982',
       totalKgMagro: '125.000',
       diferencia: '-387.982',
+      // Capa 24 — rendimiento fijo por cerdo, 12/6/7 kg × nombrePorcs.
+      kgJamon: '60.000',
+      kgRecortes: '30.000',
+      kgPaletillas: '35.000',
     });
+
+    await fastify.close();
+  });
+
+  it('capa 24 — kgJamon/kgRecortes/kgPaletillas escalan linealmente con nombrePorcs (12/6/7 kg por cerdo, Francesc)', async () => {
+    const fastify = construirServidor();
+
+    const conUnPorc = cuerpoJson<PanellProduccioApi>(
+      await fastify.inject({
+        method: 'GET',
+        url: `/api/v1/panells/produccio?nombrePorcs=1&dataDes=${DATA}&dataFins=${DATA}`,
+      }),
+    );
+    expect(conUnPorc.totals.kgJamon).toBe('12.000');
+    expect(conUnPorc.totals.kgRecortes).toBe('6.000');
+    expect(conUnPorc.totals.kgPaletillas).toBe('7.000');
+
+    // Ejemplo exacto confirmado por Francesc: 10 cerdos → Jamón 120,
+    // Recortes 60, Paletillas 70.
+    const conDiezPorcs = cuerpoJson<PanellProduccioApi>(
+      await fastify.inject({
+        method: 'GET',
+        url: `/api/v1/panells/produccio?nombrePorcs=10&dataDes=${DATA}&dataFins=${DATA}`,
+      }),
+    );
+    expect(conDiezPorcs.totals.kgJamon).toBe('120.000');
+    expect(conDiezPorcs.totals.kgRecortes).toBe('60.000');
+    expect(conDiezPorcs.totals.kgPaletillas).toBe('70.000');
 
     await fastify.close();
   });
@@ -357,6 +389,11 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
       totalKgAElaborar: '0.000',
       totalKgMagro: '0.000',
       diferencia: '0.000',
+      // kgJamon/kgRecortes/kgPaletillas son constantes fijas × nombrePorcs
+      // — no dependen de si hay datos en el rango filtrado (capa 24).
+      kgJamon: '60.000',
+      kgRecortes: '30.000',
+      kgPaletillas: '35.000',
     });
 
     await fastify.close();

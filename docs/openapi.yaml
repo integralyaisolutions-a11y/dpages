@@ -1655,6 +1655,20 @@ components:
             totalKgAElaborar: { type: string }
             totalKgMagro: { type: string }
             diferencia: { type: string }
+            kgJamon:
+              type: string
+              description: >-
+                Capa 24. Rendimiento fijo por cerdo confirmado por
+                Francesc (12 kg/cerdo) — constante de negocio, NO
+                calculada desde Rendiments Porcs: constante × nombrePorcs.
+                Nunca null (nombrePorcs ya es obligatorio en este
+                endpoint).
+            kgRecortes:
+              type: string
+              description: Igual que kgJamon — 6 kg/cerdo (Francesc).
+            kgPaletillas:
+              type: string
+              description: Igual que kgJamon — 7 kg/cerdo (Francesc).
         dades:
           type: array
           items: { $ref: '#/components/schemas/PanellProduccioFila' }

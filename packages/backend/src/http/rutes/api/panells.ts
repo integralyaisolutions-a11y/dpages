@@ -47,6 +47,18 @@ function dataIsoAmbOffset(diesOffset: number): string {
   return data.toISOString().slice(0, 10);
 }
 
+/**
+ * Rendimiento fijo por cerdo — Francesc, WhatsApp 25/08/2026: "De media, de
+ * 1 cerdo salen 12Kg de jamón, 6Kg de recortes, y 7Kg de paletillas."
+ * Valores fijos confirmados por el cliente, NO calculados desde
+ * `rendiments_porcs` (no hay artículos de catálogo individuales para
+ * "jamón"/"recortes"/"paletillas" con esos rendimientos cargados) —
+ * pendiente de exponer como configuración si cambian en el futuro.
+ */
+const KG_JAMON_PER_CERDO = 12;
+const KG_RECORTES_PER_CERDO = 6;
+const KG_PALETILLAS_PER_CERDO = 7;
+
 export function registrarRutesPanells(fastify: FastifyInstance): void {
   // ── 4.6 · Panell Oficina ─────────────────────────────────────────────
   fastify.get('/panells/oficina', async (req, reply) => {
@@ -603,6 +615,12 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
         totalKgAElaborar: totalKgAElaborarNum.toFixed(3),
         totalKgMagro: totalKgMagroNum.toFixed(3),
         diferencia: (totalKgMagroNum - totalKgAElaborarNum).toFixed(3),
+        // Capa 24 — rendimiento fijo por cerdo (ver constantes arriba).
+        // nombrePorcs ya está validado como obligatorio y > 0 más arriba
+        // en el handler, así que estos tres campos siempre traen un valor.
+        kgJamon: (KG_JAMON_PER_CERDO * nombrePorcs).toFixed(3),
+        kgRecortes: (KG_RECORTES_PER_CERDO * nombrePorcs).toFixed(3),
+        kgPaletillas: (KG_PALETILLAS_PER_CERDO * nombrePorcs).toFixed(3),
       },
       dades,
       paginacio: construirPaginacio(pagina, mida, dadesCompletes.length),

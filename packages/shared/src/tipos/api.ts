@@ -487,6 +487,17 @@ export interface PanellProduccioApi {
     totalKgAElaborar: string;
     totalKgMagro: string;
     diferencia: string;
+    /**
+     * Capa 24 — rendimiento fijo por cerdo (jamón/recortes/paletillas),
+     * confirmado por Francesc: no calculado desde `rendiments_porcs`, son
+     * constantes de negocio (`KG_JAMON_PER_CERDO` × `nombrePorcs`, y así
+     * para los otros dos). `nombrePorcs` es obligatorio en este endpoint
+     * (ver `GET /panells/produccio`), así que estos tres campos siempre
+     * traen un valor — nunca `null`.
+     */
+    kgJamon: string;
+    kgRecortes: string;
+    kgPaletillas: string;
   };
   dades: PanellProduccioFilaApi[];
   paginacio: Paginacio;
