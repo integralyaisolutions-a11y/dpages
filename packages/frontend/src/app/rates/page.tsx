@@ -1,0 +1,358 @@
+"use client";
+
+import { ChevronRight } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { EditableCell } from "@/components/ui/EditableCell";
+import { FilterBar } from "@/components/ui/FilterBar";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { SearchInput } from "@/components/ui/SearchInput";
+import { SelectFilter } from "@/components/ui/SelectFilter";
+import { useCatalog } from "@/hooks/useCatalog";
+import { useEditableRow } from "@/hooks/useEditableRow";
+import { useRates } from "@/hooks/useRates";
+import type { FilaMatriuTarifesApi, TarifaResumApi } from "@/lib/api";
+import { parseDecimalInput } from "@/lib/decimals";
+import { TariffFormModal } from "./TariffFormModal";
+
+const ALL = "Tots";
+const ALL_FEM = "Totes";
+
+// Columnes fixes (esquerra) queden "sticky": no es desplacen amb el scroll
+// horitzontal, que només afecta les columnes de tarifa i Guardar (poden
+// créixer amb "Nova tarifa"). És l'únic lloc del projecte on el scroll
+// horitzontal contingut és la solució correcta en lloc de tarjetes, perquè
+// el nombre de columnes és dinàmic.
+//
+// A mòbil (<640px) les 4 columnes fixes amb l'amplada d'escriptori (460px)
+// no caben dins del viewport: ocupen tot l'espai visible i la columna de
+// tarifes (i la seva ombra indicadora) queden fora de la vista, sense cap
+// pista que es pugui fer scroll. Per sota de 640px s'usen amplades més
+// compactes perquè les 4 columnes fixes càpiguen i quedi sempre visible
+// una franja de la primera columna de tarifa.
+const CATEGORIA_WIDTH_DESKTOP = 110;
+const FORMAT_WIDTH_DESKTOP = 90;
+const CODI_WIDTH_DESKTOP = 100;
+const DESCRIPCIO_WIDTH_DESKTOP = 160;
+
+const CATEGORIA_WIDTH_MOBILE = 62;
+const FORMAT_WIDTH_MOBILE = 54;
+const CODI_WIDTH_MOBILE = 62;
+const DESCRIPCIO_WIDTH_MOBILE = 74;
+
+const GUARDAR_WIDTH = 90;
+const TARIFF_COLUMN_WIDTH = 110;
+
+const MOBILE_BREAKPOINT_QUERY = "(max-width: 639px)";
+
+const STICKY_LEFT_SHADOW = "shadow-[4px_0_6px_-4px_rgba(0,0,0,0.15)]";
+
+function useIsMobileWidth() {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window === "undefined" ? false : window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches,
+  );
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(MOBILE_BREAKPOINT_QUERY);
+    const handleChange = (event: MediaQueryListEvent) => setIsMobile(event.matches);
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, []);
+
+  return isMobile;
+}
+
+function distinct(values: string[]) {
+  return Array.from(new Set(values));
+}
+
+type ColumnWidths = {
+  categoria: number;
+  format: number;
+  codi: number;
+  descripcio: number;
+  formatLeft: number;
+  codiLeft: number;
+  descripcioLeft: number;
+};
+
+function useColumnWidths(): ColumnWidths {
+  const isMobile = useIsMobileWidth();
+  return useMemo(() => {
+    const categoria = isMobile ? CATEGORIA_WIDTH_MOBILE : CATEGORIA_WIDTH_DESKTOP;
+    const format = isMobile ? FORMAT_WIDTH_MOBILE : FORMAT_WIDTH_DESKTOP;
+    const codi = isMobile ? CODI_WIDTH_MOBILE : CODI_WIDTH_DESKTOP;
+    const descripcio = isMobile ? DESCRIPCIO_WIDTH_MOBILE : DESCRIPCIO_WIDTH_DESKTOP;
+    return {
+      categoria,
+      format,
+      codi,
+      descripcio,
+      formatLeft: categoria,
+      codiLeft: categoria + format,
+      descripcioLeft: categoria + format + codi,
+    };
+  }, [isMobile]);
+}
+
+function RateProductRow({
+  product,
+  category,
+  format,
+  tariffColumns,
+  columnWidths,
+  onSave,
+}: {
+  product: FilaMatriuTarifesApi;
+  category: string;
+  format: string;
+  tariffColumns: TarifaResumApi[];
+  columnWidths: ColumnWidths;
+  onSave: (producteId: number, preus: Record<string, string | null>) => void;
+}) {
+  const initialPrices = useMemo(() => {
+    const entries: Record<string, number | null> = {};
+    for (const tariff of tariffColumns) {
+      const raw = product.preus[String(tariff.id)] ?? null;
+      entries[String(tariff.id)] = raw === null ? null : Number(raw);
+    }
+    return entries;
+  }, [product, tariffColumns]);
+
+  const { draft, setField, save, isDirty } = useEditableRow(initialPrices, (prices) => {
+    const preus: Record<string, string | null> = {};
+    for (const [tarifaId, value] of Object.entries(prices)) {
+      preus[tarifaId] = value === null ? null : parseDecimalInput(value, 2);
+    }
+    onSave(product.producteId, preus);
+  });
+
+  return (
+    <tr className="border-b border-gray-100 last:border-0">
+      <td
+        className="sticky left-0 z-10 bg-white px-2 py-3 break-words text-gray-900"
+        style={{ width: columnWidths.categoria }}
+      >
+        {category}
+      </td>
+      <td
+        className="sticky z-10 bg-white px-2 py-3 break-words text-gray-900"
+        style={{ left: columnWidths.formatLeft, width: columnWidths.format }}
+      >
+        {format}
+      </td>
+      <td
+        className="sticky z-10 bg-white px-2 py-3 break-words"
+        style={{ left: columnWidths.codiLeft, width: columnWidths.codi }}
+      >
+        <span className="font-semibold text-gray-900">{product.codi}</span>
+      </td>
+      <td
+        className={`sticky z-10 bg-white px-2 py-3 break-words text-gray-900 ${STICKY_LEFT_SHADOW}`}
+        style={{ left: columnWidths.descripcioLeft, width: columnWidths.descripcio }}
+      >
+        {product.descripcio}
+      </td>
+      {tariffColumns.map((tariff) => (
+        <td key={tariff.id} className="px-1 py-3 text-right" style={{ width: TARIFF_COLUMN_WIDTH }}>
+          <EditableCell
+            value={draft[String(tariff.id)] ?? null}
+            onChange={(value) => setField(String(tariff.id), value)}
+          />
+        </td>
+      ))}
+      <td className="px-2 py-3 text-center" style={{ width: GUARDAR_WIDTH }}>
+        <button
+          type="button"
+          onClick={save}
+          disabled={!isDirty}
+          className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+            isDirty ? "bg-ink text-white hover:opacity-90" : "cursor-not-allowed bg-gray-200 text-gray-400"
+          }`}
+        >
+          Guardar
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+export default function RatesPage() {
+  const { data, tariffColumns, isLoading, error, updatePrices, createTariff } = useRates();
+  const { data: catalog } = useCatalog();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState(ALL_FEM);
+  const [format, setFormat] = useState(ALL);
+  const [scrollContainer, setScrollContainer] = useState<HTMLDivElement | null>(null);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const columnWidths = useColumnWidths();
+
+  const tableWidth =
+    columnWidths.categoria +
+    columnWidths.format +
+    columnWidths.codi +
+    columnWidths.descripcio +
+    tariffColumns.length * TARIFF_COLUMN_WIDTH +
+    GUARDAR_WIDTH;
+
+  useEffect(() => {
+    if (!scrollContainer) return;
+    function updateCanScrollRight() {
+      if (!scrollContainer) return;
+      const remaining = scrollContainer.scrollWidth - scrollContainer.scrollLeft - scrollContainer.clientWidth;
+      setCanScrollRight(remaining > 1);
+    }
+    updateCanScrollRight();
+    scrollContainer.addEventListener("scroll", updateCanScrollRight);
+    window.addEventListener("resize", updateCanScrollRight);
+    return () => {
+      scrollContainer.removeEventListener("scroll", updateCanScrollRight);
+      window.removeEventListener("resize", updateCanScrollRight);
+    };
+    // tableWidth canvia quan es filtra/afegeix una tarifa; cal recalcular si hi ha més scroll disponible.
+  }, [scrollContainer, tableWidth]);
+
+  // FilaMatriuTarifesApi (contrato §4.3) no trae categoria/format: la matriz
+  // de tarifas sólo expone producteId/codi/descripcio/preus. Se derivan acá
+  // cruzando por producteId contra el catàleg (useCatalog) en vez de
+  // duplicar el dato a mano, como hacía el mock viejo (ver AUDITORIA_FRONTEND.md
+  // §4). Con los datos de ejemplo de hoy la mayoría no cruza (mocks/rates.ts
+  // usa otro conjunto de SKUs que mocks/catalog.ts, gap documentado ahí) y
+  // queda en "—" — eso es correcto, no un bug de este cruce.
+  const categoryByProductId = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const product of catalog) map.set(product.id, product.categoria?.nom ?? "—");
+    return map;
+  }, [catalog]);
+  const formatByProductId = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const product of catalog) map.set(product.id, product.format ?? "—");
+    return map;
+  }, [catalog]);
+
+  const categoryOptions = useMemo(
+    () => [ALL_FEM, ...distinct(data.map((product) => categoryByProductId.get(product.producteId) ?? "—"))],
+    [data, categoryByProductId],
+  );
+  const formatOptions = useMemo(
+    () => [ALL, ...distinct(data.map((product) => formatByProductId.get(product.producteId) ?? "—"))],
+    [data, formatByProductId],
+  );
+
+  const filtered = data.filter((product) => {
+    if (search && !product.descripcio.toLowerCase().includes(search.toLowerCase())) return false;
+    if (category !== ALL_FEM && (categoryByProductId.get(product.producteId) ?? "—") !== category) return false;
+    if (format !== ALL && (formatByProductId.get(product.producteId) ?? "—") !== format) return false;
+    return true;
+  });
+
+  return (
+    <div>
+      <PageHeader
+        title="Llistat de Tarifes"
+        subtitle="Preus dels productes per cada tarifa. Edita les cel·les i prem Guardar a la fila."
+        action={{ label: "Nova tarifa", onClick: () => setIsModalOpen(true) }}
+      />
+
+      <FilterBar>
+        <SearchInput label="Cerca descripció" value={search} onChange={setSearch} />
+        <SelectFilter label="Categoria" options={categoryOptions} value={category} onChange={setCategory} />
+        <SelectFilter label="Format" options={formatOptions} value={format} onChange={setFormat} />
+      </FilterBar>
+
+      {isLoading && <p className="text-sm text-gray-500">Carregant...</p>}
+      {error && <p className="text-sm text-red-600">No s&apos;han pogut carregar les tarifes.</p>}
+
+      {!isLoading && !error && (
+        <div className="relative">
+          <div ref={setScrollContainer} className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+            <table className="text-sm" style={{ width: tableWidth, tableLayout: "fixed", borderCollapse: "collapse" }}>
+              <thead className="border-b border-gray-200">
+                <tr>
+                  <th
+                    className="sticky left-0 z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words"
+                    style={{ width: columnWidths.categoria }}
+                  >
+                    Categoria
+                  </th>
+                  <th
+                    className="sticky z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words"
+                    style={{ left: columnWidths.formatLeft, width: columnWidths.format }}
+                  >
+                    Format
+                  </th>
+                  <th
+                    className="sticky z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words"
+                    style={{ left: columnWidths.codiLeft, width: columnWidths.codi }}
+                  >
+                    Codi Producte
+                  </th>
+                  <th
+                    className={`sticky z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words ${STICKY_LEFT_SHADOW}`}
+                    style={{ left: columnWidths.descripcioLeft, width: columnWidths.descripcio }}
+                  >
+                    Descripció
+                  </th>
+                  {tariffColumns.map((tariff) => (
+                    <th
+                      key={tariff.id}
+                      className="px-1 py-2 text-right font-medium text-gray-500 break-words"
+                      style={{ width: TARIFF_COLUMN_WIDTH }}
+                    >
+                      {tariff.nom}
+                    </th>
+                  ))}
+                  <th
+                    className="px-2 py-2 text-center font-medium text-gray-500 break-words"
+                    style={{ width: GUARDAR_WIDTH }}
+                  >
+                    Guardar
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((product) => (
+                  <RateProductRow
+                    key={product.producteId}
+                    product={product}
+                    category={categoryByProductId.get(product.producteId) ?? "—"}
+                    format={formatByProductId.get(product.producteId) ?? "—"}
+                    tariffColumns={tariffColumns}
+                    columnWidths={columnWidths}
+                    onSave={updatePrices}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Indicador de scroll: degradat + xip amb fletxa a la vora dreta, visible
+              només mentre queda contingut de tarifes per veure. Ancorat a prop de la
+              capçalera (no al centre vertical) perquè sigui visible sense haver de
+              fer scroll vertical, i no depèn de la posició de l'ombra sticky, que a
+              mòbil pot quedar fora del viewport. */}
+          {canScrollRight && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute top-0 right-0 bottom-0 flex w-12 justify-end rounded-r-xl bg-gradient-to-l from-white via-white/90 to-transparent pt-1.5 pr-1.5"
+            >
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-900/85 text-white shadow-sm">
+                <ChevronRight className="h-4 w-4" />
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      <TariffFormModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={(code, name) => {
+          createTariff(code, name);
+          setIsModalOpen(false);
+        }}
+      />
+    </div>
+  );
+}

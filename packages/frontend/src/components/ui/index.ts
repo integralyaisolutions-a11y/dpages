@@ -1,7 +1,15 @@
-// Punto de entrada de los componentes de UI genéricos y reutilizables
-// (botones, inputs, tablas, badges de estado, etc.), sin lógica de
-// negocio ni conocimiento de un panel en particular.
-//
-// TODO: exportar acá los componentes a medida que se creen.
-
-export {};
+﻿export * from "./Badge";
+export * from "./ConfirmDialog";
+export * from "./DataCard";
+export * from "./DataTable";
+export * from "./DateInput";
+export * from "./DateRangeInput";
+export * from "./EditableCell";
+export * from "./FilterBar";
+export * from "./IconButton";
+export * from "./Modal";
+export * from "./PageHeader";
+export * from "./SearchInput";
+export * from "./SelectFilter";
+export * from "./StatCard";
+export * from "./TextField";
