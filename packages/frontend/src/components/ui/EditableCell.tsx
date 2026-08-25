@@ -60,7 +60,7 @@ export function EditableCell({
     <button
       type="button"
       onClick={startEditing}
-      className="w-full rounded-md px-2 py-1 text-right text-sm text-gray-900 hover:bg-gray-50"
+      className="w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-right text-sm text-gray-900 hover:border-gray-400 hover:bg-gray-50"
     >
       {value === null ? "—" : formatValue(value)}
     </button>

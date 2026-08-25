@@ -11,7 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Gestió de Comandes",
+  title: "Gestió de Comandes - dPagès",
   description: "Panell operatiu de gestió de comandes de dPagès",
 };
 

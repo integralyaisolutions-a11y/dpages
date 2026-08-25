@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { ChevronRight } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { EditableCell } from "@/components/ui/EditableCell";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -19,30 +20,87 @@ const ALL_FEM = "Totes";
 // créixer amb "Nova tarifa"). És l'únic lloc del projecte on el scroll
 // horitzontal contingut és la solució correcta en lloc de tarjetes, perquè
 // el nombre de columnes és dinàmic.
-const CATEGORIA_WIDTH = 110;
-const FORMAT_WIDTH = 90;
-const CODI_WIDTH = 100;
-const DESCRIPCIO_WIDTH = 160;
+//
+// A mòbil (<640px) les 4 columnes fixes amb l'amplada d'escriptori (460px)
+// no caben dins del viewport: ocupen tot l'espai visible i la columna de
+// tarifes (i la seva ombra indicadora) queden fora de la vista, sense cap
+// pista que es pugui fer scroll. Per sota de 640px s'usen amplades més
+// compactes perquè les 4 columnes fixes càpiguen i quedi sempre visible
+// una franja de la primera columna de tarifa.
+const CATEGORIA_WIDTH_DESKTOP = 110;
+const FORMAT_WIDTH_DESKTOP = 90;
+const CODI_WIDTH_DESKTOP = 100;
+const DESCRIPCIO_WIDTH_DESKTOP = 160;
+
+const CATEGORIA_WIDTH_MOBILE = 62;
+const FORMAT_WIDTH_MOBILE = 54;
+const CODI_WIDTH_MOBILE = 62;
+const DESCRIPCIO_WIDTH_MOBILE = 74;
+
 const GUARDAR_WIDTH = 90;
 const TARIFF_COLUMN_WIDTH = 110;
 
-const FORMAT_LEFT = CATEGORIA_WIDTH;
-const CODI_LEFT = FORMAT_LEFT + FORMAT_WIDTH;
-const DESCRIPCIO_LEFT = CODI_LEFT + CODI_WIDTH;
+const MOBILE_BREAKPOINT_QUERY = "(max-width: 639px)";
 
 const STICKY_LEFT_SHADOW = "shadow-[4px_0_6px_-4px_rgba(0,0,0,0.15)]";
+
+function useIsMobileWidth() {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window === "undefined" ? false : window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches,
+  );
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(MOBILE_BREAKPOINT_QUERY);
+    const handleChange = (event: MediaQueryListEvent) => setIsMobile(event.matches);
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, []);
+
+  return isMobile;
+}
 
 function distinct(values: string[]) {
   return Array.from(new Set(values));
 }
 
+type ColumnWidths = {
+  categoria: number;
+  format: number;
+  codi: number;
+  descripcio: number;
+  formatLeft: number;
+  codiLeft: number;
+  descripcioLeft: number;
+};
+
+function useColumnWidths(): ColumnWidths {
+  const isMobile = useIsMobileWidth();
+  return useMemo(() => {
+    const categoria = isMobile ? CATEGORIA_WIDTH_MOBILE : CATEGORIA_WIDTH_DESKTOP;
+    const format = isMobile ? FORMAT_WIDTH_MOBILE : FORMAT_WIDTH_DESKTOP;
+    const codi = isMobile ? CODI_WIDTH_MOBILE : CODI_WIDTH_DESKTOP;
+    const descripcio = isMobile ? DESCRIPCIO_WIDTH_MOBILE : DESCRIPCIO_WIDTH_DESKTOP;
+    return {
+      categoria,
+      format,
+      codi,
+      descripcio,
+      formatLeft: categoria,
+      codiLeft: categoria + format,
+      descripcioLeft: categoria + format + codi,
+    };
+  }, [isMobile]);
+}
+
 function RateProductRow({
   product,
   tariffColumns,
+  columnWidths,
   onSave,
 }: {
   product: ProductRateApi;
   tariffColumns: TariffApi[];
+  columnWidths: ColumnWidths;
   onSave: (productCode: string, prices: Record<string, number | null>) => void;
 }) {
   const initialPrices = useMemo(() => {
@@ -59,19 +117,25 @@ function RateProductRow({
     <tr className="border-b border-gray-100 last:border-0">
       <td
         className="sticky left-0 z-10 bg-white px-2 py-3 break-words text-gray-900"
-        style={{ width: CATEGORIA_WIDTH }}
+        style={{ width: columnWidths.categoria }}
       >
         {product.category}
       </td>
-      <td className="sticky z-10 bg-white px-2 py-3 break-words text-gray-900" style={{ left: FORMAT_LEFT, width: FORMAT_WIDTH }}>
+      <td
+        className="sticky z-10 bg-white px-2 py-3 break-words text-gray-900"
+        style={{ left: columnWidths.formatLeft, width: columnWidths.format }}
+      >
         {product.format}
       </td>
-      <td className="sticky z-10 bg-white px-2 py-3 break-words" style={{ left: CODI_LEFT, width: CODI_WIDTH }}>
+      <td
+        className="sticky z-10 bg-white px-2 py-3 break-words"
+        style={{ left: columnWidths.codiLeft, width: columnWidths.codi }}
+      >
         <span className="font-semibold text-gray-900">{product.productCode}</span>
       </td>
       <td
         className={`sticky z-10 bg-white px-2 py-3 break-words text-gray-900 ${STICKY_LEFT_SHADOW}`}
-        style={{ left: DESCRIPCIO_LEFT, width: DESCRIPCIO_WIDTH }}
+        style={{ left: columnWidths.descripcioLeft, width: columnWidths.descripcio }}
       >
         {product.description}
       </td>
@@ -102,9 +166,35 @@ export default function RatesPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState(ALL_FEM);
   const [format, setFormat] = useState(ALL);
+  const [scrollContainer, setScrollContainer] = useState<HTMLDivElement | null>(null);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const columnWidths = useColumnWidths();
 
   const tableWidth =
-    CATEGORIA_WIDTH + FORMAT_WIDTH + CODI_WIDTH + DESCRIPCIO_WIDTH + tariffColumns.length * TARIFF_COLUMN_WIDTH + GUARDAR_WIDTH;
+    columnWidths.categoria +
+    columnWidths.format +
+    columnWidths.codi +
+    columnWidths.descripcio +
+    tariffColumns.length * TARIFF_COLUMN_WIDTH +
+    GUARDAR_WIDTH;
+
+  useEffect(() => {
+    if (!scrollContainer) return;
+    function updateCanScrollRight() {
+      if (!scrollContainer) return;
+      const remaining = scrollContainer.scrollWidth - scrollContainer.scrollLeft - scrollContainer.clientWidth;
+      setCanScrollRight(remaining > 1);
+    }
+    updateCanScrollRight();
+    scrollContainer.addEventListener("scroll", updateCanScrollRight);
+    window.addEventListener("resize", updateCanScrollRight);
+    return () => {
+      scrollContainer.removeEventListener("scroll", updateCanScrollRight);
+      window.removeEventListener("resize", updateCanScrollRight);
+    };
+    // tableWidth canvia quan es filtra/afegeix una tarifa; cal recalcular si hi ha més scroll disponible.
+  }, [scrollContainer, tableWidth]);
 
   const categoryOptions = useMemo(() => [ALL_FEM, ...distinct(data.map((product) => product.category))], [data]);
   const formatOptions = useMemo(() => [ALL, ...distinct(data.map((product) => product.format))], [data]);
@@ -134,62 +224,81 @@ export default function RatesPage() {
       {error && <p className="text-sm text-red-600">No s&apos;han pogut carregar les tarifes.</p>}
 
       {!isLoading && !error && (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-          <table className="text-sm" style={{ width: tableWidth, tableLayout: "fixed", borderCollapse: "collapse" }}>
-            <thead className="border-b border-gray-200">
-              <tr>
-                <th
-                  className="sticky left-0 z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words"
-                  style={{ width: CATEGORIA_WIDTH }}
-                >
-                  Categoria
-                </th>
-                <th
-                  className="sticky z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words"
-                  style={{ left: FORMAT_LEFT, width: FORMAT_WIDTH }}
-                >
-                  Format
-                </th>
-                <th
-                  className="sticky z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words"
-                  style={{ left: CODI_LEFT, width: CODI_WIDTH }}
-                >
-                  Codi Producte
-                </th>
-                <th
-                  className={`sticky z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words ${STICKY_LEFT_SHADOW}`}
-                  style={{ left: DESCRIPCIO_LEFT, width: DESCRIPCIO_WIDTH }}
-                >
-                  Descripció
-                </th>
-                {tariffColumns.map((tariff) => (
+        <div className="relative">
+          <div ref={setScrollContainer} className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+            <table className="text-sm" style={{ width: tableWidth, tableLayout: "fixed", borderCollapse: "collapse" }}>
+              <thead className="border-b border-gray-200">
+                <tr>
                   <th
-                    key={tariff.code}
-                    className="px-1 py-2 text-right font-medium text-gray-500 break-words"
-                    style={{ width: TARIFF_COLUMN_WIDTH }}
+                    className="sticky left-0 z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words"
+                    style={{ width: columnWidths.categoria }}
                   >
-                    {tariff.name}
+                    Categoria
                   </th>
+                  <th
+                    className="sticky z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words"
+                    style={{ left: columnWidths.formatLeft, width: columnWidths.format }}
+                  >
+                    Format
+                  </th>
+                  <th
+                    className="sticky z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words"
+                    style={{ left: columnWidths.codiLeft, width: columnWidths.codi }}
+                  >
+                    Codi Producte
+                  </th>
+                  <th
+                    className={`sticky z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words ${STICKY_LEFT_SHADOW}`}
+                    style={{ left: columnWidths.descripcioLeft, width: columnWidths.descripcio }}
+                  >
+                    Descripció
+                  </th>
+                  {tariffColumns.map((tariff) => (
+                    <th
+                      key={tariff.code}
+                      className="px-1 py-2 text-right font-medium text-gray-500 break-words"
+                      style={{ width: TARIFF_COLUMN_WIDTH }}
+                    >
+                      {tariff.name}
+                    </th>
+                  ))}
+                  <th
+                    className="px-2 py-2 text-center font-medium text-gray-500 break-words"
+                    style={{ width: GUARDAR_WIDTH }}
+                  >
+                    Guardar
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((product) => (
+                  <RateProductRow
+                    key={product.productCode}
+                    product={product}
+                    tariffColumns={tariffColumns}
+                    columnWidths={columnWidths}
+                    onSave={updatePrices}
+                  />
                 ))}
-                <th
-                  className="px-2 py-2 text-center font-medium text-gray-500 break-words"
-                  style={{ width: GUARDAR_WIDTH }}
-                >
-                  Guardar
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((product) => (
-                <RateProductRow
-                  key={product.productCode}
-                  product={product}
-                  tariffColumns={tariffColumns}
-                  onSave={updatePrices}
-                />
-              ))}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Indicador de scroll: degradat + xip amb fletxa a la vora dreta, visible
+              només mentre queda contingut de tarifes per veure. Ancorat a prop de la
+              capçalera (no al centre vertical) perquè sigui visible sense haver de
+              fer scroll vertical, i no depèn de la posició de l'ombra sticky, que a
+              mòbil pot quedar fora del viewport. */}
+          {canScrollRight && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute top-0 right-0 bottom-0 flex w-12 justify-end rounded-r-xl bg-gradient-to-l from-white via-white/90 to-transparent pt-1.5 pr-1.5"
+            >
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-900/85 text-white shadow-sm">
+                <ChevronRight className="h-4 w-4" />
+              </span>
+            </div>
+          )}
         </div>
       )}
 

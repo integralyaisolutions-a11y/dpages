@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { DataCard, DataCardActions } from "@/components/ui/DataCard";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { IconButton } from "@/components/ui/IconButton";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -23,6 +24,41 @@ const EMAIL_WIDTH = 22;
 const ROL_WIDTH = 24;
 const ESTAT_WIDTH = 16;
 const ACCIONS_WIDTH = 20;
+
+function UserCard({
+  user,
+  onEdit,
+  onDelete,
+}: {
+  user: UserApi;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <DataCard>
+      <p className="font-semibold text-gray-900">{user.name}</p>
+      <p className="text-sm break-words text-gray-500">{user.email}</p>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Badge variant="info">{ROLE_LABELS[user.role]}</Badge>
+        <Badge variant={user.status === "active" ? "positive" : "negative"}>
+          {user.status === "active" ? "Actiu" : "Inactiu"}
+        </Badge>
+      </div>
+
+      <DataCardActions>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="flex-1 rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Editar usuari
+        </button>
+        <IconButton variant="delete" label="Suprimeix usuari" onClick={onDelete} />
+      </DataCardActions>
+    </DataCard>
+  );
+}
 
 export default function UsersPage() {
   const { data, isLoading, error, createUser, editUser, deleteUser } = useUsers();
@@ -76,60 +112,73 @@ export default function UsersPage() {
       {error && <p className="text-sm text-red-600">No s&apos;han pogut carregar els usuaris.</p>}
 
       {!isLoading && !error && (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-          <table className="w-full table-fixed text-sm">
-            <thead className="border-b border-gray-200">
-              <tr>
-                <th className="px-3 py-2 text-left font-medium text-gray-500 break-words" style={{ width: `${NOM_WIDTH}%` }}>
-                  Nom
-                </th>
-                <th className="px-3 py-2 text-left font-medium text-gray-500 break-words" style={{ width: `${EMAIL_WIDTH}%` }}>
-                  Email
-                </th>
-                <th className="px-3 py-2 text-left font-medium text-gray-500 break-words" style={{ width: `${ROL_WIDTH}%` }}>
-                  Rol
-                </th>
-                <th className="px-3 py-2 text-left font-medium text-gray-500 break-words" style={{ width: `${ESTAT_WIDTH}%` }}>
-                  Estat
-                </th>
-                <th
-                  className="px-3 py-2 text-right font-medium text-gray-500 break-words"
-                  style={{ width: `${ACCIONS_WIDTH}%` }}
-                >
-                  Accions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((user) => (
-                <tr key={user.id} className="border-b border-gray-100 last:border-0">
-                  <td className="px-3 py-3 break-words">
-                    <span className="font-semibold text-gray-900">{user.name}</span>
-                  </td>
-                  <td className="px-3 py-3 break-words text-gray-900">{user.email}</td>
-                  <td className="px-3 py-3 break-words">
-                    <Badge variant="info">{ROLE_LABELS[user.role]}</Badge>
-                  </td>
-                  <td className="px-3 py-3 break-words">
-                    <Badge variant={user.status === "active" ? "positive" : "negative"}>
-                      {user.status === "active" ? "Actiu" : "Inactiu"}
-                    </Badge>
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    <div className="flex justify-end gap-1">
-                      <IconButton
-                        variant="edit"
-                        label="Editar usuari"
-                        onClick={() => setFormState({ mode: "edit", user })}
-                      />
-                      <IconButton variant="delete" label="Suprimeix usuari" onClick={() => setUserToDelete(user)} />
-                    </div>
-                  </td>
+        <>
+          <div className="flex flex-col gap-3 xl:hidden">
+            {filtered.map((user) => (
+              <UserCard
+                key={user.id}
+                user={user}
+                onEdit={() => setFormState({ mode: "edit", user })}
+                onDelete={() => setUserToDelete(user)}
+              />
+            ))}
+          </div>
+
+          <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white xl:block">
+            <table className="w-full table-fixed text-sm">
+              <thead className="border-b border-gray-200">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium text-gray-500 break-words" style={{ width: `${NOM_WIDTH}%` }}>
+                    Nom
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-500 break-words" style={{ width: `${EMAIL_WIDTH}%` }}>
+                    Email
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-500 break-words" style={{ width: `${ROL_WIDTH}%` }}>
+                    Rol
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-500 break-words" style={{ width: `${ESTAT_WIDTH}%` }}>
+                    Estat
+                  </th>
+                  <th
+                    className="px-3 py-2 text-right font-medium text-gray-500 break-words"
+                    style={{ width: `${ACCIONS_WIDTH}%` }}
+                  >
+                    Accions
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filtered.map((user) => (
+                  <tr key={user.id} className="border-b border-gray-100 last:border-0">
+                    <td className="px-3 py-3 break-words">
+                      <span className="font-semibold text-gray-900">{user.name}</span>
+                    </td>
+                    <td className="px-3 py-3 break-words text-gray-900">{user.email}</td>
+                    <td className="px-3 py-3 break-words">
+                      <Badge variant="info">{ROLE_LABELS[user.role]}</Badge>
+                    </td>
+                    <td className="px-3 py-3 break-words">
+                      <Badge variant={user.status === "active" ? "positive" : "negative"}>
+                        {user.status === "active" ? "Actiu" : "Inactiu"}
+                      </Badge>
+                    </td>
+                    <td className="px-3 py-3 text-right">
+                      <div className="flex justify-end gap-1">
+                        <IconButton
+                          variant="edit"
+                          label="Editar usuari"
+                          onClick={() => setFormState({ mode: "edit", user })}
+                        />
+                        <IconButton variant="delete" label="Suprimeix usuari" onClick={() => setUserToDelete(user)} />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       <UserFormModal
