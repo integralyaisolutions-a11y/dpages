@@ -4,47 +4,53 @@ import { useState } from "react";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { TextField } from "@/components/ui/TextField";
 import { useCategories } from "@/hooks/useCategories";
-import type { ProductApi } from "@/lib/api";
+import type { ProducteApi } from "@/lib/api";
+import { parseDecimalInput } from "@/lib/decimals";
 
 const STATUS_OPTIONS = ["Actiu", "Inactiu"];
 const FORMAT_OPTIONS = ["SENCER", "TALLAT"];
 const PACKAGING_OPTIONS = ["NORMAL", "ESPECIAL", "NORMAL (web)", "NORMAL (pes)"];
 const NO_CATEGORY = "Selecciona...";
 
+type ProductFormValues = Omit<ProducteApi, "id">;
+
 export function ProductForm({
   initialData,
   onSave,
   onCancel,
 }: {
-  initialData?: ProductApi;
-  onSave: (values: ProductApi) => void;
+  initialData?: ProducteApi;
+  onSave: (values: ProductFormValues) => void;
   onCancel: () => void;
 }) {
   const { data: categories } = useCategories();
-  const [code, setCode] = useState(initialData?.code ?? "");
-  const [productionGroup, setProductionGroup] = useState(initialData?.productionGroup ?? "");
-  const [status, setStatus] = useState<string>(initialData?.status ?? "Actiu");
-  const [description, setDescription] = useState(initialData?.description ?? "");
-  const [category, setCategory] = useState(initialData?.category ?? NO_CATEGORY);
-  const [format, setFormat] = useState(initialData?.format ?? "SENCER");
-  const [packaging, setPackaging] = useState(initialData?.packaging ?? "NORMAL");
-  const [weightKg, setWeightKg] = useState(initialData?.weightKg ?? 0);
-  const [basePrice, setBasePrice] = useState(initialData?.basePrice ?? 0);
+  const [codi, setCodi] = useState(initialData?.codi ?? "");
+  const [agrupacioProduccio, setAgrupacioProduccio] = useState(initialData?.agrupacioProduccio ?? "");
+  const [actiu, setActiu] = useState<string>(initialData?.actiu === false ? "Inactiu" : "Actiu");
+  const [descripcio, setDescripcio] = useState(initialData?.descripcio ?? "");
+  const [categoriaNom, setCategoriaNom] = useState(initialData?.categoria?.nom ?? NO_CATEGORY);
+  const [format, setFormat] = useState<ProducteApi["format"]>(initialData?.format ?? "SENCER");
+  const [envasat, setEnvasat] = useState<ProducteApi["envasat"]>(initialData?.envasat ?? "NORMAL");
+  const [pesKg, setPesKg] = useState(initialData?.pesKg !== null ? (initialData?.pesKg ?? "0") : "0");
+  const [preuVenda, setPreuVenda] = useState(initialData?.preuVenda ?? "0");
 
-  const canSave = code.trim() !== "" && description.trim() !== "";
+  const canSave = codi.trim() !== "" && descripcio.trim() !== "";
 
   function handleSave() {
     if (!canSave) return;
+    const categoria = categories.find((item) => item.nom === categoriaNom) ?? null;
     onSave({
-      code: code.trim(),
-      productionGroup: productionGroup.trim(),
-      status: status as ProductApi["status"],
-      description: description.trim(),
-      category: category === NO_CATEGORY ? "" : category,
+      codi: codi.trim(),
+      descripcio: descripcio.trim(),
+      descripcioVenda: initialData?.descripcioVenda ?? null,
+      tipus: initialData?.tipus ?? "simple",
+      agrupacioProduccio: agrupacioProduccio.trim() || null,
+      actiu: actiu === "Actiu",
+      categoria: categoria ? { id: categoria.id, nom: categoria.nom } : null,
       format,
-      packaging,
-      weightKg,
-      basePrice,
+      envasat,
+      pesKg: Number(pesKg) > 0 ? parseDecimalInput(pesKg, 3) : null,
+      preuVenda: Number(preuVenda) > 0 ? parseDecimalInput(preuVenda, 2) : null,
     });
   }
 
@@ -52,32 +58,42 @@ export function ProductForm({
     <div className="rounded-xl border border-gray-200 bg-white p-6">
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <TextField label="Codi de producte" value={code} onChange={(event) => setCode(event.target.value)} />
+          <TextField label="Codi de producte" value={codi} onChange={(event) => setCodi(event.target.value)} />
           <TextField
             label="Agrupació producció"
-            value={productionGroup}
-            onChange={(event) => setProductionGroup(event.target.value)}
+            value={agrupacioProduccio}
+            onChange={(event) => setAgrupacioProduccio(event.target.value)}
           />
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <SelectFilter label="Estat" options={STATUS_OPTIONS} value={status} onChange={setStatus} />
+          <SelectFilter label="Estat" options={STATUS_OPTIONS} value={actiu} onChange={setActiu} />
         </div>
 
-        <TextField label="Descripció" value={description} onChange={(event) => setDescription(event.target.value)} />
+        <TextField label="Descripció" value={descripcio} onChange={(event) => setDescripcio(event.target.value)} />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <SelectFilter
             label="Categoria"
-            options={[NO_CATEGORY, ...categories.map((item) => item.name)]}
-            value={category}
-            onChange={setCategory}
+            options={[NO_CATEGORY, ...categories.map((item) => item.nom)]}
+            value={categoriaNom}
+            onChange={setCategoriaNom}
           />
-          <SelectFilter label="Format" options={FORMAT_OPTIONS} value={format} onChange={setFormat} />
+          <SelectFilter
+            label="Format"
+            options={FORMAT_OPTIONS}
+            value={format ?? FORMAT_OPTIONS[0]}
+            onChange={(value) => setFormat(value as ProducteApi["format"])}
+          />
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <SelectFilter label="Envasat" options={PACKAGING_OPTIONS} value={packaging} onChange={setPackaging} />
+          <SelectFilter
+            label="Envasat"
+            options={PACKAGING_OPTIONS}
+            value={envasat ?? PACKAGING_OPTIONS[0]}
+            onChange={(value) => setEnvasat(value as ProducteApi["envasat"])}
+          />
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -85,15 +101,15 @@ export function ProductForm({
             label="Pes (kg)"
             type="number"
             step="0.001"
-            value={weightKg}
-            onChange={(event) => setWeightKg(Number(event.target.value))}
+            value={pesKg}
+            onChange={(event) => setPesKg(event.target.value)}
           />
           <TextField
             label="Preu base (€)"
             type="number"
             step="0.01"
-            value={basePrice}
-            onChange={(event) => setBasePrice(Number(event.target.value))}
+            value={preuVenda}
+            onChange={(event) => setPreuVenda(event.target.value)}
           />
         </div>
       </div>

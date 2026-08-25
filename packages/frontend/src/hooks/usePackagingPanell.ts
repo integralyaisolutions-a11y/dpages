@@ -7,8 +7,9 @@
 //
 // `PackagingLine` no lleva el sufijo `Api` por el mismo motivo que
 // `ObradorLine`: es una vista aplanada derivada en el cliente a partir de
-// OrderApi/ProductApi/ClientTariffApi/CarrierApi, no un contrato de backend
-// confirmado.
+// ComandaDetallApi, no un contrato de backend confirmado. Desde la capa 20
+// del contrato, la línia y la cabecera ya traen embebido lo que antes había
+// que cruzar a mano contra catàleg/clients/transportistes.
 //
 // La escritura (saveLineDelivery) reutiliza updateMockOrder, la misma
 // mutación que ya usa Comandes para editar una comanda completa — acá se
@@ -16,11 +17,7 @@
 // esa función, sin duplicar lógica de escritura.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { CarrierApi, ClientTariffApi, OrderApi, ProductApi } from "@/lib/api";
-import { calculateOrderedWeightKg } from "@/lib/orderCalculations";
-import { getMockCatalog } from "@/mocks/catalog";
-import { getMockClientTariffs } from "@/mocks/clientTariffs";
-import { getMockCarriers } from "@/mocks/carriers";
+import type { ComandaDetallApi } from "@/lib/api";
 import { getMockOrders, updateMockOrder } from "@/mocks/orders";
 
 export type PackagingLine = {
@@ -47,57 +44,40 @@ type UsePackagingPanellResult = {
   saveLineDelivery: (orderNumber: string, lineId: string, deliveredUnits: number, deliveredWeightKg: number) => void;
 };
 
-function flattenOrders(
-  orders: OrderApi[],
-  products: ProductApi[],
-  clients: ClientTariffApi[],
-  carriers: CarrierApi[],
-): PackagingLine[] {
+function flattenOrders(orders: ComandaDetallApi[]): PackagingLine[] {
   return orders.flatMap((order) =>
-    order.lines.map((line) => {
-      const product = products.find((item) => item.code === line.productCode);
-      const client = clients.find((item) => item.code === order.clientCode);
-      const carrier = carriers.find((item) => item.code === order.carrierCode);
-      const orderedWeight = calculateOrderedWeightKg(line.orderedUnits, product);
-      return {
-        id: line.id,
-        orderNumber: order.number,
-        productDescription: product?.description ?? line.productCode,
-        category: product?.category ?? "—",
-        format: product?.format ?? "—",
-        packaging: product?.packaging ?? "—",
-        clientName: client?.name ?? order.clientCode,
-        carrierName: carrier?.name ?? "—",
-        shippingDate: order.shippingDate,
-        deliveryDate: order.deliveryDate,
-        orderedUnits: line.orderedUnits,
-        orderedWeightKg: orderedWeight.isCalculated ? orderedWeight.value : line.orderedWeightKg,
-        deliveredUnits: line.deliveredUnits,
-        deliveredWeightKg: line.deliveredWeightKg,
-      };
-    }),
+    order.linies
+      .filter((line) => !line.esborrat)
+      .map((line) => ({
+        id: String(line.id),
+        orderNumber: order.num,
+        productDescription: line.producte?.descripcio ?? "—",
+        category: line.categoria ?? "—",
+        format: line.format ?? "—",
+        packaging: line.envasat ?? "—",
+        clientName: order.client?.nom ?? "—",
+        carrierName: order.transportista?.nom ?? "—",
+        shippingDate: order.dataExpedicio,
+        deliveryDate: order.dataLliurament,
+        orderedUnits: line.unitatsDemanades,
+        orderedWeightKg: Number(line.kgDemanats),
+        deliveredUnits: line.unitatsLliurades,
+        deliveredWeightKg: Number(line.kgLliurats),
+      })),
   );
 }
 
 export function usePackagingPanell(): UsePackagingPanellResult {
-  const [orders, setOrders] = useState<OrderApi[]>([]);
-  const [products, setProducts] = useState<ProductApi[]>([]);
-  const [clients, setClients] = useState<ClientTariffApi[]>([]);
-  const [carriers, setCarriers] = useState<CarrierApi[]>([]);
+  const [orders, setOrders] = useState<ComandaDetallApi[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    Promise.all([getMockOrders(), getMockCatalog(), getMockClientTariffs(), getMockCarriers()])
-      .then(([fetchedOrders, fetchedProducts, fetchedClients, fetchedCarriers]) => {
-        if (!cancelled) {
-          setOrders(fetchedOrders);
-          setProducts(fetchedProducts);
-          setClients(fetchedClients);
-          setCarriers(fetchedCarriers);
-        }
+    getMockOrders()
+      .then((fetchedOrders) => {
+        if (!cancelled) setOrders(fetchedOrders);
       })
       .catch((caught) => {
         if (!cancelled) setError(caught instanceof Error ? caught : new Error(String(caught)));
@@ -111,19 +91,23 @@ export function usePackagingPanell(): UsePackagingPanellResult {
     };
   }, []);
 
-  const data = useMemo(
-    () => flattenOrders(orders, products, clients, carriers),
-    [orders, products, clients, carriers],
-  );
+  const data = useMemo(() => flattenOrders(orders), [orders]);
 
   const saveLineDelivery = useCallback(
     (orderNumber: string, lineId: string, deliveredUnits: number, deliveredWeightKg: number) => {
-      const order = orders.find((item) => item.number === orderNumber);
+      const order = orders.find((item) => item.num === orderNumber);
       if (!order) return;
-      const updatedOrder: OrderApi = {
+      const updatedOrder: ComandaDetallApi = {
         ...order,
-        lines: order.lines.map((line) =>
-          line.id === lineId ? { ...line, deliveredUnits, deliveredWeightKg } : line,
+        linies: order.linies.map((line) =>
+          line.id === Number(lineId)
+            ? {
+                ...line,
+                unitatsLliurades: deliveredUnits,
+                kgLliurats: deliveredWeightKg.toFixed(3),
+                confirmatA: new Date().toISOString(),
+              }
+            : line,
         ),
       };
       updateMockOrder(orderNumber, updatedOrder).then(setOrders);

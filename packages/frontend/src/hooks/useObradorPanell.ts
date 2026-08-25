@@ -14,14 +14,15 @@
 //
 // Por el mismo motivo, `ObradorLine` no lleva el sufijo `Api`: no es un tipo
 // de contrato confirmado con el backend (esos van en lib/api.ts), es una
-// vista aplanada derivada en el cliente a partir de OrderApi/ProductApi/
-// ClientTariffApi mientras ese contrato no cierra.
+// vista aplanada derivada en el cliente a partir de ComandaDetallApi
+// mientras ese contrato no cierra. Ya no hace falta cruzar por separado
+// contra el catàleg/clients: desde la capa 20 del contrato, cada línia de
+// comanda (ComandaLiniaApi) ya trae categoria/format/envasat resueltos, y
+// la cabecera ya trae el client embebido — igual que expone `GET
+// /panells/obrador` de verdad (contrato §4.7).
 
 import { useEffect, useState } from "react";
 import { mockRequest } from "@/lib/mockClient";
-import { calculateOrderedWeightKg } from "@/lib/orderCalculations";
-import { getMockCatalog } from "@/mocks/catalog";
-import { getMockClientTariffs } from "@/mocks/clientTariffs";
 import { getMockOrders } from "@/mocks/orders";
 
 export type ObradorLine = {
@@ -50,25 +51,22 @@ export function useObradorPanell(): UseObradorPanellResult {
   useEffect(() => {
     let cancelled = false;
 
-    Promise.all([getMockOrders(), getMockCatalog(), getMockClientTariffs()])
-      .then(([orders, products, clients]) => {
+    getMockOrders()
+      .then((orders) => {
         const lines: ObradorLine[] = orders.flatMap((order) =>
-          order.lines.map((line) => {
-            const product = products.find((item) => item.code === line.productCode);
-            const client = clients.find((item) => item.code === order.clientCode);
-            const orderedWeight = calculateOrderedWeightKg(line.orderedUnits, product);
-            return {
-              id: line.id,
-              productDescription: product?.description ?? line.productCode,
-              packaging: product?.packaging ?? "—",
-              format: product?.format ?? "—",
-              clientName: client?.name ?? order.clientCode,
-              productionDate: line.productionDate,
-              units: line.orderedUnits,
-              weightKg: orderedWeight.isCalculated ? orderedWeight.value : line.orderedWeightKg,
-              productionNotes: line.productionNotes,
-            };
-          }),
+          order.linies
+            .filter((line) => !line.esborrat)
+            .map((line) => ({
+              id: String(line.id),
+              productDescription: line.producte?.descripcio ?? "—",
+              packaging: line.envasat ?? "—",
+              format: line.format ?? "—",
+              clientName: order.client?.nom ?? "—",
+              productionDate: line.dataProduccio,
+              units: line.unitatsDemanades,
+              weightKg: Number(line.kgDemanats),
+              productionNotes: line.obsProduccio ?? "",
+            })),
         );
         return mockRequest(lines);
       })

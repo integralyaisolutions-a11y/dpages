@@ -10,7 +10,7 @@ import { SelectFilter } from "@/components/ui/SelectFilter";
 import { StatCard } from "@/components/ui/StatCard";
 import type { ObradorLine } from "@/hooks/useObradorPanell";
 import { useObradorPanell } from "@/hooks/useObradorPanell";
-import { formatDateDisplay } from "@/lib/orderCalculations";
+import { formatData } from "@/lib/dates";
 
 const ALL = "Tots";
 
@@ -29,7 +29,7 @@ function WorkshopCard({ line }: { line: ObradorLine }) {
           <DataCardField label="Envasat">{line.packaging}</DataCardField>
           <DataCardField label="Format">{line.format}</DataCardField>
           <DataCardField label="Data producció">
-            {line.productionDate ? formatDateDisplay(line.productionDate) : "—"}
+            {line.productionDate ? formatData(line.productionDate, false) : "—"}
           </DataCardField>
           <DataCardField label="Unitats">{line.units}</DataCardField>
           <DataCardField label="Pes (kg)">{formatKg(line.weightKg)}</DataCardField>
@@ -65,7 +65,7 @@ export default function WorkshopPage() {
     }
     if (packagingFilter !== ALL && line.packaging !== packagingFilter) return false;
     if (formatFilter !== ALL && line.format !== formatFilter) return false;
-    if (productionDateFilter && line.productionDate !== productionDateFilter) return false;
+    if (productionDateFilter && line.productionDate?.slice(0, 10) !== productionDateFilter) return false;
     return true;
   });
 
@@ -143,7 +143,7 @@ export default function WorkshopPage() {
                     <td className="px-3 py-3 break-words text-gray-900">{line.format}</td>
                     <td className="px-3 py-3 break-words text-gray-900">{line.clientName}</td>
                     <td className="px-3 py-3 break-words text-gray-900">
-                      {line.productionDate ? formatDateDisplay(line.productionDate) : "—"}
+                      {line.productionDate ? formatData(line.productionDate, false) : "—"}
                     </td>
                     <td className="px-3 py-3 text-right text-gray-900">{line.units}</td>
                     <td className="px-3 py-3 text-right text-gray-900">{formatKg(line.weightKg)}</td>

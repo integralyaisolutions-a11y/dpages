@@ -1,21 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { ProductApi } from "@/lib/api";
+import type { ProducteApi } from "@/lib/api";
 import { addMockProduct, getMockCatalog, updateMockProduct } from "@/mocks/catalog";
 
 type UseCatalogResult = {
-  data: ProductApi[];
+  data: ProducteApi[];
   isLoading: boolean;
   error: Error | null;
-  createProduct: (values: ProductApi) => void;
-  editProduct: (code: string, values: ProductApi) => void;
+  createProduct: (values: Omit<ProducteApi, "id">) => void;
+  editProduct: (codi: string, values: ProducteApi) => void;
 };
 
 // TODO: cuando cierre el contrato con el backend, reemplazar getMockCatalog()
-// por api.get<ProductApi[]>("/catalog") sin tocar la forma del hook.
+// por api.get<ProducteApi[]>("/productes") sin tocar la forma del hook.
 export function useCatalog(): UseCatalogResult {
-  const [data, setData] = useState<ProductApi[]>([]);
+  const [data, setData] = useState<ProducteApi[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -38,16 +38,16 @@ export function useCatalog(): UseCatalogResult {
     };
   }, []);
 
-  // TODO: sustituir por mutation real (POST /catalog) cuando exista backend.
-  const createProduct = useCallback((values: ProductApi) => {
+  // TODO: sustituir por mutation real (POST /productes) cuando exista backend.
+  const createProduct = useCallback((values: Omit<ProducteApi, "id">) => {
     console.log("create product", values);
     addMockProduct(values).then(setData);
   }, []);
 
-  // TODO: sustituir por mutation real (PATCH /catalog/:code) cuando exista backend.
-  const editProduct = useCallback((code: string, values: ProductApi) => {
-    console.log("edit product", code, values);
-    updateMockProduct(code, values).then(setData);
+  // TODO: sustituir por mutation real (PATCH /productes/:id) cuando exista backend.
+  const editProduct = useCallback((codi: string, values: ProducteApi) => {
+    console.log("edit product", codi, values);
+    updateMockProduct(codi, values).then(setData);
   }, []);
 
   return { data, isLoading, error, createProduct, editProduct };

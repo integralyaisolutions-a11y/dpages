@@ -9,7 +9,7 @@ import { useCatalog } from "@/hooks/useCatalog";
 import { useClientTariffs } from "@/hooks/useClientTariffs";
 import { useOrders } from "@/hooks/useOrders";
 import { useRates } from "@/hooks/useRates";
-import type { OrderApi } from "@/lib/api";
+import type { ComandaDetallApi } from "@/lib/api";
 import { OrderForm, type OrderFormHandle } from "../OrderForm";
 
 export default function NewOrderPage() {
@@ -21,7 +21,7 @@ export default function NewOrderPage() {
   const { data: products } = useCatalog();
   const formRef = useRef<OrderFormHandle>(null);
 
-  function handleSave(values: Omit<OrderApi, "number">) {
+  function handleSave(values: Omit<ComandaDetallApi, "id" | "num">) {
     createOrder(values);
     router.push("/orders");
   }

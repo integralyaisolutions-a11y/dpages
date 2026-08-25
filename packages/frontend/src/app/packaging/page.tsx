@@ -11,7 +11,7 @@ import { StatCard } from "@/components/ui/StatCard";
 import { useCarriers } from "@/hooks/useCarriers";
 import { useEditableRow } from "@/hooks/useEditableRow";
 import { usePackagingPanell, type PackagingLine } from "@/hooks/usePackagingPanell";
-import { formatDateDisplay } from "@/lib/orderCalculations";
+import { formatData } from "@/lib/dates";
 
 const ALL = "Tots";
 
@@ -38,10 +38,10 @@ function PackagingRow({
   return (
     <tr className="border-b border-gray-100 last:border-0">
       <td className="px-3 py-3 break-words text-gray-900">
-        {line.shippingDate ? formatDateDisplay(line.shippingDate) : "—"}
+        {line.shippingDate ? formatData(line.shippingDate, true) : "—"}
       </td>
       <td className="px-3 py-3 break-words text-gray-900">
-        {line.deliveryDate ? formatDateDisplay(line.deliveryDate) : "—"}
+        {line.deliveryDate ? formatData(line.deliveryDate, true) : "—"}
       </td>
       <td className="px-3 py-3 break-words text-gray-900">{line.carrierName}</td>
       <td className="px-3 py-3 break-words">
@@ -108,10 +108,10 @@ function PackagingCard({
       <div className="mt-3">
         <DataCardGrid>
           <DataCardField label="Data d'expedició">
-            {line.shippingDate ? formatDateDisplay(line.shippingDate) : "—"}
+            {line.shippingDate ? formatData(line.shippingDate, true) : "—"}
           </DataCardField>
           <DataCardField label="Data de lliurament">
-            {line.deliveryDate ? formatDateDisplay(line.deliveryDate) : "—"}
+            {line.deliveryDate ? formatData(line.deliveryDate, true) : "—"}
           </DataCardField>
           <DataCardField label="Transportista">{line.carrierName}</DataCardField>
           <DataCardField label="Unitats demanades">{line.orderedUnits}</DataCardField>
@@ -177,8 +177,8 @@ export default function PackagingPage() {
   }
 
   const filtered = data.filter((line) => {
-    if (shippingDateFilter && line.shippingDate !== shippingDateFilter) return false;
-    if (deliveryDateFilter && line.deliveryDate !== deliveryDateFilter) return false;
+    if (shippingDateFilter && line.shippingDate?.slice(0, 10) !== shippingDateFilter) return false;
+    if (deliveryDateFilter && line.deliveryDate?.slice(0, 10) !== deliveryDateFilter) return false;
     if (carrierFilter !== ALL && line.carrierName !== carrierFilter) return false;
     if (productSearch && !line.productDescription.toLowerCase().includes(productSearch.toLowerCase())) return false;
     if (clientSearch && !line.clientName.toLowerCase().includes(clientSearch.toLowerCase())) return false;
@@ -205,7 +205,7 @@ export default function PackagingPage() {
         <DateInput label="Data de lliurament" value={deliveryDateFilter} onChange={setDeliveryDateFilter} />
         <SelectFilter
           label="Transportista"
-          options={[ALL, ...carriers.map((item) => item.name)]}
+          options={[ALL, ...carriers.map((item) => item.nom)]}
           value={carrierFilter}
           onChange={setCarrierFilter}
         />
@@ -265,3 +265,5 @@ export default function PackagingPage() {
     </div>
   );
 }
+
+

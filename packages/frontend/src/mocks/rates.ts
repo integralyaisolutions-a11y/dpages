@@ -1,147 +1,93 @@
-import type { ProductRateApi, TariffApi } from "@/lib/api";
+import type { FilaMatriuTarifesApi, TarifaResumApi } from "@/lib/api";
 import { mockRequest } from "@/lib/mockClient";
 
-let tariffColumns: TariffApi[] = [
-  { code: "BOTIFARRA", name: "BOTIFARRA" },
-  { code: "CATALUNYA", name: "CATALUNYA" },
-  { code: "CCAA", name: "CCAA" },
-  { code: "USA", name: "Estados Unidos" },
-  { code: "EXPORTACIO", name: "Exportacio" },
-  { code: "SARGAIRE", name: "SARGAIRE" },
-  { code: "WEB+PART", name: "WEB+PART" },
+let tariffColumns: TarifaResumApi[] = [
+  { id: 1, codi: "BOTIFARRA", nom: "BOTIFARRA" },
+  { id: 2, codi: "CATALUNYA", nom: "CATALUNYA" },
+  { id: 3, codi: "CCAA", nom: "CCAA" },
+  { id: 4, codi: "USA", nom: "Estados Unidos" },
+  { id: 5, codi: "EXPORTACIO", nom: "Exportacio" },
+  { id: 6, codi: "SARGAIRE", nom: "SARGAIRE" },
+  { id: 7, codi: "WEB+PART", nom: "WEB+PART" },
 ];
 
-let productRates: ProductRateApi[] = [
+let nextTariffId = tariffColumns.length + 1;
+
+/**
+ * `producteId` 101+ (a propòsit fora del rang 1-8 del mock de catàleg,
+ * `mocks/catalog.ts`): aquesta llista de tarifes és una altra mostra de dades
+ * que no comparteix SKU amb el mock del catàleg (gap ja documentat a
+ * AUDITORIA_FRONTEND.md §4 — dues fonts de veritat separades). No inventem
+ * un encreuament fals assignant-los un id que sí existeixi al catàleg.
+ */
+let productRates: FilaMatriuTarifesApi[] = [
   {
-    productCode: "BOTTN6",
-    category: "ELABORAT FRESC",
-    format: "boti X 2UT",
-    description: "BOTIFARRA",
-    prices: {
-      BOTIFARRA: 10.45,
-      CATALUNYA: 4.43,
-      CCAA: 5.01,
-      USA: null,
-      EXPORTACIO: null,
-      SARGAIRE: null,
-      "WEB+PART": null,
-    },
+    producteId: 101,
+    codi: "BOTTN6",
+    descripcio: "BOTIFARRA",
+    preus: { "1": "10.45", "2": "4.43", "3": "5.01", "4": null, "5": null, "6": null, "7": null },
   },
   {
-    productCode: "COLLTN",
-    category: "ELABORAT FRESC",
-    format: "boti X 2UT",
-    description: "COLL",
-    prices: {
-      BOTIFARRA: null,
-      CATALUNYA: 36.33,
-      CCAA: 35.88,
-      USA: null,
-      EXPORTACIO: 37.97,
-      SARGAIRE: null,
-      "WEB+PART": null,
-    },
+    producteId: 102,
+    codi: "COLLTN",
+    descripcio: "COLL",
+    preus: { "1": null, "2": "36.33", "3": "35.88", "4": null, "5": "37.97", "6": null, "7": null },
   },
   {
-    productCode: "DONBLTNW",
-    category: "ELABORAT FRESC",
-    format: "boti X 2UT",
-    description: "DONEGAL BLANC",
-    prices: {
-      BOTIFARRA: null,
-      CATALUNYA: 16.01,
-      CCAA: 16.83,
-      USA: null,
-      EXPORTACIO: 16.44,
-      SARGAIRE: null,
-      "WEB+PART": null,
-    },
+    producteId: 103,
+    codi: "DONBLTNW",
+    descripcio: "DONEGAL BLANC",
+    preus: { "1": null, "2": "16.01", "3": "16.83", "4": null, "5": "16.44", "6": null, "7": null },
   },
   {
-    productCode: "GARRTE",
-    category: "ELABORAT FRESC",
-    format: "boti X 2UT",
-    description: "GARRONS",
-    prices: {
-      BOTIFARRA: null,
-      CATALUNYA: 7.4,
-      CCAA: 7.13,
-      USA: null,
-      EXPORTACIO: null,
-      SARGAIRE: null,
-      "WEB+PART": null,
-    },
+    producteId: 104,
+    codi: "GARRTE",
+    descripcio: "GARRONS",
+    preus: { "1": null, "2": "7.40", "3": "7.13", "4": null, "5": null, "6": null, "7": null },
   },
   {
-    productCode: "CTLLTATN",
-    category: "PECES NOBLES KG",
-    format: "TALLAT",
-    description: "COSTELLETA",
-    prices: {
-      BOTIFARRA: null,
-      CATALUNYA: null,
-      CCAA: 7.29,
-      USA: null,
-      EXPORTACIO: null,
-      SARGAIRE: null,
-      "WEB+PART": null,
-    },
+    producteId: 105,
+    codi: "CTLLTATN",
+    descripcio: "COSTELLETA",
+    preus: { "1": null, "2": null, "3": "7.29", "4": null, "5": null, "6": null, "7": null },
   },
   {
-    productCode: "HAMTN2",
-    category: "ELABORAT FRESC",
-    format: "TALLAT",
-    description: "HAMBURGUESA",
-    prices: {
-      BOTIFARRA: null,
-      CATALUNYA: null,
-      CCAA: 7.75,
-      USA: null,
-      EXPORTACIO: null,
-      SARGAIRE: null,
-      "WEB+PART": null,
-    },
+    producteId: 106,
+    codi: "HAMTN2",
+    descripcio: "HAMBURGUESA",
+    preus: { "1": null, "2": null, "3": "7.75", "4": null, "5": null, "6": null, "7": null },
   },
   {
-    productCode: "PICTN250",
-    category: "ELABORAT FRESC",
-    format: "boti X 2UT",
-    description: "PICADA 250",
-    prices: {
-      BOTIFARRA: null,
-      CATALUNYA: 34.0,
-      CCAA: 22.0,
-      USA: null,
-      EXPORTACIO: 30.12,
-      SARGAIRE: null,
-      "WEB+PART": null,
-    },
+    producteId: 107,
+    codi: "PICTN250",
+    descripcio: "PICADA 250",
+    preus: { "1": null, "2": "34.00", "3": "22.00", "4": null, "5": "30.12", "6": null, "7": null },
   },
 ];
 
-export function getMockTariffColumns(): Promise<TariffApi[]> {
+export function getMockTariffColumns(): Promise<TarifaResumApi[]> {
   return mockRequest(tariffColumns);
 }
 
-export function getMockRates(): Promise<ProductRateApi[]> {
+export function getMockRates(): Promise<FilaMatriuTarifesApi[]> {
   return mockRequest(productRates);
 }
 
-export function addMockTariff(tariff: TariffApi): Promise<{ tariffColumns: TariffApi[]; data: ProductRateApi[] }> {
-  tariffColumns = [...tariffColumns, tariff];
+export function addMockTariff(
+  tariff: Omit<TarifaResumApi, "id">,
+): Promise<{ tariffColumns: TarifaResumApi[]; data: FilaMatriuTarifesApi[] }> {
+  const created = { id: nextTariffId++, ...tariff };
+  tariffColumns = [...tariffColumns, created];
   productRates = productRates.map((product) => ({
     ...product,
-    prices: { ...product.prices, [tariff.code]: null },
+    preus: { ...product.preus, [String(created.id)]: null },
   }));
   return mockRequest({ tariffColumns, data: productRates });
 }
 
-export function updateMockPrices(
-  productCode: string,
-  prices: Record<string, number | null>,
-): Promise<ProductRateApi[]> {
+export function updateMockPrices(producteId: number, preus: Record<string, string | null>): Promise<FilaMatriuTarifesApi[]> {
   productRates = productRates.map((product) =>
-    product.productCode === productCode ? { ...product, prices: { ...product.prices, ...prices } } : product,
+    product.producteId === producteId ? { ...product, preus: { ...product.preus, ...preus } } : product,
   );
   return mockRequest(productRates);
 }

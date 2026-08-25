@@ -5,10 +5,14 @@ import { Modal } from "@/components/ui/Modal";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { TextField } from "@/components/ui/TextField";
 import { useCatalog } from "@/hooks/useCatalog";
-import { useCategories } from "@/hooks/useCategories";
-import type { PigYieldApi } from "@/lib/api";
+import type { RendimentPorcEntradaApi } from "@/lib/api";
+import { parseDecimalInput } from "@/lib/decimals";
 
 const PLACEHOLDER = "Selecciona...";
+
+function productLabel(product: { id: number; codi: string | null; descripcio: string }) {
+  return `${product.codi ?? product.id} · ${product.descripcio}`;
+}
 
 export function PigYieldFormModal({
   isOpen,
@@ -17,78 +21,50 @@ export function PigYieldFormModal({
 }: {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (values: Omit<PigYieldApi, "id">) => void;
+  onSave: (values: RendimentPorcEntradaApi) => void;
 }) {
-  const { data: categories } = useCategories();
   const { data: products } = useCatalog();
 
-  const yieldGroupOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(categories.map((category) => category.agrupacioRendiment).filter((value): value is string => Boolean(value))),
-      ),
-    [categories],
-  );
-  const categoryOptions = useMemo(() => categories.map((category) => category.name), [categories]);
-  const productionGroupOptions = useMemo(
-    () => Array.from(new Set(products.map((product) => product.productionGroup))),
-    [products],
-  );
-  const productOptions = useMemo(
-    () => products.map((product) => `${product.code} · ${product.description}`),
-    [products],
-  );
+  const productOptions = useMemo(() => products.map((product) => productLabel(product)), [products]);
 
-  const [yieldGroup, setYieldGroup] = useState(PLACEHOLDER);
-  const [category, setCategory] = useState(PLACEHOLDER);
-  const [productionGroup, setProductionGroup] = useState(PLACEHOLDER);
-  const [product, setProduct] = useState(PLACEHOLDER);
+  const [productLabelValue, setProductLabelValue] = useState(PLACEHOLDER);
   const [unitsPerPig, setUnitsPerPig] = useState("");
   const [kgPerUnit, setKgPerUnit] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  const selectedProduct = products.find((product) => productLabel(product) === productLabelValue);
+
   function handleSave() {
-    if (category === PLACEHOLDER || productionGroup === PLACEHOLDER) {
-      setError("Selecciona categoria i agrupació producció.");
+    if (!selectedProduct) {
+      setError("Selecciona un producte.");
       return;
     }
     onSave({
-      category,
-      productionGroup,
-      unitsPerPig: Number(unitsPerPig.replace(",", ".")) || 0,
-      kgPerUnit: Number(kgPerUnit.replace(",", ".")) || 0,
+      producteId: selectedProduct.id,
+      unitatsPerPorc: parseDecimalInput(unitsPerPig, 2),
+      kgPerUnitat: parseDecimalInput(kgPerUnit, 3),
     });
   }
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Nova línia">
       <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-4 sm:flex-row">
-          <SelectFilter
-            label="Agrupació Rendiment"
-            options={[PLACEHOLDER, ...yieldGroupOptions]}
-            value={yieldGroup}
-            onChange={setYieldGroup}
-          />
-          <SelectFilter
-            label="Categoria"
-            options={[PLACEHOLDER, ...categoryOptions]}
-            value={category}
-            onChange={setCategory}
-          />
-        </div>
-        <SelectFilter
-          label="Agrupació Producció"
-          options={[PLACEHOLDER, ...productionGroupOptions]}
-          value={productionGroup}
-          onChange={setProductionGroup}
-        />
         <SelectFilter
           label="Producte"
           options={[PLACEHOLDER, ...productOptions]}
-          value={product}
-          onChange={setProduct}
+          value={productLabelValue}
+          onChange={setProductLabelValue}
         />
+        {/* Agrupació Rendiment / Categoria / Agrupació Producció ya no se
+            eligen a mano: el backend real las deriva del producte (contrato
+            §4.9, sólo lectura en esta ficha) — se muestran acá una vez
+            elegido el producte, sólo para confirmar visualmente. */}
+        {selectedProduct && (
+          <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+            <p>Categoria: {selectedProduct.categoria?.nom ?? "—"}</p>
+            <p>Agrupació producció: {selectedProduct.agrupacioProduccio ?? "—"}</p>
+          </div>
+        )}
         <div className="flex flex-col gap-4 sm:flex-row">
           <div className="flex-1">
             <TextField

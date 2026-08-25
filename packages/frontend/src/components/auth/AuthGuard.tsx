@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { firstAllowedRoute, isRouteAllowed } from "@/lib/roles";
+import { firstAllowedRouteForModules, isModuleRouteAllowed } from "@/lib/roles";
 
 const PUBLIC_ROUTES = ["/login"];
 const SHARED_ROUTES = ["/profile"];
@@ -15,7 +15,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
 
   const isPublic = PUBLIC_ROUTES.includes(pathname);
   const isShared = SHARED_ROUTES.includes(pathname);
-  const isAllowedForRole = user ? isShared || isRouteAllowed(user.role, pathname) : false;
+  const isAllowedForRole = user ? isShared || isModuleRouteAllowed(user.rol.modulsPermesos, pathname) : false;
 
   useEffect(() => {
     if (isLoading) return;
@@ -26,7 +26,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     }
 
     if (isPublic || !isAllowedForRole) {
-      router.replace(firstAllowedRoute(user.role));
+      router.replace(firstAllowedRouteForModules(user.rol.modulsPermesos));
     }
   }, [user, isLoading, isPublic, isAllowedForRole, router]);
 

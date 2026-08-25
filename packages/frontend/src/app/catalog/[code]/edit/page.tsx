@@ -3,17 +3,18 @@
 import { useParams, useRouter } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useCatalog } from "@/hooks/useCatalog";
-import type { ProductApi } from "@/lib/api";
+import type { ProducteApi } from "@/lib/api";
 import { ProductForm } from "../../ProductForm";
 
 export default function EditProductPage() {
   const router = useRouter();
   const params = useParams<{ code: string }>();
   const { data, isLoading, error, editProduct } = useCatalog();
-  const product = data.find((item) => item.code === params.code);
+  const product = data.find((item) => item.codi === params.code);
 
-  function handleSave(values: ProductApi) {
-    editProduct(params.code, values);
+  function handleSave(values: Omit<ProducteApi, "id">) {
+    if (!product) return;
+    editProduct(params.code, { id: product.id, ...values });
     router.push("/catalog");
   }
 

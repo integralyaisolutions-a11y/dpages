@@ -18,26 +18,27 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { isRouteAllowed } from "@/lib/roles";
 
 type NavItem = {
   label: string;
   href: string;
+  /** Clave de `modulsPermesos` (contrato §4.12) que habilita este ítem — ver lib/roles.ts (MODUL_ROUTES). */
+  modul: string;
   icon: ComponentType<{ className?: string }>;
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { label: "Categories", href: "/categories", icon: Layers },
-  { label: "Catàleg", href: "/catalog", icon: Boxes },
-  { label: "Llistat de Tarifes", href: "/rates", icon: List },
-  { label: "Tarifes per client", href: "/client-tariffs", icon: Tag },
-  { label: "Comandes", href: "/orders", icon: Package },
-  { label: "Rendiments Porcs", href: "/pig-yields", icon: ClipboardList },
-  { label: "Panell Oficina", href: "/office", icon: LayoutGrid },
-  { label: "Panell Producció", href: "/production", icon: LayoutGrid },
-  { label: "Panell Obrador", href: "/workshop", icon: LayoutGrid },
-  { label: "Panell Empaquetat", href: "/packaging", icon: LayoutGrid },
-  { label: "Administració d'usuaris", href: "/users", icon: Users },
+  { label: "Categories", href: "/categories", modul: "categories", icon: Layers },
+  { label: "Catàleg", href: "/catalog", modul: "catalog", icon: Boxes },
+  { label: "Llistat de Tarifes", href: "/rates", modul: "tarifes", icon: List },
+  { label: "Tarifes per client", href: "/client-tariffs", modul: "tarifes-clients", icon: Tag },
+  { label: "Comandes", href: "/orders", modul: "comandes", icon: Package },
+  { label: "Rendiments Porcs", href: "/pig-yields", modul: "rendiments-porcs", icon: ClipboardList },
+  { label: "Panell Oficina", href: "/office", modul: "panell-oficina", icon: LayoutGrid },
+  { label: "Panell Producció", href: "/production", modul: "panell-produccio", icon: LayoutGrid },
+  { label: "Panell Obrador", href: "/workshop", modul: "panell-obrador", icon: LayoutGrid },
+  { label: "Panell Empaquetat", href: "/packaging", modul: "panell-empaquetat", icon: LayoutGrid },
+  { label: "Administració d'usuaris", href: "/users", modul: "usuaris", icon: Users },
 ];
 
 function UserMenu({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
@@ -59,7 +60,7 @@ function UserMenu({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: 
 
   if (!user) return null;
 
-  const initial = user.name.trim().charAt(0).toUpperCase() || "?";
+  const initial = user.nom.trim().charAt(0).toUpperCase() || "?";
 
   return (
     <div ref={containerRef} className="relative">
@@ -98,7 +99,7 @@ function UserMenu({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: 
           {initial}
         </span>
         {!collapsed && (
-          <span className="min-w-0 flex-1 truncate text-left text-sm font-medium text-gray-900">{user.name}</span>
+          <span className="min-w-0 flex-1 truncate text-left text-sm font-medium text-gray-900">{user.nom}</span>
         )}
       </button>
     </div>
@@ -118,7 +119,7 @@ function SidebarContent({
 }) {
   const pathname = usePathname();
   const { user } = useAuth();
-  const visibleItems = user ? NAV_ITEMS.filter((item) => isRouteAllowed(user.role, item.href)) : [];
+  const visibleItems = user ? NAV_ITEMS.filter((item) => user.rol.modulsPermesos.includes(item.modul)) : [];
 
   return (
     <div className="flex h-full flex-col justify-between">

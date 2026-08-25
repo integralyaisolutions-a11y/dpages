@@ -1,110 +1,142 @@
-import type { ProductApi } from "@/lib/api";
+import type { ProducteApi } from "@/lib/api";
 import { mockRequest } from "@/lib/mockClient";
 
-let catalog: ProductApi[] = [
+const CAT_ELABORAT_CUIT = { id: 1, nom: "ELABORAT CUIT" };
+const CAT_PECES_NOBLES_KG = { id: 6, nom: "PECES NOBLES KG" };
+const CAT_ELABORAT_FRESC = { id: 3, nom: "ELABORAT FRESC" };
+const CAT_ELABORAT_FUMAT = { id: 4, nom: "ELABORAT FUMAT" };
+
+let catalog: ProducteApi[] = [
   {
-    code: "BOTNGTE",
-    category: "ELABORAT CUIT",
-    productionGroup: "BOTNG",
-    description: "BOTIFARRA NEGRA",
+    id: 1,
+    codi: "BOTNGTE",
+    descripcio: "BOTIFARRA NEGRA",
+    descripcioVenda: null,
+    tipus: "simple",
+    categoria: CAT_ELABORAT_CUIT,
+    agrupacioProduccio: "BOTNG",
     format: "TALLAT",
-    packaging: "ESPECIAL",
-    weightKg: 1.2,
-    basePrice: 3.11,
-    status: "Actiu",
+    envasat: "ESPECIAL",
+    pesKg: "1.200",
+    preuVenda: "3.11",
+    actiu: true,
   },
   {
-    code: "BOTNGTN1",
-    category: "ELABORAT CUIT",
-    productionGroup: "BOTNG",
-    description: "BOTIFARRA NEGRA",
+    id: 2,
+    codi: "BOTNGTN1",
+    descripcio: "BOTIFARRA NEGRA",
+    descripcioVenda: null,
+    tipus: "simple",
+    categoria: CAT_ELABORAT_CUIT,
+    agrupacioProduccio: "BOTNG",
     format: "TALLAT",
-    packaging: "NORMAL",
-    weightKg: 1.0,
-    basePrice: 8.21,
-    status: "Actiu",
+    envasat: "NORMAL",
+    pesKg: "1.000",
+    preuVenda: "8.21",
+    actiu: true,
   },
   {
-    code: "BOTNGTN2",
-    category: "ELABORAT CUIT",
-    productionGroup: "BOTNG",
-    description: "BOTIFARRA NEGRA",
+    id: 3,
+    codi: "BOTNGTN2",
+    descripcio: "BOTIFARRA NEGRA",
+    descripcioVenda: null,
+    tipus: "simple",
+    categoria: CAT_ELABORAT_CUIT,
+    agrupacioProduccio: "BOTNG",
     format: "TALLAT",
-    packaging: "NORMAL (web)",
-    weightKg: 0.25,
-    basePrice: 29.7,
-    status: "Actiu",
+    envasat: "NORMAL (web)",
+    pesKg: "0.250",
+    preuVenda: "29.70",
+    actiu: true,
   },
   {
-    code: "BOTNGTN4",
-    category: "ELABORAT CUIT",
-    productionGroup: "BOTNG",
-    description: "BOTIFARRA NEGRA",
+    id: 4,
+    codi: "BOTNGTN4",
+    descripcio: "BOTIFARRA NEGRA",
+    descripcioVenda: null,
+    tipus: "simple",
+    categoria: CAT_ELABORAT_CUIT,
+    agrupacioProduccio: "BOTNG",
     format: "TALLAT",
-    packaging: "NORMAL",
-    weightKg: 0.5,
-    basePrice: 47.34,
-    status: "Actiu",
+    envasat: "NORMAL",
+    pesKg: "0.500",
+    preuVenda: "47.34",
+    actiu: true,
   },
   {
-    code: "BOTPERTNP",
-    category: "ELABORAT CUIT",
-    productionGroup: "BOTPE",
-    description: "BOTIFARRA PEROL",
+    id: 5,
+    codi: "BOTPERTNP",
+    descripcio: "BOTIFARRA PEROL",
+    descripcioVenda: null,
+    tipus: "simple",
+    categoria: CAT_ELABORAT_CUIT,
+    agrupacioProduccio: "BOTPE",
     format: "TALLAT",
-    packaging: "NORMAL (pes)",
-    weightKg: 0,
-    basePrice: 47.64,
-    status: "Actiu",
+    envasat: "NORMAL (pes)",
+    // pesKg null = article "a mida" (mateix criteri que el contracte real, secció 4.2).
+    pesKg: null,
+    preuVenda: "47.64",
+    actiu: true,
   },
   {
-    code: "CTLLTATN",
-    category: "PECES NOBLES KG",
-    productionGroup: "CTLL",
-    description: "COSTELLETA",
+    id: 6,
+    codi: "CTLLTATN",
+    descripcio: "COSTELLETA",
+    descripcioVenda: null,
+    tipus: "simple",
+    categoria: CAT_PECES_NOBLES_KG,
+    agrupacioProduccio: "CTLL",
     format: "TALLAT",
-    packaging: "NORMAL",
-    weightKg: 0.5,
-    // basePrice: no confirmado en la data que me pasaste, valor de relleno.
-    basePrice: 12.5,
-    status: "Actiu",
+    envasat: "NORMAL",
+    pesKg: "0.500",
+    // preuVenda: no confirmat en la data que em vau passar, valor de farciment.
+    preuVenda: "12.50",
+    actiu: true,
   },
   {
-    code: "HAMTN2",
-    category: "ELABORAT FRESC",
-    productionGroup: "HAM",
-    description: "HAMBURGUESA",
+    id: 7,
+    codi: "HAMTN2",
+    descripcio: "HAMBURGUESA",
+    descripcioVenda: null,
+    tipus: "simple",
+    categoria: CAT_ELABORAT_FRESC,
+    agrupacioProduccio: "HAM",
     format: "TALLAT",
-    packaging: "NORMAL",
-    weightKg: 0.25,
-    // basePrice: no confirmado en la data que me pasaste, valor de relleno.
-    basePrice: 6.8,
-    status: "Actiu",
+    envasat: "NORMAL",
+    pesKg: "0.250",
+    // preuVenda: no confirmat en la data que em vau passar, valor de farciment.
+    preuVenda: "6.80",
+    actiu: true,
   },
   {
-    code: "BACLLW",
-    category: "ELABORAT FUMAT",
-    productionGroup: "BAC",
-    description: "BACÓ",
+    id: 8,
+    codi: "BACLLW",
+    descripcio: "BACÓ",
+    descripcioVenda: null,
+    tipus: "simple",
+    categoria: CAT_ELABORAT_FUMAT,
+    agrupacioProduccio: "BAC",
     format: "LLESCAT",
-    packaging: "NORMAL (web)",
-    // weightKg y basePrice: no confirmados en la data que me pasaste, valores de relleno.
-    weightKg: 0.3,
-    basePrice: 9.9,
-    status: "Actiu",
+    envasat: "NORMAL (web)",
+    // pesKg i preuVenda: no confirmats en la data que em vau passar, valors de farciment.
+    pesKg: "0.300",
+    preuVenda: "9.90",
+    actiu: true,
   },
 ];
 
-export function getMockCatalog(): Promise<ProductApi[]> {
+let nextProductId = catalog.length + 1;
+
+export function getMockCatalog(): Promise<ProducteApi[]> {
   return mockRequest(catalog);
 }
 
-export function addMockProduct(product: ProductApi): Promise<ProductApi[]> {
-  catalog = [...catalog, product];
+export function addMockProduct(product: Omit<ProducteApi, "id">): Promise<ProducteApi[]> {
+  catalog = [...catalog, { id: nextProductId++, ...product }];
   return mockRequest(catalog);
 }
 
-export function updateMockProduct(code: string, product: ProductApi): Promise<ProductApi[]> {
-  catalog = catalog.map((item) => (item.code === code ? product : item));
+export function updateMockProduct(codi: string, product: ProducteApi): Promise<ProducteApi[]> {
+  catalog = catalog.map((item) => (item.codi === codi ? product : item));
   return mockRequest(catalog);
 }

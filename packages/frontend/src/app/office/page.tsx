@@ -14,58 +14,51 @@ import { useCarriers } from "@/hooks/useCarriers";
 import { useClientTariffs } from "@/hooks/useClientTariffs";
 import { useOrders } from "@/hooks/useOrders";
 import { useRates } from "@/hooks/useRates";
-import type { CarrierApi, ClientTariffApi, OrderApi, TariffApi } from "@/lib/api";
+import type { ComandaDetallApi } from "@/lib/api";
+import { formatData } from "@/lib/dates";
 import { sumOrderedWeightKg } from "@/lib/orderCalculations";
 
 const ALL = "Tots";
 const ALL_FEM = "Totes";
 
+const ESTAT_LABELS: Record<string, string> = {
+  oberta: "Oberta",
+  en_proces: "En procés",
+  tancada: "Tancada",
+  amb_incidencia: "Amb incidència",
+};
+
 function formatKg(value: number) {
   return `${value.toFixed(3).replace(".", ",")}`;
 }
 
-function formatDateShort(isoDate: string) {
-  const [, month, day] = isoDate.split("-");
-  return `${day}/${month}`;
-}
-
-function OfficeOrderCard({
-  order,
-  client,
-  tariff,
-  carrier,
-  onClick,
-}: {
-  order: OrderApi;
-  client?: ClientTariffApi;
-  tariff?: TariffApi;
-  carrier?: CarrierApi;
-  onClick: () => void;
-}) {
+function OfficeOrderCard({ order, onClick }: { order: ComandaDetallApi; onClick: () => void }) {
   return (
     <DataCard onClick={onClick}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-semibold text-gray-900">{order.number}</p>
-          <p className="text-sm text-gray-500">{client?.name ?? order.clientCode}</p>
+          <p className="font-semibold text-gray-900">{order.num}</p>
+          <p className="text-sm text-gray-500">{order.client?.nom ?? "—"}</p>
         </div>
-        <Badge variant={order.status === "Incidència" ? "negative" : "info"}>{order.status}</Badge>
+        <Badge variant={order.estat === "amb_incidencia" ? "negative" : "info"}>
+          {ESTAT_LABELS[order.estat] ?? order.estat}
+        </Badge>
       </div>
 
       <div className="mt-3">
         <DataCardGrid>
           <DataCardField label="Població de destí">{order.poblacioDesti || "—"}</DataCardField>
-          <DataCardField label="Tarifa">{tariff?.name ?? "—"}</DataCardField>
-          <DataCardField label="Transportista">{carrier?.name ?? "—"}</DataCardField>
-          <DataCardField label="Total kg demanats">{formatKg(sumOrderedWeightKg(order.lines))}</DataCardField>
-          <DataCardField label="Data comanda">{formatDateShort(order.orderDate)}</DataCardField>
+          <DataCardField label="Tarifa">{order.tarifa?.nom ?? "—"}</DataCardField>
+          <DataCardField label="Transportista">{order.transportista?.nom ?? "—"}</DataCardField>
+          <DataCardField label="Total kg demanats">{formatKg(sumOrderedWeightKg(order.linies))}</DataCardField>
+          <DataCardField label="Data comanda">{formatData(order.dataComanda, false)}</DataCardField>
           <DataCardField label="Data expedició">
-            {order.shippingDate ? formatDateShort(order.shippingDate) : "—"}
+            {order.dataExpedicio ? formatData(order.dataExpedicio, true) : "—"}
           </DataCardField>
           <DataCardField label="Data lliurament">
-            {order.deliveryDate ? formatDateShort(order.deliveryDate) : "—"}
+            {order.dataLliurament ? formatData(order.dataLliurament, true) : "—"}
           </DataCardField>
-          <DataCardField label="Núm. bultos">{order.packageCount}</DataCardField>
+          <DataCardField label="Núm. bultos">{order.bultos ?? "—"}</DataCardField>
         </DataCardGrid>
       </div>
 
@@ -73,7 +66,7 @@ function OfficeOrderCard({
         <label className="flex items-center gap-2 text-sm text-gray-700">
           <input
             type="checkbox"
-            checked={order.productionNotes.trim().length > 0}
+            checked={(order.obsProduccio ?? "").trim().length > 0}
             disabled
             className="h-4 w-4 rounded border-gray-300 text-ink"
           />
@@ -82,7 +75,7 @@ function OfficeOrderCard({
         <label className="flex items-center gap-2 text-sm text-gray-700">
           <input
             type="checkbox"
-            checked={order.deliveryNotes.trim().length > 0}
+            checked={(order.obsLliurament ?? "").trim().length > 0}
             disabled
             className="h-4 w-4 rounded border-gray-300 text-ink"
           />
@@ -113,33 +106,33 @@ export default function OfficePage() {
   const [deliveryDateTo, setDeliveryDateTo] = useState("");
 
   const destinationOptions = useMemo(
-    () => [ALL_FEM, ...Array.from(new Set(data.map((order) => order.poblacioDesti)))],
+    () => [ALL_FEM, ...Array.from(new Set(data.map((order) => order.poblacioDesti ?? "—")))],
     [data],
   );
 
   const filtered = data.filter((order) => {
     if (clientSearch) {
-      const client = clients.find((item) => item.code === order.clientCode);
+      // El resumen del pedido sólo trae {id, nom} del cliente — el codi se
+      // cruza contra el listado completo de clients (contrato §4.4).
+      const client = clients.find((item) => item.id === order.client?.id);
       const term = clientSearch.toLowerCase();
-      const matches = client?.name.toLowerCase().includes(term) || client?.code.toLowerCase().includes(term);
+      const matches =
+        order.client?.nom.toLowerCase().includes(term) || (client?.codi ?? "").toLowerCase().includes(term);
       if (!matches) return false;
     }
-    if (statusFilter !== ALL && order.status !== statusFilter) return false;
-    if (carrierFilter !== ALL) {
-      const carrier = carriers.find((item) => item.code === order.carrierCode);
-      if (carrier?.name !== carrierFilter) return false;
-    }
-    if (tariffFilter !== ALL_FEM) {
-      const tariff = tariffColumns.find((item) => item.code === order.tariffCode);
-      if (tariff?.name !== tariffFilter) return false;
-    }
-    if (destinationFilter !== ALL_FEM && order.poblacioDesti !== destinationFilter) return false;
-    if (orderDateFrom && order.orderDate < orderDateFrom) return false;
-    if (orderDateTo && order.orderDate > orderDateTo) return false;
-    if (shippingDateFrom && (!order.shippingDate || order.shippingDate < shippingDateFrom)) return false;
-    if (shippingDateTo && (!order.shippingDate || order.shippingDate > shippingDateTo)) return false;
-    if (deliveryDateFrom && (!order.deliveryDate || order.deliveryDate < deliveryDateFrom)) return false;
-    if (deliveryDateTo && (!order.deliveryDate || order.deliveryDate > deliveryDateTo)) return false;
+    if (statusFilter !== ALL && (ESTAT_LABELS[order.estat] ?? order.estat) !== statusFilter) return false;
+    if (carrierFilter !== ALL && (order.transportista?.nom ?? "—") !== carrierFilter) return false;
+    if (tariffFilter !== ALL_FEM && (order.tarifa?.nom ?? "—") !== tariffFilter) return false;
+    if (destinationFilter !== ALL_FEM && (order.poblacioDesti ?? "—") !== destinationFilter) return false;
+    const dataComanda = order.dataComanda.slice(0, 10);
+    const dataExpedicio = order.dataExpedicio?.slice(0, 10);
+    const dataLliurament = order.dataLliurament?.slice(0, 10);
+    if (orderDateFrom && dataComanda < orderDateFrom) return false;
+    if (orderDateTo && dataComanda > orderDateTo) return false;
+    if (shippingDateFrom && (!dataExpedicio || dataExpedicio < shippingDateFrom)) return false;
+    if (shippingDateTo && (!dataExpedicio || dataExpedicio > shippingDateTo)) return false;
+    if (deliveryDateFrom && (!dataLliurament || dataLliurament < deliveryDateFrom)) return false;
+    if (deliveryDateTo && (!dataLliurament || dataLliurament > deliveryDateTo)) return false;
     return true;
   });
 
@@ -156,19 +149,19 @@ export default function OfficePage() {
           <SearchInput label="Client" value={clientSearch} onChange={setClientSearch} />
           <SelectFilter
             label="Estat"
-            options={[ALL, "Oberta", "Incidència"]}
+            options={[ALL, ...Object.values(ESTAT_LABELS)]}
             value={statusFilter}
             onChange={setStatusFilter}
           />
           <SelectFilter
             label="Transportista"
-            options={[ALL, ...carriers.map((item) => item.name)]}
+            options={[ALL, ...carriers.map((item) => item.nom)]}
             value={carrierFilter}
             onChange={setCarrierFilter}
           />
           <SelectFilter
             label="Tarifa"
-            options={[ALL_FEM, ...tariffColumns.map((item) => item.name)]}
+            options={[ALL_FEM, ...tariffColumns.map((item) => item.nom)]}
             value={tariffFilter}
             onChange={setTariffFilter}
           />
@@ -211,14 +204,7 @@ export default function OfficePage() {
         <>
           <div className="flex flex-col gap-3 xl:hidden">
             {filtered.map((order) => (
-              <OfficeOrderCard
-                key={order.number}
-                order={order}
-                client={clients.find((item) => item.code === order.clientCode)}
-                tariff={tariffColumns.find((item) => item.code === order.tariffCode)}
-                carrier={carriers.find((item) => item.code === order.carrierCode)}
-                onClick={() => router.push(`/office/${order.number}`)}
-              />
+              <OfficeOrderCard key={order.num} order={order} onClick={() => router.push(`/office/${order.num}`)} />
             ))}
           </div>
 
@@ -250,56 +236,53 @@ export default function OfficePage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((order) => {
-                  const client = clients.find((item) => item.code === order.clientCode);
-                  const tariff = tariffColumns.find((item) => item.code === order.tariffCode);
-                  const carrier = carriers.find((item) => item.code === order.carrierCode);
-                  return (
-                    <tr
-                      key={order.number}
-                      onClick={() => router.push(`/office/${order.number}`)}
-                      className="cursor-pointer border-b border-gray-100 last:border-0 hover:bg-gray-50"
-                    >
-                      <td className="px-2 py-3 break-words">
-                        <span className="font-semibold text-gray-900">{order.number}</span>
-                      </td>
-                      <td className="px-2 py-3 break-words text-gray-900">{client?.name ?? order.clientCode}</td>
-                      <td className="px-2 py-3 break-words text-gray-900">{order.poblacioDesti || "—"}</td>
-                      <td className="px-2 py-3 break-words text-gray-900">{tariff?.name ?? "—"}</td>
-                      <td className="px-2 py-3 break-words text-gray-900">{carrier?.name ?? "—"}</td>
-                      <td className="px-2 py-3">
-                        <Badge variant={order.status === "Incidència" ? "negative" : "info"}>{order.status}</Badge>
-                      </td>
-                      <td className="px-2 py-3 break-words text-gray-900">{formatDateShort(order.orderDate)}</td>
-                      <td className="px-2 py-3 break-words text-gray-900">
-                        {order.shippingDate ? formatDateShort(order.shippingDate) : "—"}
-                      </td>
-                      <td className="px-2 py-3 break-words text-gray-900">
-                        {order.deliveryDate ? formatDateShort(order.deliveryDate) : "—"}
-                      </td>
-                      <td className="px-2 py-3 text-right text-gray-900">
-                        {formatKg(sumOrderedWeightKg(order.lines))}
-                      </td>
-                      <td className="px-2 py-3 text-right text-gray-900">{order.packageCount}</td>
-                      <td className="px-2 py-3 text-center">
-                        <input
-                          type="checkbox"
-                          checked={order.productionNotes.trim().length > 0}
-                          disabled
-                          className="h-4 w-4 rounded border-gray-300 text-ink"
-                        />
-                      </td>
-                      <td className="px-2 py-3 text-center">
-                        <input
-                          type="checkbox"
-                          checked={order.deliveryNotes.trim().length > 0}
-                          disabled
-                          className="h-4 w-4 rounded border-gray-300 text-ink"
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
+                {filtered.map((order) => (
+                  <tr
+                    key={order.num}
+                    onClick={() => router.push(`/office/${order.num}`)}
+                    className="cursor-pointer border-b border-gray-100 last:border-0 hover:bg-gray-50"
+                  >
+                    <td className="px-2 py-3 break-words">
+                      <span className="font-semibold text-gray-900">{order.num}</span>
+                    </td>
+                    <td className="px-2 py-3 break-words text-gray-900">{order.client?.nom ?? "—"}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">{order.poblacioDesti || "—"}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">{order.tarifa?.nom ?? "—"}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">{order.transportista?.nom ?? "—"}</td>
+                    <td className="px-2 py-3">
+                      <Badge variant={order.estat === "amb_incidencia" ? "negative" : "info"}>
+                        {ESTAT_LABELS[order.estat] ?? order.estat}
+                      </Badge>
+                    </td>
+                    <td className="px-2 py-3 break-words text-gray-900">{formatData(order.dataComanda, false)}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">
+                      {order.dataExpedicio ? formatData(order.dataExpedicio, true) : "—"}
+                    </td>
+                    <td className="px-2 py-3 break-words text-gray-900">
+                      {order.dataLliurament ? formatData(order.dataLliurament, true) : "—"}
+                    </td>
+                    <td className="px-2 py-3 text-right text-gray-900">
+                      {formatKg(sumOrderedWeightKg(order.linies))}
+                    </td>
+                    <td className="px-2 py-3 text-right text-gray-900">{order.bultos ?? "—"}</td>
+                    <td className="px-2 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={(order.obsProduccio ?? "").trim().length > 0}
+                        disabled
+                        className="h-4 w-4 rounded border-gray-300 text-ink"
+                      />
+                    </td>
+                    <td className="px-2 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={(order.obsLliurament ?? "").trim().length > 0}
+                        disabled
+                        className="h-4 w-4 rounded border-gray-300 text-ink"
+                      />
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

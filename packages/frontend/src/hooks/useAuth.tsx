@@ -1,15 +1,21 @@
 "use client";
 
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { UserApi } from "@/lib/api";
-import { getMockUsers, validateCredentials } from "@/mocks/users";
+import { api, setAuthTokenProvider, type UsuariApi } from "@/lib/api";
+import { auth } from "@/lib/firebase";
 
-const SESSION_STORAGE_KEY = "dpages_session";
+// Punto de inyección del token para lib/api.ts (tarea 3 de esta sesión) —
+// se resuelve acá, una sola vez, apenas se importa este módulo: cada
+// petición de la capa HTTP manda el ID token vigente del usuario de
+// Firebase, o ninguno si no hay sesión (el backend lo rechaza con
+// 401 NO_AUTENTICAT, contrato §2).
+setAuthTokenProvider(async () => (auth.currentUser ? auth.currentUser.getIdToken() : null));
 
-export type LoginResult = { ok: true; user: UserApi } | { ok: false; reason: "invalid" | "inactive" };
+export type LoginResult = { ok: true; user: UsuariApi } | { ok: false; reason: "invalid" | "inactive" };
 
 type AuthContextValue = {
-  user: UserApi | null;
+  user: UsuariApi | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<LoginResult>;
   logout: () => void;
@@ -17,44 +23,57 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/** `GET /jo` — usuario autenticado con rol y mòduls permesos, contrato §4.12. Devuelve `null` si el backend lo rechaza (token vencido, usuari.actiu=false). */
+async function fetchUsuariActual(): Promise<UsuariApi | null> {
+  try {
+    return await api.get<UsuariApi>("/jo");
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<UserApi | null>(null);
+  const [user, setUser] = useState<UsuariApi | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    let cancelled = false;
-    const sessionId = window.localStorage.getItem(SESSION_STORAGE_KEY);
+    // Firebase gestiona la sesión sola (persistida por el propio SDK, no a
+    // mano en localStorage) — esto reemplaza la hidratación manual de antes.
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
+      setUser(await fetchUsuariActual());
+      setIsLoading(false);
+    });
 
-    // TODO: al conectar Firebase Auth real, hidratar la sesión validando el
-    // token en vez de buscar el id guardado contra el mock de usuarios.
-    const hydrate = sessionId
-      ? getMockUsers().then((users) => users.find((item) => item.id === sessionId) ?? null)
-      : Promise.resolve(null);
-
-    hydrate
-      .then((found) => {
-        if (!cancelled) setUser(found);
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    return unsubscribe;
   }, []);
 
   const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
-    // TODO: sustituir por signInWithEmailAndPassword de Firebase Auth cuando exista backend real.
-    const result = await validateCredentials(email, password);
-    if (!result.ok) return result;
-    window.localStorage.setItem(SESSION_STORAGE_KEY, result.user.id);
-    setUser(result.user);
-    return result;
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch {
+      return { ok: false, reason: "invalid" };
+    }
+
+    const usuari = await fetchUsuariActual();
+    if (!usuari) {
+      // GET /jo rechazó el token recién emitido: el caso documentado es
+      // usuari.actiu=false (403 SENSE_PERMIS, contrato §4.12) — no dejamos
+      // una sesión de Firebase viva si el backend no reconoce al usuario.
+      await signOut(auth);
+      return { ok: false, reason: "inactive" };
+    }
+
+    setUser(usuari);
+    return { ok: true, user: usuari };
   }, []);
 
   const logout = useCallback(() => {
-    window.localStorage.removeItem(SESSION_STORAGE_KEY);
+    void signOut(auth);
     setUser(null);
   }, []);
 

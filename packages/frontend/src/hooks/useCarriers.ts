@@ -1,19 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { CarrierApi } from "@/lib/api";
+import type { TransportistaApi } from "@/lib/api";
 import { getMockCarriers } from "@/mocks/carriers";
 
 type UseCarriersResult = {
-  data: CarrierApi[];
+  data: TransportistaApi[];
   isLoading: boolean;
   error: Error | null;
 };
 
 // TODO: cuando cierre el contrato con el backend, reemplazar getMockCarriers()
-// por api.get<CarrierApi[]>("/carriers") sin tocar la forma del hook.
+// por api.get<TransportistaApi[]>("/transportistes") sin tocar la forma del hook.
 export function useCarriers(): UseCarriersResult {
-  const [data, setData] = useState<CarrierApi[]>([]);
+  const [data, setData] = useState<TransportistaApi[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 

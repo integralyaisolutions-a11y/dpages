@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { TextField } from "@/components/ui/TextField";
-import type { ClientTariffApi, TariffApi } from "@/lib/api";
+import type { ClientApi, TarifaResumApi } from "@/lib/api";
 
 const NO_TARIFF = "Sense tarifa";
 
@@ -17,27 +17,35 @@ export function ClientFormModal({
   onSave,
 }: {
   mode: "create" | "edit";
-  initialData?: ClientTariffApi;
-  tariffColumns: TariffApi[];
+  initialData?: ClientApi;
+  tariffColumns: TarifaResumApi[];
   isOpen: boolean;
   onClose: () => void;
-  onSave: (values: ClientTariffApi) => void;
+  onSave: (values: Omit<ClientApi, "id">) => void;
 }) {
-  const [code, setCode] = useState(initialData?.code ?? "");
-  const [city, setCity] = useState(initialData?.city ?? "");
-  const [name, setName] = useState(initialData?.name ?? "");
-  const [tariffName, setTariffName] = useState(
-    tariffColumns.find((tariff) => tariff.code === initialData?.tariffCode)?.name ?? NO_TARIFF,
-  );
+  const [codi, setCodi] = useState(initialData?.codi ?? "");
+  const [poblacio, setPoblacio] = useState(initialData?.poblacio ?? "");
+  const [nom, setNom] = useState(initialData?.nom ?? "");
+  const [tariffName, setTariffName] = useState(initialData?.tarifa?.nom ?? NO_TARIFF);
   const [error, setError] = useState<string | null>(null);
 
   function handleSave() {
-    if (!code.trim() || !name.trim()) {
+    if (!codi.trim() || !nom.trim()) {
       setError("El codi i el nom son obligatoris.");
       return;
     }
-    const tariffCode = tariffColumns.find((tariff) => tariff.name === tariffName)?.code ?? null;
-    onSave({ code: code.trim(), name: name.trim(), city: city.trim(), tariffCode });
+    const tarifa = tariffColumns.find((tariff) => tariff.nom === tariffName) ?? null;
+    onSave({
+      codi: codi.trim(),
+      nom: nom.trim(),
+      poblacio: poblacio.trim() || null,
+      nif: initialData?.nif ?? null,
+      email: initialData?.email ?? null,
+      telefon: initialData?.telefon ?? null,
+      tarifa: tarifa ? { id: tarifa.id, nom: tarifa.nom } : null,
+      transportistaDefecte: initialData?.transportistaDefecte ?? null,
+      actiu: initialData?.actiu ?? true,
+    });
   }
 
   return (
@@ -46,16 +54,16 @@ export function ClientFormModal({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <TextField
             label="Codi"
-            value={code}
-            onChange={(event) => setCode(event.target.value)}
+            value={codi}
+            onChange={(event) => setCodi(event.target.value)}
             error={error ?? undefined}
           />
-          <TextField label="Població" value={city} onChange={(event) => setCity(event.target.value)} />
+          <TextField label="Població" value={poblacio} onChange={(event) => setPoblacio(event.target.value)} />
         </div>
-        <TextField label="Nom" value={name} onChange={(event) => setName(event.target.value)} />
+        <TextField label="Nom" value={nom} onChange={(event) => setNom(event.target.value)} />
         <SelectFilter
           label="Tarifa"
-          options={[NO_TARIFF, ...tariffColumns.map((tariff) => tariff.name)]}
+          options={[NO_TARIFF, ...tariffColumns.map((tariff) => tariff.nom)]}
           value={tariffName}
           onChange={setTariffName}
         />

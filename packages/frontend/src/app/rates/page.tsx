@@ -7,9 +7,11 @@ import { FilterBar } from "@/components/ui/FilterBar";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { SelectFilter } from "@/components/ui/SelectFilter";
+import { useCatalog } from "@/hooks/useCatalog";
 import { useEditableRow } from "@/hooks/useEditableRow";
 import { useRates } from "@/hooks/useRates";
-import type { ProductRateApi, TariffApi } from "@/lib/api";
+import type { FilaMatriuTarifesApi, TarifaResumApi } from "@/lib/api";
+import { parseDecimalInput } from "@/lib/decimals";
 import { TariffFormModal } from "./TariffFormModal";
 
 const ALL = "Tots";
@@ -94,24 +96,35 @@ function useColumnWidths(): ColumnWidths {
 
 function RateProductRow({
   product,
+  category,
+  format,
   tariffColumns,
   columnWidths,
   onSave,
 }: {
-  product: ProductRateApi;
-  tariffColumns: TariffApi[];
+  product: FilaMatriuTarifesApi;
+  category: string;
+  format: string;
+  tariffColumns: TarifaResumApi[];
   columnWidths: ColumnWidths;
-  onSave: (productCode: string, prices: Record<string, number | null>) => void;
+  onSave: (producteId: number, preus: Record<string, string | null>) => void;
 }) {
   const initialPrices = useMemo(() => {
     const entries: Record<string, number | null> = {};
-    for (const tariff of tariffColumns) entries[tariff.code] = product.prices[tariff.code] ?? null;
+    for (const tariff of tariffColumns) {
+      const raw = product.preus[String(tariff.id)] ?? null;
+      entries[String(tariff.id)] = raw === null ? null : Number(raw);
+    }
     return entries;
   }, [product, tariffColumns]);
 
-  const { draft, setField, save, isDirty } = useEditableRow(initialPrices, (prices) =>
-    onSave(product.productCode, prices),
-  );
+  const { draft, setField, save, isDirty } = useEditableRow(initialPrices, (prices) => {
+    const preus: Record<string, string | null> = {};
+    for (const [tarifaId, value] of Object.entries(prices)) {
+      preus[tarifaId] = value === null ? null : parseDecimalInput(value, 2);
+    }
+    onSave(product.producteId, preus);
+  });
 
   return (
     <tr className="border-b border-gray-100 last:border-0">
@@ -119,29 +132,32 @@ function RateProductRow({
         className="sticky left-0 z-10 bg-white px-2 py-3 break-words text-gray-900"
         style={{ width: columnWidths.categoria }}
       >
-        {product.category}
+        {category}
       </td>
       <td
         className="sticky z-10 bg-white px-2 py-3 break-words text-gray-900"
         style={{ left: columnWidths.formatLeft, width: columnWidths.format }}
       >
-        {product.format}
+        {format}
       </td>
       <td
         className="sticky z-10 bg-white px-2 py-3 break-words"
         style={{ left: columnWidths.codiLeft, width: columnWidths.codi }}
       >
-        <span className="font-semibold text-gray-900">{product.productCode}</span>
+        <span className="font-semibold text-gray-900">{product.codi}</span>
       </td>
       <td
         className={`sticky z-10 bg-white px-2 py-3 break-words text-gray-900 ${STICKY_LEFT_SHADOW}`}
         style={{ left: columnWidths.descripcioLeft, width: columnWidths.descripcio }}
       >
-        {product.description}
+        {product.descripcio}
       </td>
       {tariffColumns.map((tariff) => (
-        <td key={tariff.code} className="px-1 py-3 text-right" style={{ width: TARIFF_COLUMN_WIDTH }}>
-          <EditableCell value={draft[tariff.code] ?? null} onChange={(value) => setField(tariff.code, value)} />
+        <td key={tariff.id} className="px-1 py-3 text-right" style={{ width: TARIFF_COLUMN_WIDTH }}>
+          <EditableCell
+            value={draft[String(tariff.id)] ?? null}
+            onChange={(value) => setField(String(tariff.id), value)}
+          />
         </td>
       ))}
       <td className="px-2 py-3 text-center" style={{ width: GUARDAR_WIDTH }}>
@@ -162,6 +178,7 @@ function RateProductRow({
 
 export default function RatesPage() {
   const { data, tariffColumns, isLoading, error, updatePrices, createTariff } = useRates();
+  const { data: catalog } = useCatalog();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState(ALL_FEM);
@@ -196,13 +213,37 @@ export default function RatesPage() {
     // tableWidth canvia quan es filtra/afegeix una tarifa; cal recalcular si hi ha més scroll disponible.
   }, [scrollContainer, tableWidth]);
 
-  const categoryOptions = useMemo(() => [ALL_FEM, ...distinct(data.map((product) => product.category))], [data]);
-  const formatOptions = useMemo(() => [ALL, ...distinct(data.map((product) => product.format))], [data]);
+  // FilaMatriuTarifesApi (contrato §4.3) no trae categoria/format: la matriz
+  // de tarifas sólo expone producteId/codi/descripcio/preus. Se derivan acá
+  // cruzando por producteId contra el catàleg (useCatalog) en vez de
+  // duplicar el dato a mano, como hacía el mock viejo (ver AUDITORIA_FRONTEND.md
+  // §4). Con los datos de ejemplo de hoy la mayoría no cruza (mocks/rates.ts
+  // usa otro conjunto de SKUs que mocks/catalog.ts, gap documentado ahí) y
+  // queda en "—" — eso es correcto, no un bug de este cruce.
+  const categoryByProductId = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const product of catalog) map.set(product.id, product.categoria?.nom ?? "—");
+    return map;
+  }, [catalog]);
+  const formatByProductId = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const product of catalog) map.set(product.id, product.format ?? "—");
+    return map;
+  }, [catalog]);
+
+  const categoryOptions = useMemo(
+    () => [ALL_FEM, ...distinct(data.map((product) => categoryByProductId.get(product.producteId) ?? "—"))],
+    [data, categoryByProductId],
+  );
+  const formatOptions = useMemo(
+    () => [ALL, ...distinct(data.map((product) => formatByProductId.get(product.producteId) ?? "—"))],
+    [data, formatByProductId],
+  );
 
   const filtered = data.filter((product) => {
-    if (search && !product.description.toLowerCase().includes(search.toLowerCase())) return false;
-    if (category !== ALL_FEM && product.category !== category) return false;
-    if (format !== ALL && product.format !== format) return false;
+    if (search && !product.descripcio.toLowerCase().includes(search.toLowerCase())) return false;
+    if (category !== ALL_FEM && (categoryByProductId.get(product.producteId) ?? "—") !== category) return false;
+    if (format !== ALL && (formatByProductId.get(product.producteId) ?? "—") !== format) return false;
     return true;
   });
 
@@ -255,11 +296,11 @@ export default function RatesPage() {
                   </th>
                   {tariffColumns.map((tariff) => (
                     <th
-                      key={tariff.code}
+                      key={tariff.id}
                       className="px-1 py-2 text-right font-medium text-gray-500 break-words"
                       style={{ width: TARIFF_COLUMN_WIDTH }}
                     >
-                      {tariff.name}
+                      {tariff.nom}
                     </th>
                   ))}
                   <th
@@ -273,8 +314,10 @@ export default function RatesPage() {
               <tbody>
                 {filtered.map((product) => (
                   <RateProductRow
-                    key={product.productCode}
+                    key={product.producteId}
                     product={product}
+                    category={categoryByProductId.get(product.producteId) ?? "—"}
+                    format={formatByProductId.get(product.producteId) ?? "—"}
                     tariffColumns={tariffColumns}
                     columnWidths={columnWidths}
                     onSave={updatePrices}

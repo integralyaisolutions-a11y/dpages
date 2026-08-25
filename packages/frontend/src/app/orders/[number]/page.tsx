@@ -10,7 +10,7 @@ import { useCatalog } from "@/hooks/useCatalog";
 import { useClientTariffs } from "@/hooks/useClientTariffs";
 import { useOrders } from "@/hooks/useOrders";
 import { useRates } from "@/hooks/useRates";
-import type { OrderApi } from "@/lib/api";
+import type { ComandaDetallApi } from "@/lib/api";
 import { OrderForm, type OrderFormHandle } from "../OrderForm";
 
 export default function OrderDetailPage() {
@@ -24,10 +24,11 @@ export default function OrderDetailPage() {
   const formRef = useRef<OrderFormHandle>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const order = orders.find((item) => item.number === params.number);
+  const order = orders.find((item) => item.num === params.number);
 
-  function handleSave(values: Omit<OrderApi, "number">) {
-    editOrder(params.number, { number: params.number, ...values });
+  function handleSave(values: Omit<ComandaDetallApi, "id" | "num">) {
+    if (!order) return;
+    editOrder(params.number, { id: order.id, num: params.number, ...values });
     router.push("/orders");
   }
 
@@ -45,7 +46,7 @@ export default function OrderDetailPage() {
           <h1 className="text-2xl font-bold text-gray-900 lg:text-3xl">Comanda {params.number}</h1>
         </div>
         <div className="flex items-center gap-3">
-          {order && order.status !== "Incidència" && (
+          {order && order.estat !== "amb_incidencia" && (
             <button
               type="button"
               onClick={() => setConfirmOpen(true)}

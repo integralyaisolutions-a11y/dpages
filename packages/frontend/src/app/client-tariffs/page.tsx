@@ -11,29 +11,23 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { useClientTariffs } from "@/hooks/useClientTariffs";
 import { useRates } from "@/hooks/useRates";
-import type { ClientTariffApi } from "@/lib/api";
+import type { ClientApi } from "@/lib/api";
 import { ClientFormModal } from "./ClientFormModal";
 
 const ALL_FEM = "Totes";
 
-function ClientTariffCard({
-  client,
-  tariffName,
-  onEdit,
-}: {
-  client: ClientTariffApi;
-  tariffName: string | undefined;
-  onEdit: () => void;
-}) {
+function ClientTariffCard({ client, onEdit }: { client: ClientApi; onEdit: () => void }) {
   return (
     <DataCard>
-      <p className="font-semibold text-gray-900">{client.code}</p>
-      <p className="text-sm text-gray-500">{client.name}</p>
+      <p className="font-semibold text-gray-900">{client.codi}</p>
+      <p className="text-sm text-gray-500">{client.nom}</p>
 
       <div className="mt-3">
         <DataCardGrid>
-          <DataCardField label="Població">{client.city}</DataCardField>
-          <DataCardField label="Tarifa assignada">{tariffName ? <Badge>{tariffName}</Badge> : "—"}</DataCardField>
+          <DataCardField label="Població">{client.poblacio ?? "—"}</DataCardField>
+          <DataCardField label="Tarifa assignada">
+            {client.tarifa ? <Badge>{client.tarifa.nom}</Badge> : "—"}
+          </DataCardField>
         </DataCardGrid>
       </div>
 
@@ -55,25 +49,25 @@ export default function ClientTariffsPage() {
   const { tariffColumns } = useRates();
   const [search, setSearch] = useState("");
   const [tariffFilter, setTariffFilter] = useState(ALL_FEM);
-  const [formState, setFormState] = useState<{ mode: "create" | "edit"; client?: ClientTariffApi } | null>(null);
+  const [formState, setFormState] = useState<{ mode: "create" | "edit"; client?: ClientApi } | null>(null);
 
-  const tariffFilterOptions = useMemo(() => [ALL_FEM, ...tariffColumns.map((tariff) => tariff.name)], [tariffColumns]);
+  const tariffFilterOptions = useMemo(() => [ALL_FEM, ...tariffColumns.map((tariff) => tariff.nom)], [tariffColumns]);
 
   const filtered = data.filter((client) => {
     if (search) {
       const term = search.toLowerCase();
-      if (!client.code.toLowerCase().includes(term) && !client.name.toLowerCase().includes(term)) return false;
+      if (!(client.codi ?? "").toLowerCase().includes(term) && !(client.nom ?? "").toLowerCase().includes(term))
+        return false;
     }
     if (tariffFilter !== ALL_FEM) {
-      const tariffName = tariffColumns.find((tariff) => tariff.code === client.tariffCode)?.name;
-      if (tariffName !== tariffFilter) return false;
+      if ((client.tarifa?.nom ?? null) !== tariffFilter) return false;
     }
     return true;
   });
 
-  function handleSave(values: ClientTariffApi) {
+  function handleSave(values: Omit<ClientApi, "id">) {
     if (formState?.mode === "edit" && formState.client) {
-      editClient(formState.client.code, values);
+      editClient(formState.client.codi ?? "", { id: formState.client.id, ...values });
     } else {
       createClient(values);
     }
@@ -103,17 +97,13 @@ export default function ClientTariffsPage() {
       {!isLoading && !error && (
         <>
           <div className="flex flex-col gap-3 xl:hidden">
-            {filtered.map((client) => {
-              const tariffName = tariffColumns.find((tariff) => tariff.code === client.tariffCode)?.name;
-              return (
-                <ClientTariffCard
-                  key={client.code}
-                  client={client}
-                  tariffName={tariffName}
-                  onEdit={() => setFormState({ mode: "edit", client })}
-                />
-              );
-            })}
+            {filtered.map((client) => (
+              <ClientTariffCard
+                key={client.id}
+                client={client}
+                onEdit={() => setFormState({ mode: "edit", client })}
+              />
+            ))}
           </div>
 
           <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white xl:block">
@@ -130,28 +120,27 @@ export default function ClientTariffsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((client) => {
-                  const tariffName = tariffColumns.find((tariff) => tariff.code === client.tariffCode)?.name;
-                  return (
-                    <tr key={client.code} className="border-b border-gray-100 last:border-0">
-                      <td className="px-2 py-3 break-words">
-                        <span className="font-semibold text-gray-900">{client.code}</span>
-                      </td>
-                      <td className="px-2 py-3 break-words text-gray-900">{client.name}</td>
-                      <td className="px-2 py-3 break-words text-gray-900">{client.city}</td>
-                      <td className="px-2 py-3 break-words">{tariffName ? <Badge>{tariffName}</Badge> : "—"}</td>
-                      <td className="px-2 py-3 text-right">
-                        <div className="flex justify-end">
-                          <IconButton
-                            variant="edit"
-                            label="Editar client"
-                            onClick={() => setFormState({ mode: "edit", client })}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {filtered.map((client) => (
+                  <tr key={client.id} className="border-b border-gray-100 last:border-0">
+                    <td className="px-2 py-3 break-words">
+                      <span className="font-semibold text-gray-900">{client.codi}</span>
+                    </td>
+                    <td className="px-2 py-3 break-words text-gray-900">{client.nom}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">{client.poblacio ?? "—"}</td>
+                    <td className="px-2 py-3 break-words">
+                      {client.tarifa ? <Badge>{client.tarifa.nom}</Badge> : "—"}
+                    </td>
+                    <td className="px-2 py-3 text-right">
+                      <div className="flex justify-end">
+                        <IconButton
+                          variant="edit"
+                          label="Editar client"
+                          onClick={() => setFormState({ mode: "edit", client })}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -159,7 +148,7 @@ export default function ClientTariffsPage() {
       )}
 
       <ClientFormModal
-        key={formState ? (formState.client?.code ?? "create") : "closed"}
+        key={formState ? (formState.client?.id ?? "create") : "closed"}
         mode={formState?.mode ?? "create"}
         initialData={formState?.client}
         tariffColumns={tariffColumns}

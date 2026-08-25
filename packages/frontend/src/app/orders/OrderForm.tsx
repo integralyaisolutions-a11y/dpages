@@ -5,35 +5,80 @@ import { forwardRef, useImperativeHandle, useState } from "react";
 import { DataCard, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { TextField } from "@/components/ui/TextField";
-import type { CarrierApi, ClientTariffApi, OrderApi, OrderLineApi, ProductApi, TariffApi } from "@/lib/api";
+import type { ClientApi, ComandaDetallApi, ComandaLiniaApi, ProducteApi, TarifaResumApi, TransportistaApi } from "@/lib/api";
 import { calculateOrderedWeightKg } from "@/lib/orderCalculations";
 
 const NO_CLIENT = "Selecciona client...";
 const NO_TARIFF = "Sense tarifa";
 const NO_CARRIER = "Selecciona transportista...";
 const NO_PRODUCT = "Selecciona producte...";
-const STATUS_OPTIONS: OrderApi["status"][] = ["Oberta", "Incidència"];
 
-function codeName(code: string, name: string) {
-  return `${code} · ${name}`;
+const ESTAT_OPTIONS: ComandaDetallApi["estat"][] = ["oberta", "en_proces", "tancada", "amb_incidencia"];
+const ESTAT_LABELS: Record<string, string> = {
+  oberta: "Oberta",
+  en_proces: "En procés",
+  tancada: "Tancada",
+  amb_incidencia: "Amb incidència",
+};
+
+function clientLabel(client: ClientApi) {
+  return `${client.codi ?? client.id} · ${client.nom ?? ""}`;
 }
 
-function parseCode(formatted: string) {
-  return formatted.split(" · ")[0] ?? "";
+function tariffLabel(tariff: TarifaResumApi) {
+  return `${tariff.codi ?? tariff.id} · ${tariff.nom}`;
 }
 
-type LineDraft = OrderLineApi;
+function carrierLabel(carrier: TransportistaApi) {
+  return `${carrier.codi ?? carrier.id} · ${carrier.nom}`;
+}
 
-function createEmptyLine(): LineDraft {
+function productLabel(product: ProducteApi) {
+  return `${product.codi ?? product.id} · ${product.descripcio}`;
+}
+
+type LineDraft = ComandaLiniaApi;
+
+let tempLineId = -1;
+
+function createEmptyLine(ordinal: number): LineDraft {
   return {
-    id: crypto.randomUUID(),
-    productCode: "",
-    productionDate: "",
-    orderedUnits: 0,
-    deliveredUnits: 0,
-    orderedWeightKg: 0,
-    deliveredWeightKg: 0,
-    productionNotes: "",
+    id: tempLineId--,
+    ordinal,
+    producte: null,
+    categoria: null,
+    format: null,
+    envasat: null,
+    unitatsDemanades: 0,
+    kgDemanats: "0.000",
+    kgEditable: true,
+    unitatsLliurades: 0,
+    kgLliurats: "0.000",
+    confirmatA: null,
+    preuUnitari: "0.00",
+    totalLinia: "0.00",
+    dataProduccio: null,
+    obsProduccio: "",
+    esborrat: false,
+  };
+}
+
+function applyProduct(line: LineDraft, product: ProducteApi | undefined): LineDraft {
+  if (!product) {
+    return { ...line, producte: null, categoria: null, format: null, envasat: null, kgEditable: true };
+  }
+  const orderedWeight = calculateOrderedWeightKg(line.unitatsDemanades, product);
+  const preuUnitari = product.preuVenda ?? "0.00";
+  return {
+    ...line,
+    producte: { id: product.id, codi: product.codi, descripcio: product.descripcio },
+    categoria: product.categoria?.nom ?? null,
+    format: product.format,
+    envasat: product.envasat,
+    kgEditable: product.pesKg === null,
+    kgDemanats: orderedWeight.isCalculated ? orderedWeight.value.toFixed(3) : line.kgDemanats,
+    preuUnitari,
+    totalLinia: (line.unitatsDemanades * Number(preuUnitari)).toFixed(2),
   };
 }
 
@@ -44,27 +89,25 @@ function LineFormCard({
   onRemove,
 }: {
   line: LineDraft;
-  products: ProductApi[];
+  products: ProducteApi[];
   onUpdate: (patch: Partial<LineDraft>) => void;
   onRemove: () => void;
 }) {
-  const product = products.find((p) => p.code === line.productCode);
-  const orderedWeight = calculateOrderedWeightKg(line.orderedUnits, product);
-  const productValue = line.productCode
-    ? codeName(line.productCode, product?.description ?? line.productCode)
-    : NO_PRODUCT;
+  const product = products.find((p) => p.id === line.producte?.id);
+  const orderedWeight = calculateOrderedWeightKg(line.unitatsDemanades, product);
 
   return (
     <DataCard>
       <div className="flex items-start gap-3">
         <select
-          value={productValue}
-          onChange={(event) =>
-            onUpdate({ productCode: event.target.value === NO_PRODUCT ? "" : parseCode(event.target.value) })
-          }
+          value={line.producte ? productLabel(line.producte as ProducteApi) : NO_PRODUCT}
+          onChange={(event) => {
+            const selected = products.find((p) => productLabel(p) === event.target.value);
+            onUpdate(applyProduct({ ...line }, selected));
+          }}
           className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
         >
-          {[NO_PRODUCT, ...products.map((p) => codeName(p.code, p.description))].map((option) => (
+          {[NO_PRODUCT, ...products.map((p) => productLabel(p))].map((option) => (
             <option key={option} value={option}>
               {option}
             </option>
@@ -82,9 +125,9 @@ function LineFormCard({
 
       <div className="mt-3">
         <DataCardGrid>
-          <DataCardField label="Categoria">{product?.category ?? "—"}</DataCardField>
-          <DataCardField label="Format">{product?.format ?? "—"}</DataCardField>
-          <DataCardField label="Envasat">{product?.packaging ?? "—"}</DataCardField>
+          <DataCardField label="Categoria">{line.categoria ?? "—"}</DataCardField>
+          <DataCardField label="Format">{line.format ?? "—"}</DataCardField>
+          <DataCardField label="Envasat">{line.envasat ?? "—"}</DataCardField>
         </DataCardGrid>
       </div>
 
@@ -93,8 +136,10 @@ function LineFormCard({
           <span className="text-xs text-gray-500">Data producció</span>
           <input
             type="date"
-            value={line.productionDate ?? ""}
-            onChange={(event) => onUpdate({ productionDate: event.target.value })}
+            value={line.dataProduccio ? line.dataProduccio.slice(0, 10) : ""}
+            onChange={(event) =>
+              onUpdate({ dataProduccio: event.target.value ? `${event.target.value}T00:00:00Z` : null })
+            }
             className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
           />
         </label>
@@ -102,8 +147,16 @@ function LineFormCard({
           <span className="text-xs text-gray-500">Unitats demanades</span>
           <input
             type="number"
-            value={line.orderedUnits}
-            onChange={(event) => onUpdate({ orderedUnits: Number(event.target.value) })}
+            value={line.unitatsDemanades}
+            onChange={(event) => {
+              const unitatsDemanades = Number(event.target.value);
+              const recalculated = calculateOrderedWeightKg(unitatsDemanades, product);
+              onUpdate({
+                unitatsDemanades,
+                kgDemanats: recalculated.isCalculated ? recalculated.value.toFixed(3) : line.kgDemanats,
+                totalLinia: (unitatsDemanades * Number(line.preuUnitari)).toFixed(2),
+              });
+            }}
             className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
           />
         </label>
@@ -111,8 +164,8 @@ function LineFormCard({
           <span className="text-xs text-gray-500">Unitats lliurades</span>
           <input
             type="number"
-            value={line.deliveredUnits}
-            onChange={(event) => onUpdate({ deliveredUnits: Number(event.target.value) })}
+            value={line.unitatsLliurades}
+            onChange={(event) => onUpdate({ unitatsLliurades: Number(event.target.value) })}
             className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
           />
         </label>
@@ -129,8 +182,8 @@ function LineFormCard({
             <input
               type="number"
               step="0.001"
-              value={line.orderedWeightKg}
-              onChange={(event) => onUpdate({ orderedWeightKg: Number(event.target.value) })}
+              value={line.kgDemanats}
+              onChange={(event) => onUpdate({ kgDemanats: Number(event.target.value).toFixed(3) })}
               className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
             />
           )}
@@ -140,8 +193,8 @@ function LineFormCard({
           <input
             type="number"
             step="0.001"
-            value={line.deliveredWeightKg}
-            onChange={(event) => onUpdate({ deliveredWeightKg: Number(event.target.value) })}
+            value={line.kgLliurats}
+            onChange={(event) => onUpdate({ kgLliurats: Number(event.target.value).toFixed(3) })}
             className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
           />
         </label>
@@ -150,8 +203,8 @@ function LineFormCard({
       <label className="mt-3 flex flex-col gap-1 text-sm">
         <span className="text-xs text-gray-500">Obs. producció</span>
         <textarea
-          value={line.productionNotes}
-          onChange={(event) => onUpdate({ productionNotes: event.target.value })}
+          value={line.obsProduccio ?? ""}
+          onChange={(event) => onUpdate({ obsProduccio: event.target.value })}
           rows={2}
           className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
         />
@@ -168,101 +221,104 @@ export const OrderForm = forwardRef<
   OrderFormHandle,
   {
     mode: "create" | "edit";
-    initialData?: OrderApi;
-    clients: ClientTariffApi[];
-    tariffs: TariffApi[];
-    carriers: CarrierApi[];
-    products: ProductApi[];
-    onSave: (values: Omit<OrderApi, "number">) => void;
+    initialData?: ComandaDetallApi;
+    clients: ClientApi[];
+    tariffs: TarifaResumApi[];
+    carriers: TransportistaApi[];
+    products: ProducteApi[];
+    onSave: (values: Omit<ComandaDetallApi, "id" | "num">) => void;
   }
 >(function OrderForm({ mode, initialData, clients, tariffs, carriers, products, onSave }, ref) {
-  const [status, setStatus] = useState<OrderApi["status"]>(initialData?.status ?? "Oberta");
-  const [clientCode, setClientCode] = useState(initialData?.clientCode ?? "");
+  const [estat, setEstat] = useState<ComandaDetallApi["estat"]>(initialData?.estat ?? "oberta");
+  const [clientId, setClientId] = useState<number | null>(initialData?.client?.id ?? null);
   const [poblacioDesti, setPoblacioDesti] = useState(initialData?.poblacioDesti ?? "");
-  const [tariffCode, setTariffCode] = useState(initialData?.tariffCode ?? "");
+  const [tarifaId, setTarifaId] = useState<number | null>(initialData?.tarifa?.id ?? null);
   const [tariffTouched, setTariffTouched] = useState(false);
-  const [carrierCode, setCarrierCode] = useState(initialData?.carrierCode ?? "");
-  const [orderDate, setOrderDate] = useState(initialData?.orderDate ?? new Date().toISOString().slice(0, 10));
-  const [deliveryDate, setDeliveryDate] = useState(initialData?.deliveryDate ?? "");
-  const [shippingDate, setShippingDate] = useState(initialData?.shippingDate ?? "");
-  const [packageCount, setPackageCount] = useState(initialData?.packageCount ?? 1);
-  const [deliveryAddress, setDeliveryAddress] = useState(initialData?.deliveryAddress ?? "");
-  const [productionNotes, setProductionNotes] = useState(initialData?.productionNotes ?? "");
-  const [deliveryNotes, setDeliveryNotes] = useState(initialData?.deliveryNotes ?? "");
-  const [lines, setLines] = useState<LineDraft[]>(initialData?.lines ?? []);
+  const [transportistaId, setTransportistaId] = useState<number | null>(initialData?.transportista?.id ?? null);
+  const [dataComanda, setDataComanda] = useState(
+    initialData?.dataComanda.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+  );
+  const [dataLliurament, setDataLliurament] = useState(initialData?.dataLliurament?.slice(0, 10) ?? "");
+  const [dataExpedicio, setDataExpedicio] = useState(initialData?.dataExpedicio?.slice(0, 10) ?? "");
+  const [bultos, setBultos] = useState(initialData?.bultos ?? 1);
+  const [adrecaLliurament, setAdrecaLliurament] = useState(initialData?.adrecaLliurament ?? "");
+  const [obsProduccio, setObsProduccio] = useState(initialData?.obsProduccio ?? "");
+  const [obsLliurament, setObsLliurament] = useState(initialData?.obsLliurament ?? "");
+  const [lines, setLines] = useState<LineDraft[]>(initialData?.linies ?? []);
   const [error, setError] = useState<string | null>(null);
 
-  function handleClientChange(formatted: string) {
-    const code = parseCode(formatted);
-    setClientCode(code);
+  function handleClientChange(id: number | null) {
+    setClientId(id);
     if (!tariffTouched) {
-      const client = clients.find((item) => item.code === code);
-      setTariffCode(client?.tariffCode ?? "");
+      const client = clients.find((item) => item.id === id);
+      setTarifaId(client?.tarifa?.id ?? null);
     }
   }
 
-  function handleTariffChange(formatted: string) {
-    setTariffTouched(true);
-    setTariffCode(formatted === NO_TARIFF ? "" : parseCode(formatted));
-  }
-
-  function updateLine(id: string, patch: Partial<LineDraft>) {
+  function updateLine(id: number, patch: Partial<LineDraft>) {
     setLines((current) => current.map((line) => (line.id === id ? { ...line, ...patch } : line)));
   }
 
-  function removeLine(id: string) {
+  function removeLine(id: number) {
     setLines((current) => current.filter((line) => line.id !== id));
   }
 
-  const totalOrderedWeightKg = lines.reduce((sum, line) => {
-    const product = products.find((p) => p.code === line.productCode);
-    const result = calculateOrderedWeightKg(line.orderedUnits, product);
-    return sum + (result.isCalculated ? result.value : line.orderedWeightKg);
-  }, 0);
+  const totalOrderedWeightKg = lines.reduce((sum, line) => sum + Number(line.kgDemanats), 0);
 
   useImperativeHandle(ref, () => ({
     submit: () => {
-      if (!clientCode) {
+      if (!clientId) {
         setError("Cal seleccionar un client.");
         return;
       }
       setError(null);
-      const normalizedLines = lines.map((line) => {
-        const product = products.find((p) => p.code === line.productCode);
-        const result = calculateOrderedWeightKg(line.orderedUnits, product);
-        return { ...line, orderedWeightKg: result.isCalculated ? result.value : line.orderedWeightKg };
-      });
+      const client = clients.find((item) => item.id === clientId) ?? null;
+      const tarifa = tariffs.find((item) => item.id === tarifaId) ?? null;
+      const transportista = carriers.find((item) => item.id === transportistaId) ?? null;
+      const totalKg = lines.reduce((sum, line) => sum + Number(line.kgDemanats), 0).toFixed(3);
+      const totalEur = lines.reduce((sum, line) => sum + Number(line.totalLinia), 0).toFixed(2);
       onSave({
-        status,
-        clientCode,
-        poblacioDesti,
-        tariffCode: tariffCode || null,
-        carrierCode: carrierCode || null,
-        orderDate,
-        deliveryDate: deliveryDate || null,
-        shippingDate: shippingDate || null,
-        packageCount,
-        deliveryAddress,
-        productionNotes,
-        deliveryNotes,
-        lines: normalizedLines,
+        origen: initialData?.origen ?? "manual",
+        estat,
+        client: client ? { id: client.id, nom: client.nom ?? "", poblacio: client.poblacio } : null,
+        tarifa: tarifa ? { id: tarifa.id, nom: tarifa.nom } : null,
+        transportista: transportista ? { id: transportista.id, nom: transportista.nom } : null,
+        poblacioDesti: poblacioDesti || null,
+        adrecaLliurament: adrecaLliurament || null,
+        dataComanda: `${dataComanda}T00:00:00Z`,
+        dataProduccio: initialData?.dataProduccio ?? null,
+        dataExpedicio: dataExpedicio ? `${dataExpedicio}T00:00:00Z` : null,
+        dataLliurament: dataLliurament ? `${dataLliurament}T00:00:00Z` : null,
+        bultos,
+        obsProduccio: obsProduccio || null,
+        obsLliurament: obsLliurament || null,
+        totalKg,
+        totalEur,
+        congelada: initialData?.congelada ?? false,
+        congelatA: initialData?.congelatA ?? null,
+        linies: lines,
+        incidencies: initialData?.incidencies ?? [],
       });
     },
   }));
 
-  const clientOptions = [NO_CLIENT, ...clients.map((item) => codeName(item.code, item.name))];
-  const clientValue = clientCode
-    ? codeName(clientCode, clients.find((item) => item.code === clientCode)?.name ?? clientCode)
+  const clientOptions = [NO_CLIENT, ...clients.map((item) => clientLabel(item))];
+  const clientValue = clientId
+    ? (clients.find((item) => item.id === clientId) && clientLabel(clients.find((item) => item.id === clientId)!)) ??
+      NO_CLIENT
     : NO_CLIENT;
 
-  const tariffOptions = [NO_TARIFF, ...tariffs.map((item) => codeName(item.code, item.name))];
-  const tariffValue = tariffCode
-    ? codeName(tariffCode, tariffs.find((item) => item.code === tariffCode)?.name ?? tariffCode)
+  const tariffOptions = [NO_TARIFF, ...tariffs.map((item) => tariffLabel(item))];
+  const tariffValue = tarifaId
+    ? (tariffs.find((item) => item.id === tarifaId) && tariffLabel(tariffs.find((item) => item.id === tarifaId)!)) ??
+      NO_TARIFF
     : NO_TARIFF;
 
-  const carrierOptions = [NO_CARRIER, ...carriers.map((item) => codeName(item.code, item.name))];
-  const carrierValue = carrierCode
-    ? codeName(carrierCode, carriers.find((item) => item.code === carrierCode)?.name ?? carrierCode)
+  const carrierOptions = [NO_CARRIER, ...carriers.map((item) => carrierLabel(item))];
+  const carrierValue = transportistaId
+    ? (carriers.find((item) => item.id === transportistaId) &&
+        carrierLabel(carriers.find((item) => item.id === transportistaId)!)) ??
+      NO_CARRIER
     : NO_CARRIER;
 
   return (
@@ -272,7 +328,7 @@ export const OrderForm = forwardRef<
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <TextField
             label="Núm. comanda"
-            value={mode === "edit" ? (initialData?.number ?? "") : ""}
+            value={mode === "edit" ? (initialData?.num ?? "") : ""}
             placeholder={mode === "create" ? "(es generarà en desar)" : undefined}
             disabled
           />
@@ -280,47 +336,65 @@ export const OrderForm = forwardRef<
             label="Client"
             options={clientOptions}
             value={clientValue}
-            onChange={handleClientChange}
+            onChange={(label) => {
+              const client = clients.find((item) => clientLabel(item) === label);
+              handleClientChange(client?.id ?? null);
+            }}
           />
           <SelectFilter
             label="Estat"
-            options={STATUS_OPTIONS}
-            value={status}
-            onChange={(value) => setStatus(value as OrderApi["status"])}
+            options={ESTAT_OPTIONS.map((value) => ESTAT_LABELS[value])}
+            value={ESTAT_LABELS[estat]}
+            onChange={(label) => {
+              const value = ESTAT_OPTIONS.find((option) => ESTAT_LABELS[option] === label);
+              if (value) setEstat(value);
+            }}
           />
 
-          <SelectFilter label="Tarifa" options={tariffOptions} value={tariffValue} onChange={handleTariffChange} />
+          <SelectFilter
+            label="Tarifa"
+            options={tariffOptions}
+            value={tariffValue}
+            onChange={(label) => {
+              setTariffTouched(true);
+              const tariff = tariffs.find((item) => tariffLabel(item) === label);
+              setTarifaId(tariff?.id ?? null);
+            }}
+          />
 
           <SelectFilter
             label="Transportista"
             options={carrierOptions}
             value={carrierValue}
-            onChange={(formatted) => setCarrierCode(formatted === NO_CARRIER ? "" : parseCode(formatted))}
+            onChange={(label) => {
+              const carrier = carriers.find((item) => carrierLabel(item) === label);
+              setTransportistaId(carrier?.id ?? null);
+            }}
           />
           <TextField
             label="Data comanda"
             type="date"
-            value={orderDate}
-            onChange={(event) => setOrderDate(event.target.value)}
+            value={dataComanda}
+            onChange={(event) => setDataComanda(event.target.value)}
           />
           <TextField
             label="Data lliurament"
             type="date"
-            value={deliveryDate}
-            onChange={(event) => setDeliveryDate(event.target.value)}
+            value={dataLliurament}
+            onChange={(event) => setDataLliurament(event.target.value)}
           />
 
           <TextField
             label="Data expedició"
             type="date"
-            value={shippingDate}
-            onChange={(event) => setShippingDate(event.target.value)}
+            value={dataExpedicio}
+            onChange={(event) => setDataExpedicio(event.target.value)}
           />
           <TextField
             label="Núm. bultos"
             type="number"
-            value={packageCount}
-            onChange={(event) => setPackageCount(Number(event.target.value))}
+            value={bultos ?? 0}
+            onChange={(event) => setBultos(Number(event.target.value))}
           />
           <TextField
             label="Població de destí"
@@ -332,8 +406,8 @@ export const OrderForm = forwardRef<
         <div className="mt-4 grid grid-cols-1 gap-4">
           <TextField
             label="Adreça de lliurament"
-            value={deliveryAddress}
-            onChange={(event) => setDeliveryAddress(event.target.value)}
+            value={adrecaLliurament}
+            onChange={(event) => setAdrecaLliurament(event.target.value)}
           />
         </div>
 
@@ -341,8 +415,8 @@ export const OrderForm = forwardRef<
           <label className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium text-gray-900">Observacions de producció</span>
             <textarea
-              value={productionNotes}
-              onChange={(event) => setProductionNotes(event.target.value)}
+              value={obsProduccio}
+              onChange={(event) => setObsProduccio(event.target.value)}
               rows={2}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
             />
@@ -350,8 +424,8 @@ export const OrderForm = forwardRef<
           <label className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium text-gray-900">Observacions de lliurament</span>
             <textarea
-              value={deliveryNotes}
-              onChange={(event) => setDeliveryNotes(event.target.value)}
+              value={obsLliurament}
+              onChange={(event) => setObsLliurament(event.target.value)}
               rows={2}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
             />
@@ -366,7 +440,7 @@ export const OrderForm = forwardRef<
           <h2 className="text-base font-bold text-gray-900">Línies</h2>
           <button
             type="button"
-            onClick={() => setLines((current) => [...current, createEmptyLine()])}
+            onClick={() => setLines((current) => [...current, createEmptyLine(current.length + 1)])}
             className="flex items-center gap-2 rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
             <Plus className="h-4 w-4" />
@@ -408,54 +482,63 @@ export const OrderForm = forwardRef<
             </thead>
             <tbody>
               {lines.map((line) => {
-                const product = products.find((p) => p.code === line.productCode);
-                const orderedWeight = calculateOrderedWeightKg(line.orderedUnits, product);
-                const productValue = line.productCode
-                  ? codeName(line.productCode, product?.description ?? line.productCode)
-                  : NO_PRODUCT;
+                const product = products.find((p) => p.id === line.producte?.id);
+                const orderedWeight = calculateOrderedWeightKg(line.unitatsDemanades, product);
+                const productValue = line.producte ? productLabel(line.producte as ProducteApi) : NO_PRODUCT;
                 return (
                   <tr key={line.id} className="border-b border-gray-100 last:border-0">
                     <td className="px-1.5 py-2">
                       <select
                         value={productValue}
-                        onChange={(event) =>
-                          updateLine(line.id, {
-                            productCode: event.target.value === NO_PRODUCT ? "" : parseCode(event.target.value),
-                          })
-                        }
+                        onChange={(event) => {
+                          const selected = products.find((p) => productLabel(p) === event.target.value);
+                          updateLine(line.id, applyProduct({ ...line }, selected));
+                        }}
                         className="w-full rounded-md border border-gray-300 px-1.5 py-1 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
                       >
-                        {[NO_PRODUCT, ...products.map((p) => codeName(p.code, p.description))].map((option) => (
+                        {[NO_PRODUCT, ...products.map((p) => productLabel(p))].map((option) => (
                           <option key={option} value={option}>
                             {option}
                           </option>
                         ))}
                       </select>
                     </td>
-                    <td className="px-1.5 py-2 break-words text-gray-500">{product?.category ?? "—"}</td>
-                    <td className="px-1.5 py-2 break-words text-gray-500">{product?.format ?? "—"}</td>
-                    <td className="px-1.5 py-2 break-words text-gray-500">{product?.packaging ?? "—"}</td>
+                    <td className="px-1.5 py-2 break-words text-gray-500">{line.categoria ?? "—"}</td>
+                    <td className="px-1.5 py-2 break-words text-gray-500">{line.format ?? "—"}</td>
+                    <td className="px-1.5 py-2 break-words text-gray-500">{line.envasat ?? "—"}</td>
                     <td className="px-1.5 py-2">
                       <input
                         type="date"
-                        value={line.productionDate ?? ""}
-                        onChange={(event) => updateLine(line.id, { productionDate: event.target.value })}
+                        value={line.dataProduccio ? line.dataProduccio.slice(0, 10) : ""}
+                        onChange={(event) =>
+                          updateLine(line.id, {
+                            dataProduccio: event.target.value ? `${event.target.value}T00:00:00Z` : null,
+                          })
+                        }
                         className="w-full rounded-md border border-gray-300 px-1.5 py-1 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
                       />
                     </td>
                     <td className="px-1.5 py-2">
                       <input
                         type="number"
-                        value={line.orderedUnits}
-                        onChange={(event) => updateLine(line.id, { orderedUnits: Number(event.target.value) })}
+                        value={line.unitatsDemanades}
+                        onChange={(event) => {
+                          const unitatsDemanades = Number(event.target.value);
+                          const recalculated = calculateOrderedWeightKg(unitatsDemanades, product);
+                          updateLine(line.id, {
+                            unitatsDemanades,
+                            kgDemanats: recalculated.isCalculated ? recalculated.value.toFixed(3) : line.kgDemanats,
+                            totalLinia: (unitatsDemanades * Number(line.preuUnitari)).toFixed(2),
+                          });
+                        }}
                         className="w-full rounded-md border border-gray-300 px-1.5 py-1 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
                       />
                     </td>
                     <td className="px-1.5 py-2">
                       <input
                         type="number"
-                        value={line.deliveredUnits}
-                        onChange={(event) => updateLine(line.id, { deliveredUnits: Number(event.target.value) })}
+                        value={line.unitatsLliurades}
+                        onChange={(event) => updateLine(line.id, { unitatsLliurades: Number(event.target.value) })}
                         className="w-full rounded-md border border-gray-300 px-1.5 py-1 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
                       />
                     </td>
@@ -471,8 +554,8 @@ export const OrderForm = forwardRef<
                         <input
                           type="number"
                           step="0.001"
-                          value={line.orderedWeightKg}
-                          onChange={(event) => updateLine(line.id, { orderedWeightKg: Number(event.target.value) })}
+                          value={line.kgDemanats}
+                          onChange={(event) => updateLine(line.id, { kgDemanats: Number(event.target.value).toFixed(3) })}
                           className="w-full rounded-md border border-gray-300 px-1.5 py-1 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
                         />
                       )}
@@ -481,15 +564,15 @@ export const OrderForm = forwardRef<
                       <input
                         type="number"
                         step="0.001"
-                        value={line.deliveredWeightKg}
-                        onChange={(event) => updateLine(line.id, { deliveredWeightKg: Number(event.target.value) })}
+                        value={line.kgLliurats}
+                        onChange={(event) => updateLine(line.id, { kgLliurats: Number(event.target.value).toFixed(3) })}
                         className="w-full rounded-md border border-gray-300 px-1.5 py-1 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
                       />
                     </td>
                     <td className="px-1.5 py-2">
                       <textarea
-                        value={line.productionNotes}
-                        onChange={(event) => updateLine(line.id, { productionNotes: event.target.value })}
+                        value={line.obsProduccio ?? ""}
+                        onChange={(event) => updateLine(line.id, { obsProduccio: event.target.value })}
                         rows={1}
                         className="w-full rounded-md border border-gray-300 px-1.5 py-1 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
                       />

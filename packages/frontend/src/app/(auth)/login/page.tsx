@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { TextField } from "@/components/ui/TextField";
 import { useAuth } from "@/hooks/useAuth";
-import { firstAllowedRoute } from "@/lib/roles";
+import { firstAllowedRouteForModules } from "@/lib/roles";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -31,7 +31,7 @@ export default function LoginPage() {
       return;
     }
 
-    router.replace(firstAllowedRoute(result.user.role));
+    router.replace(firstAllowedRouteForModules(result.user.rol.modulsPermesos));
   }
 
   return (

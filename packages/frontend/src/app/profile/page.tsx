@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useAuth } from "@/hooks/useAuth";
-import { ROLE_LABELS } from "@/lib/roles";
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -26,15 +25,13 @@ export default function ProfilePage() {
 
       <div className="max-w-md rounded-xl border border-gray-200 bg-white p-6">
         <dl className="flex flex-col gap-4">
-          <Field label="Nom">{user.name}</Field>
+          <Field label="Nom">{user.nom}</Field>
           <Field label="Email">{user.email}</Field>
           <Field label="Rol">
-            <Badge variant="info">{ROLE_LABELS[user.role]}</Badge>
+            <Badge variant="info">{user.rol.nom}</Badge>
           </Field>
           <Field label="Estat">
-            <Badge variant={user.status === "active" ? "positive" : "negative"}>
-              {user.status === "active" ? "Actiu" : "Inactiu"}
-            </Badge>
+            <Badge variant={user.actiu ? "positive" : "negative"}>{user.actiu ? "Actiu" : "Inactiu"}</Badge>
           </Field>
         </dl>
       </div>

@@ -6,16 +6,24 @@ import { useParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { DataCard, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
-import { useCarriers } from "@/hooks/useCarriers";
-import { useCatalog } from "@/hooks/useCatalog";
-import { useClientTariffs } from "@/hooks/useClientTariffs";
 import { useOrders } from "@/hooks/useOrders";
-import { useRates } from "@/hooks/useRates";
-import type { OrderLineApi, ProductApi } from "@/lib/api";
-import { formatDateDisplay } from "@/lib/orderCalculations";
+import type { ComandaLiniaApi } from "@/lib/api";
+import { formatData } from "@/lib/dates";
+import { formatDecimal } from "@/lib/decimals";
 
-function formatPrice(value: number) {
-  return `${value.toFixed(2).replace(".", ",")} €`;
+const ESTAT_LABELS: Record<string, string> = {
+  oberta: "Oberta",
+  en_proces: "En procés",
+  tancada: "Tancada",
+  amb_incidencia: "Amb incidència",
+};
+
+function formatPrice(value: string) {
+  return `${formatDecimal(value, 2)} €`;
+}
+
+function formatKg(value: string) {
+  return formatDecimal(value, 3);
 }
 
 function Field({ label, value }: { label: string; value: ReactNode }) {
@@ -27,33 +35,23 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function OrderLineCard({
-  line,
-  product,
-  unitPrice,
-  subtotal,
-}: {
-  line: OrderLineApi;
-  product?: ProductApi;
-  unitPrice: number | null;
-  subtotal: number | null;
-}) {
+function OrderLineCard({ line }: { line: ComandaLiniaApi }) {
   return (
     <DataCard>
       <p className="font-semibold text-gray-900">
-        {product ? `${product.code} · ${product.description}` : line.productCode}
+        {line.producte ? `${line.producte.codi ?? line.producte.id} · ${line.producte.descripcio}` : "—"}
       </p>
-      <p className="text-sm text-gray-500">{product?.format ?? "—"}</p>
+      <p className="text-sm text-gray-500">{line.format ?? "—"}</p>
 
       <div className="mt-3">
         <DataCardGrid>
-          <DataCardField label="Unitats demanades">{line.orderedUnits}</DataCardField>
-          <DataCardField label="Unitats lliurades">{line.deliveredUnits}</DataCardField>
-          <DataCardField label="Pes demanat (kg)">{line.orderedWeightKg.toFixed(3).replace(".", ",")}</DataCardField>
-          <DataCardField label="Pes lliurat (kg)">{line.deliveredWeightKg.toFixed(3).replace(".", ",")}</DataCardField>
-          <DataCardField label="Preu unitari">{unitPrice !== null ? formatPrice(unitPrice) : "—"}</DataCardField>
+          <DataCardField label="Unitats demanades">{line.unitatsDemanades}</DataCardField>
+          <DataCardField label="Unitats lliurades">{line.unitatsLliurades}</DataCardField>
+          <DataCardField label="Pes demanat (kg)">{formatKg(line.kgDemanats)}</DataCardField>
+          <DataCardField label="Pes lliurat (kg)">{formatKg(line.kgLliurats)}</DataCardField>
+          <DataCardField label="Preu unitari">{formatPrice(line.preuUnitari)}</DataCardField>
           <DataCardField label="Subtotal">
-            <span className="font-semibold">{subtotal !== null ? formatPrice(subtotal) : "—"}</span>
+            <span className="font-semibold">{formatPrice(line.totalLinia)}</span>
           </DataCardField>
         </DataCardGrid>
       </div>
@@ -61,7 +59,7 @@ function OrderLineCard({
       <label className="mt-3 flex items-center gap-2 border-t border-gray-100 pt-3 text-sm text-gray-700">
         <input
           type="checkbox"
-          checked={line.productionNotes.trim().length > 0}
+          checked={(line.obsProduccio ?? "").trim().length > 0}
           disabled
           className="h-4 w-4 rounded border-gray-300 text-ink"
         />
@@ -74,12 +72,8 @@ function OrderLineCard({
 export default function OfficeOrderDetailPage() {
   const params = useParams<{ number: string }>();
   const { data: orders, isLoading, error } = useOrders();
-  const { data: clients } = useClientTariffs();
-  const { tariffColumns, data: rates } = useRates();
-  const { data: carriers } = useCarriers();
-  const { data: products } = useCatalog();
 
-  const order = orders.find((item) => item.number === params.number);
+  const order = orders.find((item) => item.num === params.number);
 
   return (
     <div>
@@ -105,43 +99,38 @@ export default function OfficeOrderDetailPage() {
           <div className="rounded-xl border border-gray-200 bg-white p-6">
             <h2 className="mb-4 text-base font-bold text-gray-900">Capçalera</h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Field label="Núm. comanda" value={order.number} />
+              <Field label="Núm. comanda" value={order.num} />
               <Field
                 label="Estat"
-                value={<Badge variant={order.status === "Incidència" ? "negative" : "info"}>{order.status}</Badge>}
+                value={
+                  <Badge variant={order.estat === "amb_incidencia" ? "negative" : "info"}>
+                    {ESTAT_LABELS[order.estat] ?? order.estat}
+                  </Badge>
+                }
               />
-              <Field
-                label="Client"
-                value={clients.find((item) => item.code === order.clientCode)?.name ?? order.clientCode}
-              />
+              <Field label="Client" value={order.client?.nom ?? "—"} />
               <Field label="Població de destí" value={order.poblacioDesti || "—"} />
-              <Field
-                label="Tarifa"
-                value={tariffColumns.find((item) => item.code === order.tariffCode)?.name ?? "—"}
-              />
-              <Field
-                label="Transportista"
-                value={carriers.find((item) => item.code === order.carrierCode)?.name ?? "—"}
-              />
-              <Field label="Data comanda" value={formatDateDisplay(order.orderDate)} />
+              <Field label="Tarifa" value={order.tarifa?.nom ?? "—"} />
+              <Field label="Transportista" value={order.transportista?.nom ?? "—"} />
+              <Field label="Data comanda" value={formatData(order.dataComanda, false)} />
               <Field
                 label="Data lliurament"
-                value={order.deliveryDate ? formatDateDisplay(order.deliveryDate) : "—"}
+                value={order.dataLliurament ? formatData(order.dataLliurament, true) : "—"}
               />
               <Field
                 label="Data expedició"
-                value={order.shippingDate ? formatDateDisplay(order.shippingDate) : "—"}
+                value={order.dataExpedicio ? formatData(order.dataExpedicio, true) : "—"}
               />
-              <Field label="Núm. bultos" value={order.packageCount} />
+              <Field label="Núm. bultos" value={order.bultos ?? "—"} />
             </div>
 
             <div className="mt-4">
-              <Field label="Adreça de lliurament" value={order.deliveryAddress || "—"} />
+              <Field label="Adreça de lliurament" value={order.adrecaLliurament || "—"} />
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Observacions de producció globals" value={order.productionNotes || "—"} />
-              <Field label="Observacions de lliurament" value={order.deliveryNotes || "—"} />
+              <Field label="Observacions de producció globals" value={order.obsProduccio || "—"} />
+              <Field label="Observacions de lliurament" value={order.obsLliurament || "—"} />
             </div>
           </div>
 
@@ -149,15 +138,9 @@ export default function OfficeOrderDetailPage() {
             <h2 className="mb-4 text-base font-bold text-gray-900">Línies</h2>
 
             <div className="flex flex-col gap-3 xl:hidden">
-              {order.lines.map((line) => {
-                const product = products.find((item) => item.code === line.productCode);
-                const rate = rates.find((item) => item.productCode === line.productCode);
-                const unitPrice = order.tariffCode ? (rate?.prices[order.tariffCode] ?? null) : null;
-                const subtotal = unitPrice !== null ? line.orderedUnits * unitPrice : null;
-                return (
-                  <OrderLineCard key={line.id} line={line} product={product} unitPrice={unitPrice} subtotal={subtotal} />
-                );
-              })}
+              {order.linies.map((line) => (
+                <OrderLineCard key={line.id} line={line} />
+              ))}
             </div>
 
             <div className="hidden overflow-x-auto rounded-lg border border-gray-200 xl:block">
@@ -176,42 +159,30 @@ export default function OfficeOrderDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {order.lines.map((line) => {
-                    const product = products.find((item) => item.code === line.productCode);
-                    const rate = rates.find((item) => item.productCode === line.productCode);
-                    const unitPrice = order.tariffCode ? (rate?.prices[order.tariffCode] ?? null) : null;
-                    const subtotal = unitPrice !== null ? line.orderedUnits * unitPrice : null;
-                    return (
-                      <tr key={line.id} className="border-b border-gray-100 last:border-0">
-                        <td className="px-3 py-2 break-words text-gray-900">
-                          {product ? `${product.code} · ${product.description}` : line.productCode}
-                        </td>
-                        <td className="px-3 py-2 break-words text-gray-500">{product?.format ?? "—"}</td>
-                        <td className="px-3 py-2 text-right text-gray-900">{line.orderedUnits}</td>
-                        <td className="px-3 py-2 text-right text-gray-900">{line.deliveredUnits}</td>
-                        <td className="px-3 py-2 text-right text-gray-900">
-                          {line.orderedWeightKg.toFixed(3).replace(".", ",")}
-                        </td>
-                        <td className="px-3 py-2 text-right text-gray-900">
-                          {line.deliveredWeightKg.toFixed(3).replace(".", ",")}
-                        </td>
-                        <td className="px-3 py-2 text-right text-gray-900">
-                          {unitPrice !== null ? formatPrice(unitPrice) : "—"}
-                        </td>
-                        <td className="px-3 py-2 text-right font-semibold text-gray-900">
-                          {subtotal !== null ? formatPrice(subtotal) : "—"}
-                        </td>
-                        <td className="px-3 py-2">
-                          <input
-                            type="checkbox"
-                            checked={line.productionNotes.trim().length > 0}
-                            disabled
-                            className="h-4 w-4 rounded border-gray-300 text-ink"
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {order.linies.map((line) => (
+                    <tr key={line.id} className="border-b border-gray-100 last:border-0">
+                      <td className="px-3 py-2 break-words text-gray-900">
+                        {line.producte ? `${line.producte.codi ?? line.producte.id} · ${line.producte.descripcio}` : "—"}
+                      </td>
+                      <td className="px-3 py-2 break-words text-gray-500">{line.format ?? "—"}</td>
+                      <td className="px-3 py-2 text-right text-gray-900">{line.unitatsDemanades}</td>
+                      <td className="px-3 py-2 text-right text-gray-900">{line.unitatsLliurades}</td>
+                      <td className="px-3 py-2 text-right text-gray-900">{formatKg(line.kgDemanats)}</td>
+                      <td className="px-3 py-2 text-right text-gray-900">{formatKg(line.kgLliurats)}</td>
+                      <td className="px-3 py-2 text-right text-gray-900">{formatPrice(line.preuUnitari)}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-gray-900">
+                        {formatPrice(line.totalLinia)}
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="checkbox"
+                          checked={(line.obsProduccio ?? "").trim().length > 0}
+                          disabled
+                          className="h-4 w-4 rounded border-gray-300 text-ink"
+                        />
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

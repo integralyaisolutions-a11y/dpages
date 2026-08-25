@@ -6,13 +6,13 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { IconButton } from "@/components/ui/IconButton";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useCategories, type CategoryFormValues } from "@/hooks/useCategories";
-import type { CategoryApi } from "@/lib/api";
+import type { CategoriaApi } from "@/lib/api";
 import { CategoryFormModal } from "./CategoryFormModal";
 
 export default function CategoriesPage() {
   const { data, isLoading, error, createCategory, editCategory, deleteCategory } = useCategories();
-  const [formState, setFormState] = useState<{ mode: "create" | "edit"; category?: CategoryApi } | null>(null);
-  const [categoryToDelete, setCategoryToDelete] = useState<CategoryApi | null>(null);
+  const [formState, setFormState] = useState<{ mode: "create" | "edit"; category?: CategoriaApi } | null>(null);
+  const [categoryToDelete, setCategoryToDelete] = useState<CategoriaApi | null>(null);
 
   function handleSave(values: CategoryFormValues) {
     if (formState?.mode === "edit" && formState.category) {
@@ -55,7 +55,7 @@ export default function CategoriesPage() {
               {data.map((category) => (
                 <tr key={category.id} className="border-b border-gray-100 last:border-0">
                   <td className="px-3 py-3 break-words">
-                    <span className="font-semibold text-gray-900">{category.name}</span>
+                    <span className="font-semibold text-gray-900">{category.nom}</span>
                   </td>
                   <td className="px-3 py-3 break-words text-gray-900">{category.elaboratPorc ? "Sí" : "No"}</td>
                   <td className="px-3 py-3 break-words text-gray-900">{category.agrupacioRendiment ?? "—"}</td>
@@ -94,7 +94,7 @@ export default function CategoriesPage() {
         title="Suprimeix  categoria"
         message={
           categoryToDelete
-            ? `Estàs segur que vols suprimir la categoria "${categoryToDelete.name}"? Aquesta acció no es pot desfer.`
+            ? `Estàs segur que vols suprimir la categoria "${categoryToDelete.nom}"? Aquesta acció no es pot desfer.`
             : ""
         }
         confirmLabel="Eliminar"

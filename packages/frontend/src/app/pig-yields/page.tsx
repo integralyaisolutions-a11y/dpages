@@ -11,7 +11,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { useEditableRow } from "@/hooks/useEditableRow";
 import { usePigYields, type PigYieldPatch } from "@/hooks/usePigYields";
-import type { PigYieldApi } from "@/lib/api";
+import type { RendimentPorcApi } from "@/lib/api";
+import { parseDecimalInput } from "@/lib/decimals";
 import { calculatePigYieldTotal } from "@/lib/pigYieldCalculations";
 import { PigYieldFormModal } from "./PigYieldFormModal";
 
@@ -30,21 +31,25 @@ function PigYieldRow({
   onSave,
   onDelete,
 }: {
-  item: PigYieldApi;
-  onSave: (id: string, patch: PigYieldPatch) => void;
-  onDelete: (item: PigYieldApi) => void;
+  item: RendimentPorcApi;
+  onSave: (id: number, patch: PigYieldPatch) => void;
+  onDelete: (item: RendimentPorcApi) => void;
 }) {
   const { draft, setField, save, isDirty } = useEditableRow(
-    { unitsPerPig: item.unitsPerPig, kgPerUnit: item.kgPerUnit },
-    (values) => onSave(item.id, values),
+    { unitsPerPig: Number(item.unitatsPerPorc), kgPerUnit: Number(item.kgPerUnitat) },
+    (values) =>
+      onSave(item.id, {
+        unitatsPerPorc: parseDecimalInput(values.unitsPerPig, 2),
+        kgPerUnitat: parseDecimalInput(values.kgPerUnit, 3),
+      }),
   );
 
   return (
     <tr className="border-b border-gray-100 last:border-0">
       <td className="px-2 py-3 break-words">
-        <span className="font-semibold text-gray-900">{item.category}</span>
+        <span className="font-semibold text-gray-900">{item.categoria}</span>
       </td>
-      <td className="px-2 py-3 break-words text-gray-900">{item.productionGroup}</td>
+      <td className="px-2 py-3 break-words text-gray-900">{item.agrupacioProduccio ?? "—"}</td>
       <td className="px-2 py-3 text-right">
         <EditableCell
           value={draft.unitsPerPig}
@@ -90,19 +95,23 @@ function PigYieldCard({
   onSave,
   onDelete,
 }: {
-  item: PigYieldApi;
-  onSave: (id: string, patch: PigYieldPatch) => void;
-  onDelete: (item: PigYieldApi) => void;
+  item: RendimentPorcApi;
+  onSave: (id: number, patch: PigYieldPatch) => void;
+  onDelete: (item: RendimentPorcApi) => void;
 }) {
   const { draft, setField, save, isDirty } = useEditableRow(
-    { unitsPerPig: item.unitsPerPig, kgPerUnit: item.kgPerUnit },
-    (values) => onSave(item.id, values),
+    { unitsPerPig: Number(item.unitatsPerPorc), kgPerUnit: Number(item.kgPerUnitat) },
+    (values) =>
+      onSave(item.id, {
+        unitatsPerPorc: parseDecimalInput(values.unitsPerPig, 2),
+        kgPerUnitat: parseDecimalInput(values.kgPerUnit, 3),
+      }),
   );
 
   return (
     <DataCard>
-      <p className="font-semibold text-gray-900">{item.category}</p>
-      <p className="text-sm text-gray-500">{item.productionGroup}</p>
+      <p className="font-semibold text-gray-900">{item.categoria}</p>
+      <p className="text-sm text-gray-500">{item.agrupacioProduccio ?? "—"}</p>
 
       <div className="mt-3 grid grid-cols-2 gap-3">
         <div>
@@ -156,15 +165,15 @@ export default function PigYieldsPage() {
   const { data, isLoading, error, createPigYield, updatePigYield, deletePigYield } = usePigYields();
   const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORIES);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [pigYieldToDelete, setPigYieldToDelete] = useState<PigYieldApi | null>(null);
+  const [pigYieldToDelete, setPigYieldToDelete] = useState<RendimentPorcApi | null>(null);
 
   const categoryOptions = useMemo(
-    () => [ALL_CATEGORIES, ...Array.from(new Set(data.map((item) => item.category)))],
+    () => [ALL_CATEGORIES, ...Array.from(new Set(data.map((item) => item.categoria)))],
     [data],
   );
 
   const filteredData = data.filter(
-    (item) => categoryFilter === ALL_CATEGORIES || item.category === categoryFilter,
+    (item) => categoryFilter === ALL_CATEGORIES || item.categoria === categoryFilter,
   );
 
   return (
@@ -243,7 +252,7 @@ export default function PigYieldsPage() {
         title="Suprimeix línia"
         message={
           pigYieldToDelete
-            ? `Estàs segur que vols suprimir la línia "${pigYieldToDelete.category} · ${pigYieldToDelete.productionGroup}"? Aquesta acció no es pot desfer.`
+            ? `Estàs segur que vols suprimir la línia "${pigYieldToDelete.categoria} · ${pigYieldToDelete.agrupacioProduccio ?? "—"}"? Aquesta acció no es pot desfer.`
             : ""
         }
         confirmLabel="Eliminar"

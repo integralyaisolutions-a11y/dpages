@@ -5,9 +5,11 @@ import { Modal } from "@/components/ui/Modal";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { TextField } from "@/components/ui/TextField";
 import type { CategoryFormValues } from "@/hooks/useCategories";
+import type { CategoriaApi } from "@/lib/api";
 
 const ELABORAT_PORC_OPTIONS = ["Sí", "No"];
 const AGRUPACIO_RENDIMENT_OPTIONS = ["— Cap —", "MAGRE", "KG", "PAQ"];
+type AgrupacioRendiment = CategoriaApi["agrupacioRendiment"];
 
 export function CategoryFormModal({
   mode,
@@ -22,9 +24,11 @@ export function CategoryFormModal({
   onClose: () => void;
   onSave: (values: CategoryFormValues) => void;
 }) {
-  const [name, setName] = useState(initialData?.name ?? "");
+  const [name, setName] = useState(initialData?.nom ?? "");
   const [elaboratPorc, setElaboratPorc] = useState(initialData?.elaboratPorc ?? false);
-  const [agrupacioRendiment, setAgrupacioRendiment] = useState<string | null>(initialData?.agrupacioRendiment ?? null);
+  const [agrupacioRendiment, setAgrupacioRendiment] = useState<AgrupacioRendiment>(
+    initialData?.agrupacioRendiment ?? null,
+  );
   const [error, setError] = useState<string | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -40,7 +44,7 @@ export function CategoryFormModal({
       setError("La categoria no pot estar buida.");
       return;
     }
-    onSave({ name: trimmedName, elaboratPorc, agrupacioRendiment });
+    onSave({ nom: trimmedName, elaboratPorc, agrupacioRendiment });
   }
 
   return (
@@ -63,7 +67,7 @@ export function CategoryFormModal({
           label="Agrupació Rendiment"
           options={AGRUPACIO_RENDIMENT_OPTIONS}
           value={agrupacioRendiment ?? "— Cap —"}
-          onChange={(value) => setAgrupacioRendiment(value === "— Cap —" ? null : value)}
+          onChange={(value) => setAgrupacioRendiment(value === "— Cap —" ? null : (value as AgrupacioRendiment))}
         />
       </div>
       <div className="mt-6 flex items-center justify-between">

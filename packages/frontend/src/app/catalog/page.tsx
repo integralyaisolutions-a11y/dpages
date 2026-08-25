@@ -11,42 +11,44 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { useCatalog } from "@/hooks/useCatalog";
-import type { ProductApi } from "@/lib/api";
+import type { ProducteApi } from "@/lib/api";
+import { formatDecimal } from "@/lib/decimals";
 
 const ALL = "Tots";
 const ALL_FEM = "Totes";
 
-function formatPrice(value: number) {
-  return `${value.toFixed(2).replace(".", ",")} €`;
+function formatPrice(value: string | null) {
+  const formatted = formatDecimal(value, 2);
+  return formatted === "—" ? formatted : `${formatted} €`;
 }
 
-function formatWeight(value: number) {
-  return value.toFixed(3).replace(".", ",");
+function formatWeight(value: string | null) {
+  return formatDecimal(value, 3);
 }
 
 function distinct(values: string[]) {
   return Array.from(new Set(values));
 }
 
-function CatalogCard({ product, onEdit }: { product: ProductApi; onEdit: () => void }) {
+function CatalogCard({ product, onEdit }: { product: ProducteApi; onEdit: () => void }) {
   return (
     <DataCard>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-semibold text-gray-900">{product.code}</p>
-          <p className="text-sm text-gray-500">{product.description}</p>
+          <p className="font-semibold text-gray-900">{product.codi}</p>
+          <p className="text-sm text-gray-500">{product.descripcio}</p>
         </div>
-        <Badge variant={product.status === "Actiu" ? "positive" : "neutral"}>{product.status}</Badge>
+        <Badge variant={product.actiu ? "positive" : "neutral"}>{product.actiu ? "Actiu" : "Inactiu"}</Badge>
       </div>
 
       <div className="mt-3">
         <DataCardGrid>
-          <DataCardField label="Categoria">{product.category}</DataCardField>
-          <DataCardField label="Agrupació producció">{product.productionGroup}</DataCardField>
-          <DataCardField label="Format">{product.format}</DataCardField>
-          <DataCardField label="Envasat">{product.packaging}</DataCardField>
-          <DataCardField label="Pes (kg)">{formatWeight(product.weightKg)}</DataCardField>
-          <DataCardField label="Preu base">{formatPrice(product.basePrice)}</DataCardField>
+          <DataCardField label="Categoria">{product.categoria?.nom ?? "—"}</DataCardField>
+          <DataCardField label="Agrupació producció">{product.agrupacioProduccio ?? "—"}</DataCardField>
+          <DataCardField label="Format">{product.format ?? "—"}</DataCardField>
+          <DataCardField label="Envasat">{product.envasat ?? "—"}</DataCardField>
+          <DataCardField label="Pes (kg)">{formatWeight(product.pesKg)}</DataCardField>
+          <DataCardField label="Preu base">{formatPrice(product.preuVenda)}</DataCardField>
         </DataCardGrid>
       </div>
 
@@ -74,22 +76,28 @@ export default function CatalogPage() {
   const [packaging, setPackaging] = useState(ALL);
   const [status, setStatus] = useState(ALL);
 
-  const categoryOptions = useMemo(() => [ALL_FEM, ...distinct(data.map((product) => product.category))], [data]);
-  const productionGroupOptions = useMemo(
-    () => [ALL, ...distinct(data.map((product) => product.productionGroup))],
+  const categoryOptions = useMemo(
+    () => [ALL_FEM, ...distinct(data.map((product) => product.categoria?.nom ?? "—"))],
     [data],
   );
-  const formatOptions = useMemo(() => [ALL, ...distinct(data.map((product) => product.format))], [data]);
-  const packagingOptions = useMemo(() => [ALL, ...distinct(data.map((product) => product.packaging))], [data]);
-  const statusOptions = useMemo(() => [ALL, ...distinct(data.map((product) => product.status))], [data]);
+  const productionGroupOptions = useMemo(
+    () => [ALL, ...distinct(data.map((product) => product.agrupacioProduccio ?? "—"))],
+    [data],
+  );
+  const formatOptions = useMemo(() => [ALL, ...distinct(data.map((product) => product.format ?? "—"))], [data]);
+  const packagingOptions = useMemo(() => [ALL, ...distinct(data.map((product) => product.envasat ?? "—"))], [data]);
+  const statusOptions = useMemo(
+    () => [ALL, ...distinct(data.map((product) => (product.actiu ? "Actiu" : "Inactiu")))],
+    [data],
+  );
 
   const filtered = data.filter((product) => {
-    if (search && !product.description.toLowerCase().includes(search.toLowerCase())) return false;
-    if (category !== ALL_FEM && product.category !== category) return false;
-    if (productionGroup !== ALL && product.productionGroup !== productionGroup) return false;
-    if (format !== ALL && product.format !== format) return false;
-    if (packaging !== ALL && product.packaging !== packaging) return false;
-    if (status !== ALL && product.status !== status) return false;
+    if (search && !product.descripcio.toLowerCase().includes(search.toLowerCase())) return false;
+    if (category !== ALL_FEM && (product.categoria?.nom ?? "—") !== category) return false;
+    if (productionGroup !== ALL && (product.agrupacioProduccio ?? "—") !== productionGroup) return false;
+    if (format !== ALL && (product.format ?? "—") !== format) return false;
+    if (packaging !== ALL && (product.envasat ?? "—") !== packaging) return false;
+    if (status !== ALL && (product.actiu ? "Actiu" : "Inactiu") !== status) return false;
     return true;
   });
 
@@ -127,9 +135,9 @@ export default function CatalogPage() {
           <div className="flex flex-col gap-3 xl:hidden">
             {filtered.map((product) => (
               <CatalogCard
-                key={product.code}
+                key={product.id}
                 product={product}
-                onEdit={() => router.push(`/catalog/${product.code}/edit`)}
+                onEdit={() => router.push(`/catalog/${product.codi}/edit`)}
               />
             ))}
           </div>
@@ -154,26 +162,28 @@ export default function CatalogPage() {
               </thead>
               <tbody>
                 {filtered.map((product) => (
-                  <tr key={product.code} className="border-b border-gray-100 last:border-0">
-                    <td className="px-2 py-3 break-words text-gray-900">{product.category}</td>
-                    <td className="px-2 py-3 break-words text-gray-900">{product.productionGroup}</td>
+                  <tr key={product.id} className="border-b border-gray-100 last:border-0">
+                    <td className="px-2 py-3 break-words text-gray-900">{product.categoria?.nom ?? "—"}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">{product.agrupacioProduccio ?? "—"}</td>
                     <td className="px-2 py-3 break-words">
-                      <span className="font-semibold text-gray-900">{product.code}</span>
+                      <span className="font-semibold text-gray-900">{product.codi}</span>
                     </td>
-                    <td className="px-2 py-3 break-words text-gray-900">{product.description}</td>
-                    <td className="px-2 py-3 break-words text-gray-900">{product.format}</td>
-                    <td className="px-2 py-3 break-words text-gray-900">{product.packaging}</td>
-                    <td className="px-2 py-3 text-right text-gray-900">{formatWeight(product.weightKg)}</td>
-                    <td className="px-2 py-3 text-right text-gray-900">{formatPrice(product.basePrice)}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">{product.descripcio}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">{product.format ?? "—"}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">{product.envasat ?? "—"}</td>
+                    <td className="px-2 py-3 text-right text-gray-900">{formatWeight(product.pesKg)}</td>
+                    <td className="px-2 py-3 text-right text-gray-900">{formatPrice(product.preuVenda)}</td>
                     <td className="px-2 py-3 break-words">
-                      <Badge variant={product.status === "Actiu" ? "positive" : "neutral"}>{product.status}</Badge>
+                      <Badge variant={product.actiu ? "positive" : "neutral"}>
+                        {product.actiu ? "Actiu" : "Inactiu"}
+                      </Badge>
                     </td>
                     <td className="px-2 py-3 text-right">
                       <div className="flex justify-end">
                         <IconButton
                           variant="edit"
                           label="Editar producte"
-                          onClick={() => router.push(`/catalog/${product.code}/edit`)}
+                          onClick={() => router.push(`/catalog/${product.codi}/edit`)}
                         />
                       </div>
                     </td>

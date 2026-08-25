@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { CategoryApi, OrderApi, PigYieldApi, ProductApi } from "@/lib/api";
+import type { CategoriaApi, ComandaDetallApi, ProducteApi, RendimentPorcApi } from "@/lib/api";
 import { buildProductionRow, findMatchingProduct, type ProductionMode, type ProductionRow } from "@/lib/productionCalculations";
 import { getMockCatalog } from "@/mocks/catalog";
 import { getMockCategories } from "@/mocks/categories";
@@ -19,10 +19,10 @@ export function useProductionPanell(
   dateFrom: string,
   dateTo: string,
 ): UseProductionPanellResult {
-  const [pigYields, setPigYields] = useState<PigYieldApi[]>([]);
-  const [categories, setCategories] = useState<CategoryApi[]>([]);
-  const [products, setProducts] = useState<ProductApi[]>([]);
-  const [orders, setOrders] = useState<OrderApi[]>([]);
+  const [pigYields, setPigYields] = useState<RendimentPorcApi[]>([]);
+  const [categories, setCategories] = useState<CategoriaApi[]>([]);
+  const [products, setProducts] = useState<ProducteApi[]>([]);
+  const [orders, setOrders] = useState<ComandaDetallApi[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -53,24 +53,17 @@ export function useProductionPanell(
   const rows = useMemo(
     () =>
       pigYields.map((pigYield) => {
-        const agrupacioRendiment = categories.find((category) => category.name === pigYield.category)?.agrupacioRendiment;
         const mode: ProductionMode =
-          agrupacioRendiment === "MAGRE" || agrupacioRendiment === "KG" || agrupacioRendiment === "PAQ"
-            ? agrupacioRendiment
+          pigYield.agrupacioRendiment === "MAGRE" ||
+          pigYield.agrupacioRendiment === "KG" ||
+          pigYield.agrupacioRendiment === "PAQ"
+            ? pigYield.agrupacioRendiment
             : null;
         const matchedProduct =
-          mode === "KG" || mode === "PAQ" ? findMatchingProduct(pigYield.productionGroup, products) : undefined;
-        return buildProductionRow(
-          pigYield,
-          mode,
-          pigsToProduce,
-          matchedProduct,
-          orders,
-          products,
-          categories,
-          dateFrom,
-          dateTo,
-        );
+          mode === "KG" || mode === "PAQ"
+            ? findMatchingProduct(pigYield.agrupacioProduccio ?? "", products)
+            : undefined;
+        return buildProductionRow(pigYield, mode, pigsToProduce, matchedProduct, orders, categories, dateFrom, dateTo);
       }),
     [pigYields, categories, products, orders, pigsToProduce, dateFrom, dateTo],
   );
