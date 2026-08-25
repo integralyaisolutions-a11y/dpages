@@ -23,6 +23,28 @@ describe('CORS (@fastify/cors) — fuera de producción', () => {
     await fastify.close();
   });
 
+  it('regresión capa 26: preflight OPTIONS para PATCH/DELETE incluye esos verbos (bug real: @fastify/cors sin `methods` explícito default a GET,HEAD,POST y bloqueaba todo el borrado/edición)', async () => {
+    const fastify = construirServidor();
+
+    const patch = await fastify.inject({
+      method: 'OPTIONS',
+      url: '/api/v1/productes/1',
+      headers: { origin: 'http://localhost:3000', 'access-control-request-method': 'PATCH' },
+    });
+    expect(patch.statusCode).toBe(204);
+    expect(patch.headers['access-control-allow-methods']).toContain('PATCH');
+
+    const del = await fastify.inject({
+      method: 'OPTIONS',
+      url: '/api/v1/productes/1',
+      headers: { origin: 'http://localhost:3000', 'access-control-request-method': 'DELETE' },
+    });
+    expect(del.statusCode).toBe(204);
+    expect(del.headers['access-control-allow-methods']).toContain('DELETE');
+
+    await fastify.close();
+  });
+
   it('el origen configurado es un valor fijo, no un reflejo de cualquier Origin entrante', async () => {
     // Un origen ESTÁTICO (string, no una función que refleje el header
     // entrante) siempre devuelve ESE valor fijo, sin importar qué mande el
@@ -79,6 +101,49 @@ describe('CORS (@fastify/cors) — producción sin CORS_ORIGIN configurado', () 
     expect(res.statusCode).toBe(404);
     expect(res.headers['access-control-allow-origin']).toBeUndefined();
     expect(res.headers['access-control-allow-methods']).toBeUndefined();
+
+    await fastify.close();
+  });
+});
+
+describe('CORS (@fastify/cors) — producción con CORS_ORIGIN configurado', () => {
+  let construirServidor: typeof construirServidorType;
+  const ORIGEN_PRODUCCIO = 'https://app.dpages.cat';
+
+  beforeAll(async () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.AUTH_DISABLED;
+    process.env.CORS_ORIGIN = ORIGEN_PRODUCCIO;
+    vi.resetModules();
+    ({ construirServidor } = await import('./servidor.js'));
+  });
+
+  afterAll(() => {
+    process.env.NODE_ENV = 'test';
+    process.env.AUTH_DISABLED = 'true';
+    delete process.env.CORS_ORIGIN;
+    vi.resetModules();
+  });
+
+  it('regresión capa 26: el branch de producción TAMBIÉN incluye PATCH/DELETE en el preflight, no sólo el de desarrollo', async () => {
+    const fastify = construirServidor();
+
+    const patch = await fastify.inject({
+      method: 'OPTIONS',
+      url: '/api/v1/productes/1',
+      headers: { origin: ORIGEN_PRODUCCIO, 'access-control-request-method': 'PATCH' },
+    });
+    expect(patch.statusCode).toBe(204);
+    expect(patch.headers['access-control-allow-origin']).toBe(ORIGEN_PRODUCCIO);
+    expect(patch.headers['access-control-allow-methods']).toContain('PATCH');
+
+    const del = await fastify.inject({
+      method: 'OPTIONS',
+      url: '/api/v1/productes/1',
+      headers: { origin: ORIGEN_PRODUCCIO, 'access-control-request-method': 'DELETE' },
+    });
+    expect(del.statusCode).toBe(204);
+    expect(del.headers['access-control-allow-methods']).toContain('DELETE');
 
     await fastify.close();
   });
