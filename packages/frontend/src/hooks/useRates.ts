@@ -1,38 +1,53 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { FilaMatriuTarifesApi, TarifaResumApi } from "@/lib/api";
-import { addMockTariff, getMockRates, getMockTariffColumns, updateMockPrices } from "@/mocks/rates";
+import { api, ApiError, type FilaMatriuTarifesApi, type TarifaResumApi } from "@/lib/api";
+
+export type CellSaveResult =
+  | { tarifaId: string; success: true }
+  | { tarifaId: string; success: false; error: ApiError };
 
 type UseRatesResult = {
   data: FilaMatriuTarifesApi[];
   tariffColumns: TarifaResumApi[];
   isLoading: boolean;
-  error: Error | null;
-  updatePrices: (producteId: number, preus: Record<string, string | null>) => void;
-  createTariff: (codi: string, nom: string) => void;
+  error: ApiError | null;
+  refetch: () => void;
+  savePrices: (producteId: number, changes: Record<string, string>) => Promise<CellSaveResult[]>;
+  createTariff: (codi: string, nom: string) => Promise<void>;
 };
 
-// TODO: cuando cierre el contrato con el backend, reemplazar getMockRates()/getMockTariffColumns()
-// por las llamadas reales a api.ts sin tocar la forma del hook.
+// Igual que Categories/Catàleg: el màxim de pàgina del contracte és 200
+// (comu.ts, MIDA_PAGINA_MAXIMA) i el catàleg real té ~111 articles, així
+// que un sol GET els trau tots i es manté el filtrat client-side.
+const MIDA_LLISTAT = 200;
+
 export function useRates(): UseRatesResult {
   const [data, setData] = useState<FilaMatriuTarifesApi[]>([]);
   const [tariffColumns, setTariffColumns] = useState<TarifaResumApi[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setIsLoading(true);
+    setError(null);
 
-    Promise.all([getMockRates(), getMockTariffColumns()])
-      .then(([rates, columns]) => {
+    api
+      .get<{ tarifes: TarifaResumApi[]; dades: FilaMatriuTarifesApi[] }>("/tarifes/matriu", { mida: MIDA_LLISTAT })
+      .then((resposta) => {
         if (!cancelled) {
-          setData(rates);
-          setTariffColumns(columns);
+          setData(resposta.dades);
+          setTariffColumns(resposta.tarifes);
         }
       })
       .catch((caught) => {
-        if (!cancelled) setError(caught instanceof Error ? caught : new Error(String(caught)));
+        if (!cancelled) {
+          setError(
+            caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
+          );
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -41,22 +56,45 @@ export function useRates(): UseRatesResult {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadToken]);
 
-  // TODO: sustituir por mutation real (PATCH /tarifes/:tarifaId/preus/:producteId, una celda por vez) cuando exista backend.
-  const updatePrices = useCallback((producteId: number, preus: Record<string, string | null>) => {
-    console.log("update prices", producteId, preus);
-    updateMockPrices(producteId, preus).then(setData);
-  }, []);
+  const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 
-  // TODO: sustituir por mutation real (POST /tarifes) cuando exista backend.
-  const createTariff = useCallback((codi: string, nom: string) => {
-    console.log("create tariff", codi, nom);
-    addMockTariff({ codi, nom }).then((result) => {
-      setTariffColumns(result.tariffColumns);
-      setData(result.data);
-    });
-  }, []);
+  // Una PATCH por celda cambiada (el contrato no soporta guardar toda la
+  // fila de una vez) — Promise.all en vez de fallar rápido: el backend no
+  // garantiza atomicidad entre celdas, así que cada una se resuelve
+  // independiente y se informa cuál falló, no todo-o-nada.
+  const savePrices = useCallback(
+    async (producteId: number, changes: Record<string, string>): Promise<CellSaveResult[]> => {
+      const results = await Promise.all(
+        Object.entries(changes).map(async ([tarifaId, preu]): Promise<CellSaveResult> => {
+          try {
+            await api.patch(`/tarifes/${tarifaId}/preus/${producteId}`, { preu });
+            return { tarifaId, success: true };
+          } catch (caught) {
+            return {
+              tarifaId,
+              success: false,
+              error: caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
+            };
+          }
+        }),
+      );
+      refetch();
+      return results;
+    },
+    [refetch],
+  );
 
-  return { data, tariffColumns, isLoading, error, updatePrices, createTariff };
+  // POST /tarifes no devuelve la matriz — hace falta un refetch completo
+  // para que la columna nueva aparezca con sus celdas inicializadas en null.
+  const createTariff = useCallback(
+    async (codi: string, nom: string) => {
+      await api.post<TarifaResumApi>("/tarifes", { codi, nom });
+      refetch();
+    },
+    [refetch],
+  );
+
+  return { data, tariffColumns, isLoading, error, refetch, savePrices, createTariff };
 }

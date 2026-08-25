@@ -9,7 +9,7 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { useCatalog } from "@/hooks/useCatalog";
 import { useEditableRow } from "@/hooks/useEditableRow";
-import { useRates } from "@/hooks/useRates";
+import { type CellSaveResult, useRates } from "@/hooks/useRates";
 import type { FilaMatriuTarifesApi, TarifaResumApi } from "@/lib/api";
 import { parseDecimalInput } from "@/lib/decimals";
 import { TariffFormModal } from "./TariffFormModal";
@@ -107,8 +107,11 @@ function RateProductRow({
   format: string;
   tariffColumns: TarifaResumApi[];
   columnWidths: ColumnWidths;
-  onSave: (producteId: number, preus: Record<string, string | null>) => void;
+  onSave: (producteId: number, changes: Record<string, string>) => Promise<CellSaveResult[]>;
 }) {
+  const [cellErrors, setCellErrors] = useState<Record<string, string>>({});
+  const [isSaving, setIsSaving] = useState(false);
+
   const initialPrices = useMemo(() => {
     const entries: Record<string, number | null> = {};
     for (const tariff of tariffColumns) {
@@ -118,12 +121,29 @@ function RateProductRow({
     return entries;
   }, [product, tariffColumns]);
 
-  const { draft, setField, save, isDirty } = useEditableRow(initialPrices, (prices) => {
-    const preus: Record<string, string | null> = {};
+  const { draft, setField, save, isDirty } = useEditableRow(initialPrices, async (prices) => {
+    // Sólo se manda PATCH de las celdas que realmente cambiaron respecto al
+    // último valor conocido — nunca a null: el backend no tiene forma de
+    // vaciar un precio ya cargado (EditableCell ya bloquea que el draft
+    // llegue a null en esos casos), sólo de sobrescribirlo.
+    const changes: Record<string, string> = {};
     for (const [tarifaId, value] of Object.entries(prices)) {
-      preus[tarifaId] = value === null ? null : parseDecimalInput(value, 2);
+      if (value === null) continue;
+      if (value === initialPrices[tarifaId]) continue;
+      changes[tarifaId] = parseDecimalInput(value, 2);
     }
-    onSave(product.producteId, preus);
+    if (Object.keys(changes).length === 0) return;
+
+    setIsSaving(true);
+    setCellErrors({});
+    const results = await onSave(product.producteId, changes);
+    setIsSaving(false);
+
+    const failures: Record<string, string> = {};
+    for (const result of results) {
+      if (!result.success) failures[result.tarifaId] = result.error.message;
+    }
+    setCellErrors(failures);
   });
 
   return (
@@ -153,23 +173,27 @@ function RateProductRow({
         {product.descripcio}
       </td>
       {tariffColumns.map((tariff) => (
-        <td key={tariff.id} className="px-1 py-3 text-right" style={{ width: TARIFF_COLUMN_WIDTH }}>
+        <td key={tariff.id} className="px-1 py-3 text-right align-top" style={{ width: TARIFF_COLUMN_WIDTH }}>
           <EditableCell
             value={draft[String(tariff.id)] ?? null}
+            originalValue={initialPrices[String(tariff.id)] ?? null}
             onChange={(value) => setField(String(tariff.id), value)}
           />
+          {cellErrors[String(tariff.id)] && (
+            <p className="mt-1 text-right text-xs text-red-600">{cellErrors[String(tariff.id)]}</p>
+          )}
         </td>
       ))}
       <td className="px-2 py-3 text-center" style={{ width: GUARDAR_WIDTH }}>
         <button
           type="button"
           onClick={save}
-          disabled={!isDirty}
+          disabled={!isDirty || isSaving}
           className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-            isDirty ? "bg-ink text-white hover:opacity-90" : "cursor-not-allowed bg-gray-200 text-gray-400"
+            isDirty && !isSaving ? "bg-ink text-white hover:opacity-90" : "cursor-not-allowed bg-gray-200 text-gray-400"
           }`}
         >
-          Guardar
+          {isSaving ? "Guardant..." : "Guardar"}
         </button>
       </td>
     </tr>
@@ -177,7 +201,7 @@ function RateProductRow({
 }
 
 export default function RatesPage() {
-  const { data, tariffColumns, isLoading, error, updatePrices, createTariff } = useRates();
+  const { data, tariffColumns, isLoading, error, refetch, savePrices, createTariff } = useRates();
   const { data: catalog } = useCatalog();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -262,7 +286,18 @@ export default function RatesPage() {
       </FilterBar>
 
       {isLoading && <p className="text-sm text-gray-500">Carregant...</p>}
-      {error && <p className="text-sm text-red-600">No s&apos;han pogut carregar les tarifes.</p>}
+      {error && (
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm text-red-600">No s&apos;han pogut carregar les tarifes: {error.message}</p>
+          <button
+            type="button"
+            onClick={refetch}
+            className="shrink-0 rounded-full border border-red-300 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
 
       {!isLoading && !error && (
         <div className="relative">
@@ -320,7 +355,7 @@ export default function RatesPage() {
                     format={formatByProductId.get(product.producteId) ?? "—"}
                     tariffColumns={tariffColumns}
                     columnWidths={columnWidths}
-                    onSave={updatePrices}
+                    onSave={savePrices}
                   />
                 ))}
               </tbody>
@@ -348,8 +383,8 @@ export default function RatesPage() {
       <TariffFormModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onSave={(code, name) => {
-          createTariff(code, name);
+        onSave={async (code, name) => {
+          await createTariff(code, name);
           setIsModalOpen(false);
         }}
       />

@@ -11,11 +11,14 @@ export function EditableCell({
   onChange,
   formatValue = defaultFormat,
   step = "0.01",
+  originalValue = null,
 }: {
   value: number | null;
   onChange: (value: number | null) => void;
   formatValue?: (value: number) => string;
   step?: string;
+  /** Último valor guardado en el backend (no el draft). Si no es null, la celda no se puede dejar vacía: al perder el foco sin contenido, vuelve a este valor en vez de quedar en null — el backend no tiene forma de "borrar" un precio ya cargado, sólo de sobrescribirlo. */
+  originalValue?: number | null;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [valueAtEditStart, setValueAtEditStart] = useState<number | null>(null);
@@ -35,6 +38,11 @@ export function EditableCell({
     if (!Number.isNaN(parsed)) onChange(parsed);
   }
 
+  function handleBlur() {
+    if (value === null && originalValue !== null) onChange(originalValue);
+    setIsEditing(false);
+  }
+
   if (isEditing) {
     return (
       <input
@@ -43,7 +51,7 @@ export function EditableCell({
         autoFocus
         defaultValue={value ?? ""}
         onChange={(event) => handleChange(event.target.value)}
-        onBlur={() => setIsEditing(false)}
+        onBlur={handleBlur}
         onKeyDown={(event) => {
           if (event.key === "Enter") event.currentTarget.blur();
           if (event.key === "Escape") {
