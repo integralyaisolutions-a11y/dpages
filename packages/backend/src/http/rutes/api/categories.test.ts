@@ -126,6 +126,46 @@ describe('API negoci — /categories (Postgres real, esquema aislado)', () => {
     await fastify.close();
   });
 
+  it('regresión capa 27: producte INACTIU associat també bloqueja amb 409 (mai 500) — repro exacte de Michel', async () => {
+    const categoriaAmbInactiu = await entorn.poolTest.query<{ id: string; id_seq: string }>(
+      `INSERT INTO categoria_producte (nom) VALUES ('Amb producte inactiu') RETURNING id, id_seq`,
+    );
+    const producte = await entorn.poolTest.query<{ id_seq: string }>(
+      `INSERT INTO producte (descripcio, tipus, categoria_id, actiu)
+       VALUES ('Article que es desactivarà', 'simple', $1, true) RETURNING id_seq`,
+      [categoriaAmbInactiu.rows[0]!.id],
+    );
+
+    const fastify = construirServidor();
+
+    // Con el producto todavía activo: 409 (ya cubierto arriba, se confirma
+    // de nuevo acá para dejar el ANTES/DESPUÉS exacto del repro de Michel).
+    const abans = await fastify.inject({
+      method: 'DELETE',
+      url: `/api/v1/categories/${categoriaAmbInactiu.rows[0]!.id_seq}`,
+    });
+    expect(abans.statusCode).toBe(409);
+
+    // Se desactiva el producto — bug real: el DELETE pasaba a dar 500
+    // (la guarda sólo contaba productos actius, pero la FK sin ON DELETE
+    // seguía bloqueando por CUALQUIER producto, activo o no).
+    const patch = await fastify.inject({
+      method: 'PATCH',
+      url: `/api/v1/productes/${producte.rows[0]!.id_seq}`,
+      payload: { actiu: false },
+    });
+    expect(patch.statusCode).toBe(200);
+
+    const despres = await fastify.inject({
+      method: 'DELETE',
+      url: `/api/v1/categories/${categoriaAmbInactiu.rows[0]!.id_seq}`,
+    });
+    expect(despres.statusCode).toBe(409);
+    expect(despres.json()).toMatchObject({ error: { codi: 'CONFLICTE' } });
+
+    await fastify.close();
+  });
+
   it('DELETE /categories/:id sense productes associats elimina i respon 204', async () => {
     const categoriaLliure = await entorn.poolTest.query<{ id_seq: string }>(
       `INSERT INTO categoria_producte (nom) VALUES ('Sense ús') RETURNING id_seq`,

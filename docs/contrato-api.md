@@ -275,10 +275,19 @@ que el `PATCH` de abajo: `agrupacioRendiment` sólo se acepta si
 
 **`PATCH /categories/:id`** — cuerpo parcial, sólo los campos a cambiar.
 
-**`DELETE /categories/:id`** — borrado protegido: si algún producto **activo**
-todavía usa esta categoría, responde `409 CONFLICTE` con el recuento en el
-mensaje en vez de dejar productos con una referencia rota. `204` sin cuerpo
-si el borrado se pudo hacer.
+**`DELETE /categories/:id`** — borrado protegido: si **cualquier** producto
+todavía usa esta categoría — **activo o inactivo, sin distinción** (capa 27) — responde `409 CONFLICTE` con el recuento en el mensaje en vez de
+dejar productos con una referencia rota. `204` sin cuerpo si el borrado se
+pudo hacer.
+
+> Un producto inactivo bloquea el borrado exactamente igual que uno activo
+> — nunca se borra una categoría "por transitividad" sin acción explícita.
+> Razón: si se permitiera borrar con productos inactivos asociados, un
+> producto reactivado más tarde aparecería sin categoría sin que nadie lo
+> haya tocado directamente. (Antes de la capa 27, la guarda sólo contaba
+> productos activos, pero la FK de la base no distingue por `actiu` —
+> Postgres bloqueaba el `DELETE` igual, y el error cae como `500` en vez de
+> `409` porque no estaba capturado; ya corregido.)
 
 > **`agrupacioRendiment`** (confirmado con el cliente el 18/08/2026, ya no
 > pendiente) toma uno de tres valores, y decide cómo esa categoría entra en

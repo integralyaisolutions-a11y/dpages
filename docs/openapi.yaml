@@ -121,9 +121,10 @@ paths:
     delete:
       tags: [Categories]
       summary: >-
-        Eliminar una categoría. Borrado protegido: si algún artículo activo
-        todavía la usa, responde 409 con el recuento en vez de dejar
-        artículos con una referencia rota.
+        Eliminar una categoría. Borrado protegido: si CUALQUIER artículo
+        todavía la usa — activo o inactivo, sin distinción (capa 27) —
+        responde 409 con el recuento en vez de dejar artículos con una
+        referencia rota.
       parameters:
         - $ref: '#/components/parameters/IdPath'
       responses:
