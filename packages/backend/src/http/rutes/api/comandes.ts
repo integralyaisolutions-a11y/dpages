@@ -254,22 +254,32 @@ async function estaCongelada(dbPool: Pool, comandaUuid: string): Promise<boolean
 
 /**
  * Cascada de resolución de precio de línia (contrato,
- * `ComandaLiniaApi.preuUnitari`): 1) la tarifa asignada al cliente del
- * pedido, si tiene precio para este producto; 2) si no, el precio base del
- * producto; 3) si tampoco hay ninguno de los dos, "0.00" — `sensePreu` le
- * indica al llamador que hay que registrar una incidencia, nunca queda una
- * línea con precio silenciosamente en cero.
+ * `ComandaLiniaApi.preuUnitari`): 1) la tarifa indicada, si tiene precio
+ * para este producto; 2) si no, el precio base del producto; 3) si tampoco
+ * hay ninguno de los dos, "0.00" — `sensePreu` le indica al llamador que hay
+ * que registrar una incidencia, nunca queda una línea con precio
+ * silenciosamente en cero.
+ *
+ * La "tarifa indicada" (`tarifaId`) depende de quién llama, esta función no
+ * decide eso:
+ * - `POST /comandes` (capa 32): el `tarifaId` explícito del body si vino,
+ *   si no la del cliente (`client.tarifa_id`).
+ * - `POST /comandes/:comandaId/linies` (capa 30): SIEMPRE la del cliente,
+ *   resuelta fresca — no cambia con esta capa.
+ * - `comanda.tarifa_id` editado después vía `PATCH /comandes/:id` NO pasa
+ *   nunca por acá — esa edición no recalcula líneas existentes, a propósito
+ *   (fuera de alcance de la capa 32, ver docs/contrato-api.md).
  */
 async function resolverPreuLinia(
   dbPool: Pool,
-  clientTarifaId: string | null,
+  tarifaId: string | null,
   producteUuid: string,
   preuVenda: string | null,
 ): Promise<{ preuUnitari: string; sensePreu: boolean }> {
-  if (clientTarifaId !== null) {
+  if (tarifaId !== null) {
     const tarifa = await dbPool.query<{ preu: string }>(
       'SELECT preu FROM tarifa_preu WHERE tarifa_id = $1 AND producte_id = $2',
-      [clientTarifaId, producteUuid],
+      [tarifaId, producteUuid],
     );
     if (tarifa.rows[0]) return { preuUnitari: tarifa.rows[0].preu, sensePreu: false };
   }
@@ -413,6 +423,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
     const cos = req.body as Partial<{
       origen: string;
       clientId: number;
+      tarifaId: number;
       dataLliurament: string;
       transportistaId: number;
       obsLliurament: string;
@@ -459,6 +470,22 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       );
       clientTarifaId = clientFila.rows[0]?.tarifa_id ?? null;
     }
+    // Capa 32 — tarifaId explícito en el body de creación anula la del
+    // cliente SÓLO para resolver el precio de estas líneas, y se guarda en
+    // comanda.tarifa_id (columna ya existente, hasta ahora sólo editable
+    // vía PATCH y sin efecto real en el precio — ver nota en
+    // resolverPreuLinia). Si no viene, comportamiento idéntico al de
+    // siempre: se usa clientTarifaId y comanda.tarifa_id queda NULL.
+    let tarifaUuid: string | null = null;
+    if (cos.tarifaId !== undefined) {
+      tarifaUuid = await resolverTarifaUuid(pool, cos.tarifaId);
+      if (tarifaUuid === null) {
+        return enviarValidacio(reply, 'La tarifa indicada no existeix', [
+          { camp: 'tarifaId', missatge: 'no existeix' },
+        ]);
+      }
+    }
+    const tarifaEfectivaId = tarifaUuid ?? clientTarifaId;
     let transportistaUuid: string | null = null;
     if (cos.transportistaId !== undefined) {
       transportistaUuid = await resolverTransportistaUuid(pool, cos.transportistaId);
@@ -524,7 +551,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
 
       const { preuUnitari, sensePreu } = await resolverPreuLinia(
         pool,
-        clientTarifaId,
+        tarifaEfectivaId,
         producteUuid,
         preuVenda,
       );
@@ -555,14 +582,15 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       const teLiniaSensePreu = liniesResoltes.some((l) => l.sensePreu);
 
       const comanda = await client.query<{ id: string }>(
-        `INSERT INTO comanda (origen_id, estat, client_id, poblacio_desti, total, data_lliurament,
-                               transportista_id, obs_lliurament)
-         VALUES ($1, $2, $3, NULL, $4, $5, $6, $7)
+        `INSERT INTO comanda (origen_id, estat, client_id, tarifa_id, poblacio_desti, total,
+                               data_lliurament, transportista_id, obs_lliurament)
+         VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8)
          RETURNING id`,
         [
           origenUuid,
           teLiniaSensePreu ? 'amb_incidencia' : 'oberta',
           clientUuid,
+          tarifaUuid,
           totalEur,
           cos.dataLliurament ?? null,
           transportistaUuid,
@@ -762,10 +790,11 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
    *
    * Precio: MISMA cascada que `POST /comandes` (`resolverPreuLinia`), sin
    * duplicar la lógica. La tarifa que se usa es la del CLIENTE asignado a
-   * la comanda (resuelta fresca acá, igual que al crear) — OJO:
-   * `comanda.tarifa_id` (editable vía `PATCH /comandes/:id`) es sólo
-   * informativo, `resolverPreuLinia` nunca lo consulta; esto no lo cambia
-   * esta capa, sólo lo replica tal cual ya funcionaba.
+   * la comanda (resuelta fresca acá) — OJO, esto sigue así después de la
+   * capa 32: `comanda.tarifa_id` puede tener un valor real (fijado al crear
+   * el pedido, o editado después vía `PATCH /comandes/:id`), pero esta ruta
+   * NUNCA lo consulta, siempre usa `client.tarifa_id`. No es un descuido:
+   * la capa 32 sólo tocó el momento de creación, a propósito.
    */
   fastify.post('/comandes/:comandaId/linies', async (req, reply) => {
     const comandaUuid = await resolverComandaOResponder(

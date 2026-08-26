@@ -748,6 +748,7 @@ correo y WhatsApp, que son la mayoría del volumen real.
 {
   "origen": "manual",
   "clientId": 45,
+  "tarifaId": 3,
   "dataLliurament": "2026-08-20T00:00:00Z",
   "transportistaId": 1,
   "obsLliurament": "Entregar pels matins",
@@ -757,6 +758,21 @@ correo y WhatsApp, que son la mayoría del volumen real.
   ]
 }
 ```
+
+> **`tarifaId` (capa 32) es opcional.** Si viene, se usa ESA tarifa (no la
+> del cliente) para resolver el precio de **todas** las líneas de esta alta,
+> y queda guardada en `comanda.tarifaId`. Si no viene, sin cambios: se usa
+> la tarifa del cliente (`client.tarifaId`). `tarifaId` inválido (no
+> existe) → `400 VALIDACIO`, mismo criterio que `clientId` inválido.
+>
+> **Límite de alcance, a propósito:** editar `tarifaId` después vía
+> `PATCH /comandes/:id` **no recalcula** las líneas ya creadas — sólo
+> cambia el valor de la columna, sin efecto retroactivo. Y
+> `POST /comandes/:comandaId/linies` (agregar una línea a un pedido ya
+> creado, capa 30) tampoco lo usa: esa ruta siempre resuelve el precio
+> contra la tarifa del **cliente**, nunca contra `comanda.tarifaId`, tanto
+> si se fijó al crear como si se editó después. Si en algún momento hace
+> falta que ambos casos sigan `comanda.tarifaId`, es un cambio aparte.
 
 **`PATCH /comandes/:id`** · **`DELETE /comandes/:id/linies/:liniaId`**
 

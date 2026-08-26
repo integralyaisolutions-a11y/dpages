@@ -1022,4 +1022,160 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       await fastify.close();
     });
   });
+
+  describe('capa 32 — tarifaId explícit a POST /comandes (anul·la la del client per a l’alta)', () => {
+    it('tarifaId explícit diferent de la del client: el preu resol contra la tarifa del body, no la del client', async () => {
+      const tarifaClient = await entorn.poolTest.query<{ id: string }>(
+        `INSERT INTO tarifa (codi, nom) VALUES ('CAP32-CLIENT', 'Tarifa del client') RETURNING id`,
+      );
+      await entorn.poolTest.query(
+        `INSERT INTO tarifa_preu (tarifa_id, producte_id, preu)
+         VALUES ($1, (SELECT id FROM producte WHERE id_seq = $2), '5.00')`,
+        [tarifaClient.rows[0]!.id, producteFitxaId],
+      );
+      const tarifaBody = await entorn.poolTest.query<{ id: string; id_seq: string }>(
+        `INSERT INTO tarifa (codi, nom) VALUES ('CAP32-BODY', 'Tarifa indicada al body') RETURNING id, id_seq`,
+      );
+      await entorn.poolTest.query(
+        `INSERT INTO tarifa_preu (tarifa_id, producte_id, preu)
+         VALUES ($1, (SELECT id FROM producte WHERE id_seq = $2), '6.75')`,
+        [tarifaBody.rows[0]!.id, producteFitxaId],
+      );
+      const client = await entorn.poolTest.query<{ id_seq: string }>(
+        `INSERT INTO client (nom, poblacio, tarifa_id) VALUES ('Client capa 32', 'Girona', $1) RETURNING id_seq`,
+        [tarifaClient.rows[0]!.id],
+      );
+      const clientCap32Id = Number(client.rows[0]!.id_seq);
+      const tarifaBodyIdPublic = Number(tarifaBody.rows[0]!.id_seq);
+
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          clientId: clientCap32Id,
+          tarifaId: tarifaBodyIdPublic,
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 2 }],
+        },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const cuerpo = cuerpoJson<ComandaDetallApi>(res);
+      expect(cuerpo.linies[0]?.preuUnitari).toBe('6.75'); // tarifa del body, no la del client (5.00)
+      expect(cuerpo.tarifa?.id).toBe(tarifaBodyIdPublic); // comanda.tarifa_id queda guardat
+
+      await fastify.close();
+    });
+
+    it('sense tarifaId al body: comportament actual sense canvis (fa servir la tarifa del client)', async () => {
+      const tarifa = await entorn.poolTest.query<{ id: string }>(
+        `INSERT INTO tarifa (codi, nom) VALUES ('CAP32-DEFAULT', 'Tarifa per defecte') RETURNING id`,
+      );
+      await entorn.poolTest.query(
+        `INSERT INTO tarifa_preu (tarifa_id, producte_id, preu)
+         VALUES ($1, (SELECT id FROM producte WHERE id_seq = $2), '4.20')`,
+        [tarifa.rows[0]!.id, producteFitxaId],
+      );
+      const client = await entorn.poolTest.query<{ id_seq: string }>(
+        `INSERT INTO client (nom, poblacio, tarifa_id) VALUES ('Client sense override', 'Lleida', $1) RETURNING id_seq`,
+        [tarifa.rows[0]!.id],
+      );
+      const clientId32 = Number(client.rows[0]!.id_seq);
+
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          clientId: clientId32,
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const cuerpo = cuerpoJson<ComandaDetallApi>(res);
+      expect(cuerpo.linies[0]?.preuUnitari).toBe('4.20'); // tarifa del client, tal com ja funcionava
+      expect(cuerpo.tarifa).toBeNull(); // comanda.tarifa_id no es toca si no ve explícit al body
+
+      await fastify.close();
+    });
+
+    it('tarifaId invàlid al body: rebutja amb 400 VALIDACIO (mateix criteri que clientId invàlid)', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          tarifaId: 999999,
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+      await fastify.close();
+    });
+
+    it('POST /comandes/:comandaId/linies (capa 30) no es veu afectat: continua fent servir sempre la tarifa del client', async () => {
+      const tarifaClient = await entorn.poolTest.query<{ id: string }>(
+        `INSERT INTO tarifa (codi, nom) VALUES ('CAP32-L30-CLIENT', 'Tarifa client (capa 30)') RETURNING id`,
+      );
+      await entorn.poolTest.query(
+        `INSERT INTO tarifa_preu (tarifa_id, producte_id, preu)
+         VALUES ($1, (SELECT id FROM producte WHERE id_seq = $2), '3.30')`,
+        [tarifaClient.rows[0]!.id, producteFitxaId],
+      );
+      const tarifaBody = await entorn.poolTest.query<{ id: string; id_seq: string }>(
+        `INSERT INTO tarifa (codi, nom) VALUES ('CAP32-L30-BODY', 'Tarifa del body (capa 32)') RETURNING id, id_seq`,
+      );
+      await entorn.poolTest.query(
+        `INSERT INTO tarifa_preu (tarifa_id, producte_id, preu)
+         VALUES ($1, (SELECT id FROM producte WHERE id_seq = $2), '8.00')`,
+        [tarifaBody.rows[0]!.id, producteFitxaId],
+      );
+      const client = await entorn.poolTest.query<{ id_seq: string }>(
+        `INSERT INTO client (nom, poblacio, tarifa_id) VALUES ('Client capa 32+30', 'Tarragona', $1) RETURNING id_seq`,
+        [tarifaClient.rows[0]!.id],
+      );
+      const clientId3230 = Number(client.rows[0]!.id_seq);
+      const tarifaBodyIdPublic = Number(tarifaBody.rows[0]!.id_seq);
+
+      const fastify = construirServidor();
+      // La comanda nace con tarifaId explícito (capa 32) — comanda.tarifa_id
+      // queda con la tarifa del body (8.00), NO la del cliente (3.30).
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          clientId: clientId3230,
+          tarifaId: tarifaBodyIdPublic,
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      expect(comandaCreada.linies[0]?.preuUnitari).toBe('8.00');
+      expect(comandaCreada.tarifa?.id).toBe(tarifaBodyIdPublic);
+
+      // Agregar una línea nueva (capa 30) al mismo pedido: si usara
+      // comanda.tarifa_id resolvería 8.00; si usa (como debe) la tarifa del
+      // cliente, resuelve 3.30.
+      const res = await fastify.inject({
+        method: 'POST',
+        url: `/api/v1/comandes/${comandaCreada.id}/linies`,
+        payload: { producteId: producteFitxaId, unitatsDemanades: 1 },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const cuerpo = cuerpoJson<ComandaDetallApi>(res);
+      const liniaNova = cuerpo.linies.find((l) => l.id !== comandaCreada.linies[0]!.id);
+      expect(liniaNova?.preuUnitari).toBe('3.30'); // tarifa del client, no la de comanda.tarifa_id
+
+      await fastify.close();
+    });
+  });
 });

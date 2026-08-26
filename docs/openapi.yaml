@@ -1618,6 +1618,16 @@ components:
             Codi de origen_comanda (ej. "woocommerce", "manual") — ya no es
             un enum fijo, ver el schema OrigenComanda y GET /origens-comanda.
         clientId: { type: integer }
+        tarifaId:
+          type: integer
+          description: >-
+            Capa 32. Opcional — si viene, anula la tarifa del cliente SÓLO
+            para resolver el precio de las líneas de esta alta, y se guarda
+            en comanda.tarifaId. Si no viene, se usa client.tarifaId (sin
+            cambios respecto al comportamiento anterior a esta capa).
+            Editarlo después vía PATCH /comandes/{id} no recalcula estas
+            líneas, y POST /comandes/{comandaId}/linies (capa 30) nunca lo
+            consulta — siempre usa la tarifa del cliente.
         dataLliurament: { type: string, format: date-time, nullable: true }
         transportistaId: { type: integer, nullable: true }
         obsLliurament: { type: string, nullable: true }

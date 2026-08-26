@@ -330,6 +330,12 @@ export interface LiniaCreacioApi {
 export interface ComandaCreacioApi {
   origen: string;
   clientId?: number;
+  /**
+   * Capa 32. Si viene, anula la tarifa del cliente SÓLO para resolver el
+   * precio de las líneas de esta alta — se guarda en `comanda.tarifaId`.
+   * Editarlo después vía `PATCH /comandes/:id` NO recalcula estas líneas.
+   */
+  tarifaId?: number;
   dataLliurament?: string;
   transportistaId?: number;
   obsLliurament?: string;
