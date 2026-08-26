@@ -129,6 +129,40 @@ export function registrarRutesTarifes(fastify: FastifyInstance): void {
     return { tarifaId: tarifaIdPublic, producteId: producteIdPublic, preu: cos.preu };
   });
 
+  // Capa 28 — camino de vuelta a "sin precio": el PATCH de arriba no acepta
+  // null/vacío (siempre exige un decimal válido), así que una vez cargada
+  // una celda no había forma de volver a que la cascada de
+  // resolverPreuLinia (comandes.ts) cayera al precio de catálogo. Borra la
+  // fila de tarifa_preu; no hace falta tocar la cascada, ya contempla "no
+  // hay fila" (WHERE tarifa_id = $1 AND producte_id = $2 sin resultado).
+  fastify.delete('/tarifes/:tarifaId/preus/:producteId', async (req, reply) => {
+    const params = req.params as { tarifaId: string; producteId: string };
+    const tarifaIdPublic = parsearIdPublic(params.tarifaId);
+    const producteIdPublic = parsearIdPublic(params.producteId);
+    if (tarifaIdPublic === null || producteIdPublic === null) return enviarNoTrobat(reply);
+
+    const [tarifaUuid, producteUuid] = await Promise.all([
+      resolverTarifaUuid(pool, tarifaIdPublic),
+      resolverProducteUuid(pool, producteIdPublic),
+    ]);
+    if (tarifaUuid === null) return enviarNoTrobat(reply, 'Tarifa no trobada');
+    if (producteUuid === null) return enviarNoTrobat(reply, 'Producte no trobat');
+
+    // 404 si la celda nunca tuvo precio — mismo criterio que el resto del
+    // proyecto (DELETE /categories/:id, DELETE /rendiments-porcs/:id,
+    // DELETE de línea de pedido): ninguno es idempotente-204, todos 404
+    // cuando no hay nada que borrar.
+    const resultat = await pool.query<{ id: string }>(
+      'DELETE FROM tarifa_preu WHERE tarifa_id = $1 AND producte_id = $2 RETURNING id',
+      [tarifaUuid, producteUuid],
+    );
+    if (!resultat.rows[0]) {
+      return enviarNoTrobat(reply, 'Aquest producte no té preu assignat en aquesta tarifa');
+    }
+
+    reply.code(204);
+  });
+
   fastify.post('/tarifes', async (req, reply) => {
     const cos = req.body as Partial<{ codi: string; nom: string }>;
 

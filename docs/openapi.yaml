@@ -388,6 +388,33 @@ paths:
                   producteId: { type: integer }
                   preu: { type: string }
         '404': { $ref: '#/components/responses/NoTrobat' }
+    delete:
+      tags: [Tarifes]
+      summary: >-
+        Capa 28. Vuelve la celda a "sin precio" — el PATCH de arriba nunca
+        acepta null/vacío, así que este es el único camino de vuelta. Borra
+        la fila de tarifa_preu; la cascada de resolución de precio de línea
+        cae sola al precio de catálogo del producto.
+      parameters:
+        - name: tarifaId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: producteId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: Precio eliminado — la celda vuelve a null en la matriz
+        '404':
+          description: >-
+            tarifaId/producteId no existen, o esa celda nunca tuvo precio
+            cargado (mismo criterio que el resto de los DELETE del
+            sistema — no es idempotente-204).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /api/v1/clients:
     get:

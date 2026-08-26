@@ -1,4 +1,4 @@
-import type { MatriuTarifesApi, TarifaResumApi } from '@dpages/shared';
+import type { ComandaDetallApi, MatriuTarifesApi, TarifaResumApi } from '@dpages/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { construirServidor as construirServidorType } from '../../servidor.js';
 import {
@@ -84,6 +84,127 @@ describe('API negoci — /tarifes (Postgres real, esquema aislado)', () => {
     expect(res.statusCode).toBe(404);
 
     await fastify.close();
+  });
+
+  describe('DELETE /tarifes/:tarifaId/preus/:producteId (capa 28)', () => {
+    it('borra un precio existente: 204, la matriz vuelve a null, y una comanda nueva cae al precio de catàleg (no a 0 ni error)', async () => {
+      const fastify = construirServidor();
+
+      // Producto CON precio de catálogo propio — necesario para distinguir
+      // "cayó a catálogo" de "quedó en 0.00 / sense preu" en la aserción
+      // final. pes_kg fijo (fitxa) para no tener que mandar kgDemanats.
+      const producte = await entorn.poolTest.query<{ id_seq: string }>(
+        `INSERT INTO producte (codi, descripcio, tipus, pes_kg, preu_venda)
+         VALUES ('CAP28-P', 'Article amb preu de catàleg', 'simple', '1.000', '5.00') RETURNING id_seq`,
+      );
+      const producteCatalegId = Number(producte.rows[0]!.id_seq);
+
+      const tarifaPropia = await entorn.poolTest.query<{ id_seq: string; id: string }>(
+        `INSERT INTO tarifa (codi, nom) VALUES ('CAP28-T', 'Tarifa capa 28') RETURNING id_seq, id`,
+      );
+      const tarifaPropiaId = Number(tarifaPropia.rows[0]!.id_seq);
+
+      const client = await entorn.poolTest.query<{ id_seq: string }>(
+        `INSERT INTO client (nom, poblacio, tarifa_id) VALUES ('Client capa 28', 'Vic', $1) RETURNING id_seq`,
+        [tarifaPropia.rows[0]!.id],
+      );
+      const clientId = Number(client.rows[0]!.id_seq);
+
+      // Precio de TARIFA distinto al de catálogo, para que las dos
+      // aserciones (antes/después) no puedan confundirse entre sí.
+      await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/tarifes/${tarifaPropiaId}/preus/${producteCatalegId}`,
+        payload: { preu: '9.99' },
+      });
+
+      const abans = cuerpoJson<MatriuTarifesApi>(
+        await fastify.inject({ method: 'GET', url: '/api/v1/tarifes/matriu' }),
+      );
+      expect(
+        abans.dades.find((d) => d.producteId === producteCatalegId)?.preus[String(tarifaPropiaId)],
+      ).toBe('9.99');
+
+      const del = await fastify.inject({
+        method: 'DELETE',
+        url: `/api/v1/tarifes/${tarifaPropiaId}/preus/${producteCatalegId}`,
+      });
+      expect(del.statusCode).toBe(204);
+
+      const despres = cuerpoJson<MatriuTarifesApi>(
+        await fastify.inject({ method: 'GET', url: '/api/v1/tarifes/matriu' }),
+      );
+      expect(
+        despres.dades.find((d) => d.producteId === producteCatalegId)?.preus[
+          String(tarifaPropiaId)
+        ],
+      ).toBeNull();
+
+      // La prueba real: una línea de pedido nueva con este cliente/producto
+      // ya no encuentra tarifa_preu — la cascada (resolverPreuLinia) tiene
+      // que caer al preu_venda de catálogo, no a "0.00 sense preu".
+      const comanda = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          clientId,
+          linies: [{ producteId: producteCatalegId, unitatsDemanades: 1 }],
+        },
+      });
+      expect(comanda.statusCode).toBe(201);
+      const detall = cuerpoJson<ComandaDetallApi>(comanda);
+      expect(detall.linies[0]?.preuUnitari).toBe('5.00');
+      expect(detall.estat).toBe('oberta'); // no amb_incidencia: hubo precio real, no sensePreu
+
+      await fastify.close();
+    });
+
+    it('borrar un precio que nunca existió da 404 NO_TROBAT (mismo criterio que el resto de DELETE del proyecto)', async () => {
+      const producte = await entorn.poolTest.query<{ id_seq: string }>(
+        `INSERT INTO producte (codi, descripcio, tipus) VALUES ('CAP28-SP', 'Sense preu de tarifa', 'simple') RETURNING id_seq`,
+      );
+      const tarifa = await entorn.poolTest.query<{ id_seq: string }>(
+        `INSERT INTO tarifa (codi, nom) VALUES ('CAP28-T2', 'Tarifa capa 28 (b)') RETURNING id_seq`,
+      );
+
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'DELETE',
+        url: `/api/v1/tarifes/${tarifa.rows[0]!.id_seq}/preus/${producte.rows[0]!.id_seq}`,
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toMatchObject({ error: { codi: 'NO_TROBAT' } });
+
+      await fastify.close();
+    });
+
+    it('borrar con tarifaId inexistente da 404 NO_TROBAT', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'DELETE',
+        url: `/api/v1/tarifes/999999/preus/${producteId}`,
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toMatchObject({ error: { codi: 'NO_TROBAT' } });
+
+      await fastify.close();
+    });
+
+    it('borrar con producteId inexistente da 404 NO_TROBAT', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'DELETE',
+        url: `/api/v1/tarifes/${tarifaId}/preus/999999`,
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toMatchObject({ error: { codi: 'NO_TROBAT' } });
+
+      await fastify.close();
+    });
   });
 
   it('GET /tarifes/matriu: una tarifa vieja sin codi (NULL) no rompe la matriz ni desaparece del listado', async () => {

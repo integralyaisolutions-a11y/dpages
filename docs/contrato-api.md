@@ -439,6 +439,21 @@ Respuesta `200`:
 > Guarda una sola celda. El cliente pidió expresamente edición en línea sin
 > ventana emergente, igual que el mantenimiento de tarifas del prototipo.
 
+**`DELETE /tarifes/:tarifaId/preus/:producteId`** (capa 28) — vuelve la celda
+a "sin precio". `204` sin cuerpo si había un precio cargado; `404 NO_TROBAT`
+si esa celda nunca tuvo precio (mismo criterio que el resto de los `DELETE`
+del sistema — `DELETE /categories/:id`, `DELETE /rendiments-porcs/:id` — no
+es idempotente-204, es 404 cuando no hay nada que borrar), o si `tarifaId`/
+`producteId` no existen.
+
+> El `PATCH` de arriba nunca aceptó `null`/vacío (siempre exige un decimal
+> válido) — antes de este endpoint no había forma de volver una celda ya
+> cargada a "sin precio". Borrar la fila hace que la cascada de resolución
+> de `ComandaLiniaApi.preuUnitari` (sección 4.5 — 1º tarifa del cliente, 2º
+> precio de catálogo del producto, 3º `"0.00"` con incidencia si no hay
+> ninguno de los dos) caiga sola al precio de catálogo, exactamente igual
+> que si esa celda nunca hubiera tenido valor.
+
 ---
 
 ### 4.4 · Tarifes per client
