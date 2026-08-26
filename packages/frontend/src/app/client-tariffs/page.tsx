@@ -9,7 +9,7 @@ import { IconButton } from "@/components/ui/IconButton";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { SelectFilter } from "@/components/ui/SelectFilter";
-import { useClientTariffs } from "@/hooks/useClientTariffs";
+import { useClientTariffs, type ClientFormValues } from "@/hooks/useClientTariffs";
 import { useRates } from "@/hooks/useRates";
 import type { ClientApi } from "@/lib/api";
 import { ClientFormModal } from "./ClientFormModal";
@@ -45,7 +45,7 @@ function ClientTariffCard({ client, onEdit }: { client: ClientApi; onEdit: () =>
 }
 
 export default function ClientTariffsPage() {
-  const { data, isLoading, error, createClient, editClient } = useClientTariffs();
+  const { data, isLoading, error, refetch, createClient, editClient } = useClientTariffs();
   const { tariffColumns } = useRates();
   const [search, setSearch] = useState("");
   const [tariffFilter, setTariffFilter] = useState(ALL_FEM);
@@ -65,11 +65,11 @@ export default function ClientTariffsPage() {
     return true;
   });
 
-  function handleSave(values: Omit<ClientApi, "id">) {
+  async function handleSave(values: ClientFormValues) {
     if (formState?.mode === "edit" && formState.client) {
-      editClient(formState.client.codi ?? "", { id: formState.client.id, ...values });
+      await editClient(formState.client.id, values);
     } else {
-      createClient(values);
+      await createClient(values);
     }
     setFormState(null);
   }
@@ -92,7 +92,18 @@ export default function ClientTariffsPage() {
       </FilterBar>
 
       {isLoading && <p className="text-sm text-gray-500">Carregant...</p>}
-      {error && <p className="text-sm text-red-600">No s&apos;han pogut carregar els clients.</p>}
+      {error && (
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm text-red-600">No s&apos;han pogut carregar els clients: {error.message}</p>
+          <button
+            type="button"
+            onClick={refetch}
+            className="shrink-0 rounded-full border border-red-300 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
 
       {!isLoading && !error && (
         <>

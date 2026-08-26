@@ -6,21 +6,39 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { IconButton } from "@/components/ui/IconButton";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useCategories, type CategoryFormValues } from "@/hooks/useCategories";
-import type { CategoriaApi } from "@/lib/api";
+import { ApiError, type CategoriaApi } from "@/lib/api";
 import { CategoryFormModal } from "./CategoryFormModal";
 
 export default function CategoriesPage() {
-  const { data, isLoading, error, createCategory, editCategory, deleteCategory } = useCategories();
+  const { data, isLoading, error, refetch, createCategory, editCategory, deleteCategory } = useCategories();
   const [formState, setFormState] = useState<{ mode: "create" | "edit"; category?: CategoriaApi } | null>(null);
   const [categoryToDelete, setCategoryToDelete] = useState<CategoriaApi | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  function handleSave(values: CategoryFormValues) {
+  async function handleSave(values: CategoryFormValues) {
     if (formState?.mode === "edit" && formState.category) {
-      editCategory(formState.category.id, values);
+      await editCategory(formState.category.id, values);
     } else {
-      createCategory(values);
+      await createCategory(values);
     }
     setFormState(null);
+  }
+
+  async function handleConfirmDelete() {
+    if (!categoryToDelete) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteCategory(categoryToDelete.id);
+      setCategoryToDelete(null);
+    } catch (caught) {
+      setDeleteError(
+        caught instanceof ApiError ? caught.message : "No s'ha pogut eliminar la categoria.",
+      );
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   return (
@@ -36,7 +54,18 @@ export default function CategoriesPage() {
       />
 
       {isLoading && <p className="text-sm text-gray-500">Carregant...</p>}
-      {error && <p className="text-sm text-red-600">No s&apos;han pogut carregar les categories.</p>}
+      {error && (
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm text-red-600">No s&apos;han pogut carregar les categories: {error.message}</p>
+          <button
+            type="button"
+            onClick={refetch}
+            className="shrink-0 rounded-full border border-red-300 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
 
       {!isLoading && !error && (
         <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
@@ -69,7 +98,10 @@ export default function CategoriesPage() {
                       <IconButton
                         variant="delete"
                         label="Suprimeix categoria"
-                        onClick={() => setCategoryToDelete(category)}
+                        onClick={() => {
+                          setDeleteError(null);
+                          setCategoryToDelete(category);
+                        }}
                       />
                     </div>
                   </td>
@@ -99,11 +131,13 @@ export default function CategoriesPage() {
         }
         confirmLabel="Eliminar"
         cancelLabel="Cancel·lar"
-        onConfirm={() => {
-          if (categoryToDelete) deleteCategory(categoryToDelete.id);
+        errorMessage={deleteError}
+        isConfirming={isDeleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => {
           setCategoryToDelete(null);
+          setDeleteError(null);
         }}
-        onCancel={() => setCategoryToDelete(null)}
       />
     </div>
   );

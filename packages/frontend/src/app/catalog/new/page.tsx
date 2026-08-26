@@ -2,16 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { useCatalog } from "@/hooks/useCatalog";
-import type { ProducteApi } from "@/lib/api";
+import { useCatalog, type ProductFormValues } from "@/hooks/useCatalog";
 import { ProductForm } from "../ProductForm";
 
 export default function NewProductPage() {
   const router = useRouter();
   const { createProduct } = useCatalog();
 
-  function handleSave(values: Omit<ProducteApi, "id">) {
-    createProduct(values);
+  async function handleSave(values: ProductFormValues) {
+    await createProduct(values);
     router.push("/catalog");
   }
 

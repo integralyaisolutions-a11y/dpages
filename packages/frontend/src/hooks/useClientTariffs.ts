@@ -1,33 +1,56 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { ClientApi } from "@/lib/api";
-import { addMockClient, getMockClientTariffs, updateMockClient } from "@/mocks/clientTariffs";
+import { api, ApiError, type ClientApi, type RespostaPaginada } from "@/lib/api";
+
+export type ClientFormValues = {
+  // string sólo en alta (codi temporal generado en el modal); null en
+  // edición cuando el cliente no tenía codi — ver ClientFormModal.tsx.
+  codi: string | null;
+  nom: string;
+  poblacio: string;
+  tarifaId: number | null;
+  nif: string | null;
+  email: string | null;
+  telefon: string | null;
+};
 
 type UseClientTariffsResult = {
   data: ClientApi[];
   isLoading: boolean;
-  error: Error | null;
-  createClient: (values: Omit<ClientApi, "id">) => void;
-  editClient: (codi: string, values: ClientApi) => void;
+  error: ApiError | null;
+  refetch: () => void;
+  createClient: (values: ClientFormValues) => Promise<void>;
+  editClient: (id: number, values: ClientFormValues) => Promise<void>;
 };
 
-// TODO: cuando cierre el contrato con el backend, reemplazar getMockClientTariffs()
-// por api.get<ClientApi[]>("/clients") sin tocar la forma del hook.
+// Mismo criterio que Categories/Catàleg/Tarifes: el màxim de pàgina del
+// contracte és 200 i el volum real cap còmodament, així que es trau tot
+// d'un GET i es manté el filtrat client-side.
+const MIDA_LLISTAT = 200;
+
 export function useClientTariffs(): UseClientTariffsResult {
   const [data, setData] = useState<ClientApi[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setIsLoading(true);
+    setError(null);
 
-    getMockClientTariffs()
-      .then((clients) => {
-        if (!cancelled) setData(clients);
+    api
+      .get<RespostaPaginada<ClientApi>>("/clients", { mida: MIDA_LLISTAT })
+      .then((resposta) => {
+        if (!cancelled) setData(resposta.dades);
       })
       .catch((caught) => {
-        if (!cancelled) setError(caught instanceof Error ? caught : new Error(String(caught)));
+        if (!cancelled) {
+          setError(
+            caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
+          );
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -36,19 +59,47 @@ export function useClientTariffs(): UseClientTariffsResult {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadToken]);
 
-  // TODO: sustituir por mutation real (POST /clients) cuando exista backend.
-  const createClient = useCallback((values: Omit<ClientApi, "id">) => {
-    console.log("create client", values);
-    addMockClient(values).then(setData);
-  }, []);
+  const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 
-  // TODO: sustituir por mutation real (PATCH /clients/:id) cuando exista backend.
-  const editClient = useCallback((codi: string, values: ClientApi) => {
-    console.log("edit client", codi, values);
-    updateMockClient(codi, values).then(setData);
-  }, []);
+  const createClient = useCallback(
+    async (values: ClientFormValues) => {
+      // POST /clients no acepta tarifaId: null (sólo PATCH tiene esa rama) —
+      // confirmado con curl real: mandarlo explícito da un 400 falso ("la
+      // tarifa no existeix"). "Sense tarifa" en alta = directamente omitir
+      // la clave, no mandarla en null.
+      const cos: Record<string, unknown> = {
+        codi: values.codi,
+        nom: values.nom,
+        poblacio: values.poblacio,
+        nif: values.nif,
+        email: values.email,
+        telefon: values.telefon,
+      };
+      if (values.tarifaId !== null) cos.tarifaId = values.tarifaId;
+      await api.post<ClientApi>("/clients", cos);
+      refetch();
+    },
+    [refetch],
+  );
 
-  return { data, isLoading, error, createClient, editClient };
+  const editClient = useCallback(
+    async (id: number, values: ClientFormValues) => {
+      // transportistaDefecteId nunca se manda: esta pantalla no lo toca.
+      await api.patch<ClientApi>(`/clients/${id}`, {
+        codi: values.codi,
+        nom: values.nom,
+        poblacio: values.poblacio,
+        nif: values.nif,
+        email: values.email,
+        telefon: values.telefon,
+        tarifaId: values.tarifaId,
+      });
+      refetch();
+    },
+    [refetch],
+  );
+
+  return { data, isLoading, error, refetch, createClient, editClient };
 }
