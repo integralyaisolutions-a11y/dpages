@@ -655,7 +655,80 @@ paths:
         '404': { $ref: '#/components/responses/NoTrobat' }
         '409': { $ref: '#/components/responses/Conflicte' }
 
+  /api/v1/comandes/{comandaId}/linies:
+    post:
+      tags: [Comandes]
+      summary: >-
+        Capa 30. Agregar una línea a un pedido YA creado — hasta esta capa
+        la única forma de corregir un pedido existente era borrarlo entero
+        y recargarlo de cero, perdiendo el número de pedido original.
+      description: >-
+        El precio se resuelve con la MISMA cascada que POST /comandes
+        (tarifa del cliente → precio de catálogo → "0.00" + incidencia).
+        Si la línea queda sin precio resuelto, se registra la incidencia
+        sense_preu y el pedido pasa a amb_incidencia si no lo estaba ya.
+        409 si la comanda está congelada.
+      parameters:
+        - name: comandaId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LiniaEntrada' }
+      responses:
+        '201':
+          description: Línea agregada — devuelve la comanda completa actualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComandaDetall' }
+        '400': { $ref: '#/components/responses/Validacio' }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+        '409': { $ref: '#/components/responses/Conflicte' }
+
   /api/v1/comandes/{comandaId}/linies/{liniaId}:
+    patch:
+      tags: [Comandes]
+      summary: Capa 30. Editar una línea existente (cuerpo parcial).
+      description: >-
+        NUNCA re-resuelve preuUnitari — sólo recalcula totalLinia
+        (preuUnitari sin tocar × unitatsDemanades nuevo, si vino). Si hace
+        falta re-resolver precio a propósito es una acción separada,
+        todavía no existe un endpoint para eso. kgDemanats sólo se acepta
+        si el artículo es "a medida" (kgEditable true en esa línea) —
+        rechaza con 400 si el artículo tiene ficha de peso (el peso se
+        recalcula solo desde unitatsDemanades). 409 si la comanda está
+        congelada.
+      parameters:
+        - name: comandaId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: liniaId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                unitatsDemanades: { type: integer, minimum: 1 }
+                kgDemanats: { type: string }
+                dataProduccio: { type: string, format: date-time, nullable: true }
+                obsProduccio: { type: string, nullable: true }
+      responses:
+        '200':
+          description: Línea actualizada — devuelve la comanda completa actualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComandaDetall' }
+        '400': { $ref: '#/components/responses/Validacio' }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+        '409': { $ref: '#/components/responses/Conflicte' }
     delete:
       tags: [Comandes]
       summary: Eliminar una línea de pedido
@@ -1543,16 +1616,23 @@ components:
         obsLliurament: { type: string, nullable: true }
         linies:
           type: array
-          items:
-            type: object
-            required: [producteId, unitatsDemanades]
-            properties:
-              producteId: { type: integer }
-              unitatsDemanades: { type: integer, minimum: 1 }
-              kgDemanats:
-                type: string
-                nullable: true
-                description: Sólo si el artículo es «a medida» (sin pesKg)
+          items: { $ref: '#/components/schemas/LiniaEntrada' }
+
+    LiniaEntrada:
+      type: object
+      description: >-
+        Una línea nueva — usada tanto embebida en ComandaEntrada (alta
+        completa) como en el body de POST /comandes/{comandaId}/linies
+        (capa 30, agregar línea a un pedido ya existente). Mismo shape en
+        los dos casos.
+      required: [producteId, unitatsDemanades]
+      properties:
+        producteId: { type: integer }
+        unitatsDemanades: { type: integer, minimum: 1 }
+        kgDemanats:
+          type: string
+          nullable: true
+          description: Sólo si el artículo es «a medida» (sin pesKg)
 
     ComandaEntradaParcial:
       type: object

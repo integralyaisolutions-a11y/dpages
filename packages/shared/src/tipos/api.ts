@@ -336,6 +336,29 @@ export interface ComandaCreacioApi {
   linies: LiniaCreacioApi[];
 }
 
+/**
+ * Capa 30 — `POST /comandes/:comandaId/linies` (agregar línea a un pedido
+ * ya creado). Mismo shape que `LiniaCreacioApi`: la resolución de precio
+ * usa la misma cascada que al crear el pedido (tarifa del cliente →
+ * precio de catálogo → "0.00" + incidencia).
+ */
+export type LiniaAfegidaApi = LiniaCreacioApi;
+
+/**
+ * Capa 30 — `PATCH /comandes/:comandaId/linies/:liniaId` (editar línea
+ * existente). Todos opcionales, actualiza sólo lo que venga. NO incluye
+ * `preuUnitari`: editar cantidades nunca re-resuelve el precio, sólo
+ * recalcula `totalLinia` con el `preuUnitari` ya asignado — si hace falta
+ * re-resolver precio a propósito, es una acción separada.
+ */
+export interface LiniaEdicioApi {
+  unitatsDemanades?: number;
+  /** Sólo aceptado si el artículo es "a medida" (`kgEditable: true`) — rechaza si el artículo tiene ficha de peso. */
+  kgDemanats?: string;
+  dataProduccio?: string | null;
+  obsProduccio?: string | null;
+}
+
 // ── 5 · Empaquetado ──────────────────────────────────────────────────────
 
 export interface LliuramentBodyApi {

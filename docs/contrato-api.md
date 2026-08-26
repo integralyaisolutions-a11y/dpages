@@ -773,6 +773,51 @@ correo y WhatsApp, que son la mayoría del volumen real.
 > admite cambios desde la web. Cualquier intento de modificarlo devuelve
 > `409 CONFLICTE`. Mostralo visualmente.
 
+**`POST /comandes/:comandaId/linies`** (capa 30) — agregar una línea a un
+pedido **ya creado**. Hasta esta capa, la única forma de corregir un pedido
+existente era borrarlo entero y recargarlo de cero, perdiendo el número de
+pedido original.
+
+```json
+{ "producteId": 12, "unitatsDemanades": 5 }
+```
+
+Mismo shape que una línea de `POST /comandes` (`producteId`,
+`unitatsDemanades`, `kgDemanats` opcional — sólo tiene sentido si el
+artículo es "a medida"). Respuesta `201`, **la comanda completa
+actualizada** (mismo shape que `GET /comandes/:id`), no sólo la línea
+nueva — para refrescar toda la pantalla de una. `409 CONFLICTE` si la
+comanda está congelada, igual que el resto de las escrituras sobre un
+pedido.
+
+> El precio de la línea nueva se resuelve con la **misma cascada** que al
+> crear el pedido (tarifa del cliente → precio de catálogo → `"0.00"` con
+> incidencia). Si la línea queda sin precio resuelto, se registra la
+> incidencia `sense_preu` y el pedido pasa a `amb_incidencia` si no lo
+> estaba ya — mismo criterio que un pedido que nace con una línea así.
+
+**`PATCH /comandes/:comandaId/linies/:liniaId`** (capa 30) — editar una
+línea existente.
+
+```json
+{ "unitatsDemanades": 8, "obsProduccio": "Tallar més fi" }
+```
+
+Cuerpo parcial: `unitatsDemanades`, `kgDemanats`, `dataProduccio`,
+`obsProduccio`, todos opcionales — actualiza sólo lo que venga. Respuesta
+`200`, la comanda completa actualizada (mismo criterio que el endpoint de
+arriba). `409 CONFLICTE` si la comanda está congelada. `kgDemanats` sólo
+se acepta si el artículo es "a medida" (`kgEditable: true` en esa línea) —
+si el artículo tiene ficha de peso, rechaza con `400 VALIDACIO` (el peso
+se recalcula solo a partir de `unitatsDemanades`, igual que al crear).
+
+> **Importante — esto NO re-resuelve `preuUnitari`.** Editar cantidades
+> nunca cambia el precio ya asignado a la línea; sólo recalcula
+> `totalLinia` (`preuUnitari` sin tocar × `unitatsDemanades` nuevo, si
+> vino). Si en algún momento hace falta re-resolver precio a propósito
+> (por ejemplo, la tarifa del cliente cambió después de crear el pedido),
+> es una acción separada — todavía no existe un endpoint para eso.
+
 ---
 
 ### 4.6 · Panell Oficina

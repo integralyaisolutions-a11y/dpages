@@ -631,4 +631,239 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       await fastify.close();
     });
   });
+
+  describe('capa 30 — agregar/editar línies d’una comanda ja creada', () => {
+    it('POST .../linies: agrega línia amb preu resolt (mateixa cascada, reusada), actualitza totalLinia i el total de la comanda', async () => {
+      const tarifa = await entorn.poolTest.query<{ id: string }>(
+        `INSERT INTO tarifa (codi, nom) VALUES ('CAP30-A', 'Tarifa capa 30 A') RETURNING id`,
+      );
+      await entorn.poolTest.query(
+        `INSERT INTO tarifa_preu (tarifa_id, producte_id, preu)
+         VALUES ($1, (SELECT id FROM producte WHERE id_seq = $2), '4.50')`,
+        [tarifa.rows[0]!.id, producteFitxaId],
+      );
+      const client = await entorn.poolTest.query<{ id_seq: string }>(
+        `INSERT INTO client (nom, poblacio, tarifa_id) VALUES ('Client capa 30', 'Vic', $1) RETURNING id_seq`,
+        [tarifa.rows[0]!.id],
+      );
+      const clientCap30Id = Number(client.rows[0]!.id_seq);
+
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          clientId: clientCap30Id,
+          linies: [{ producteId: producteAMidaId, unitatsDemanades: 1, kgDemanats: '1.000' }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      const totalAbans = Number(comandaCreada.totalEur);
+
+      const res = await fastify.inject({
+        method: 'POST',
+        url: `/api/v1/comandes/${comandaCreada.id}/linies`,
+        payload: { producteId: producteFitxaId, unitatsDemanades: 3 },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const cuerpo = cuerpoJson<ComandaDetallApi>(res);
+      expect(cuerpo.linies).toHaveLength(2);
+      const liniaNova = cuerpo.linies.find((l) => l.producte?.id === producteFitxaId);
+      expect(liniaNova?.preuUnitari).toBe('4.50'); // resuelto vía tarifa — misma cascada que POST /comandes
+      expect(liniaNova?.unitatsDemanades).toBe(3);
+      expect(liniaNova?.totalLinia).toBe('13.50'); // 3 × 4.50
+      expect(liniaNova?.kgDemanats).toBe('3.750'); // fitxa: 3 × 1.250
+
+      const totalEsperat = (totalAbans + 3 * 4.5).toFixed(2);
+      expect(cuerpo.totalEur).toBe(totalEsperat);
+
+      // comanda.total (columna espejo — ningún GET la lee, ver nota en el
+      // código) también quedó consistente tras el alta.
+      const filaDb = await entorn.poolTest.query<{ total: string }>(
+        `SELECT total FROM comanda WHERE id_seq = $1`,
+        [comandaCreada.id],
+      );
+      expect(filaDb.rows[0]?.total).toBe(totalEsperat);
+
+      await fastify.close();
+    });
+
+    it('POST .../linies sense preu resolt: registra incidència sense_preu i posa la comanda amb_incidencia', async () => {
+      const producteSensePreu = await entorn.poolTest.query<{ id_seq: string }>(
+        `INSERT INTO producte (codi, descripcio, pes_kg, tipus)
+         VALUES ('CAP30-SP', 'Sense preu', '1.000', 'simple') RETURNING id_seq`,
+      );
+      const producteSensePreuId = Number(producteSensePreu.rows[0]!.id_seq);
+
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      expect(comandaCreada.estat).toBe('oberta');
+
+      const res = await fastify.inject({
+        method: 'POST',
+        url: `/api/v1/comandes/${comandaCreada.id}/linies`,
+        payload: { producteId: producteSensePreuId, unitatsDemanades: 1 },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const cuerpo = cuerpoJson<ComandaDetallApi>(res);
+      expect(cuerpo.estat).toBe('amb_incidencia');
+      expect(cuerpo.incidencies.some((i) => i.tipus === 'sense_preu')).toBe(true);
+      const liniaNova = cuerpo.linies.find((l) => l.producte?.id === producteSensePreuId);
+      expect(liniaNova?.preuUnitari).toBe('0.00');
+
+      await fastify.close();
+    });
+
+    it('POST .../linies en comanda congelada rebutja amb 409 CONFLICTE (mateixa guarda que PATCH de capçalera)', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      await entorn.poolTest.query(`UPDATE comanda SET congelat_a = now() WHERE id_seq = $1`, [
+        comandaCreada.id,
+      ]);
+
+      const res = await fastify.inject({
+        method: 'POST',
+        url: `/api/v1/comandes/${comandaCreada.id}/linies`,
+        payload: { producteId: producteFitxaId, unitatsDemanades: 1 },
+      });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toMatchObject({ error: { codi: 'CONFLICTE' } });
+
+      await fastify.close();
+    });
+
+    it('PATCH .../linies/:liniaId: edita unitatsDemanades — recalcula totalLinia i el pes (fitxa), preuUnitari sense canvis, total de comanda actualitzat', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 2 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      const liniaCreada = comandaCreada.linies[0]!;
+      expect(liniaCreada.preuUnitari).toBe('9.86');
+      expect(liniaCreada.totalLinia).toBe('19.72'); // 2 × 9.86
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}/linies/${liniaCreada.id}`,
+        payload: { unitatsDemanades: 5 },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const cuerpo = cuerpoJson<ComandaDetallApi>(res);
+      const liniaEditada = cuerpo.linies.find((l) => l.id === liniaCreada.id);
+      expect(liniaEditada?.unitatsDemanades).toBe(5);
+      expect(liniaEditada?.preuUnitari).toBe('9.86'); // sin cambios — nunca se re-resuelve
+      expect(liniaEditada?.totalLinia).toBe('49.30'); // 5 × 9.86
+      expect(liniaEditada?.kgDemanats).toBe('6.250'); // fitxa: 5 × 1.250
+      expect(cuerpo.totalEur).toBe('49.30');
+
+      await fastify.close();
+    });
+
+    it('PATCH .../linies/:liniaId: kgDemanats sobre un article amb fitxa (no editable) rebutja amb 400 VALIDACIO', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}/linies/${comandaCreada.linies[0]!.id}`,
+        payload: { kgDemanats: '3.000' },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+      await fastify.close();
+    });
+
+    it('PATCH .../linies/:liniaId en comanda congelada rebutja amb 409 CONFLICTE', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      await entorn.poolTest.query(`UPDATE comanda SET congelat_a = now() WHERE id_seq = $1`, [
+        comandaCreada.id,
+      ]);
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}/linies/${comandaCreada.linies[0]!.id}`,
+        payload: { unitatsDemanades: 9 },
+      });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toMatchObject({ error: { codi: 'CONFLICTE' } });
+
+      await fastify.close();
+    });
+
+    it('PATCH .../linies/:liniaId: editar només obsProduccio no toca quantitats ni totalLinia', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 2 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      const liniaCreada = comandaCreada.linies[0]!;
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}/linies/${liniaCreada.id}`,
+        payload: { obsProduccio: 'Tallar més fi' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const cuerpo = cuerpoJson<ComandaDetallApi>(res);
+      const liniaEditada = cuerpo.linies.find((l) => l.id === liniaCreada.id);
+      expect(liniaEditada?.obsProduccio).toBe('Tallar més fi');
+      expect(liniaEditada?.unitatsDemanades).toBe(liniaCreada.unitatsDemanades);
+      expect(liniaEditada?.totalLinia).toBe(liniaCreada.totalLinia);
+      expect(cuerpo.totalEur).toBe(comandaCreada.totalEur);
+
+      await fastify.close();
+    });
+  });
 });

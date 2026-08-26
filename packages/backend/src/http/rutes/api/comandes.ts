@@ -5,7 +5,7 @@ import type {
   IncidenciaComandaApi,
 } from '@dpages/shared';
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { pool } from '../../../db/pool.js';
 import {
   construirPaginacio,
@@ -270,6 +270,33 @@ async function resolverPreuLinia(
   }
   if (preuVenda !== null) return { preuUnitari: preuVenda, sensePreu: false };
   return { preuUnitari: '0.00', sensePreu: true };
+}
+
+/**
+ * Capa 30 — recalcula `comanda.total` a partir de las líneas activas, con
+ * la MISMA fórmula que ya usa `SELECT_COMANDA_RESUM.agg.total_eur`
+ * (`SUM(unitats_demanades * preu_unitari) WHERE NOT esborrat`).
+ *
+ * IMPORTANTE, para quien lea esto después: ningún `GET` lee esta columna.
+ * `ComandaResumApi.totalEur`/`ComandaDetallApi.totalEur` SIEMPRE se
+ * calculan en vivo desde `comanda_linia` (ver `agg` en
+ * `SELECT_COMANDA_RESUM`) — `comanda.total` es un campo espejo que sólo
+ * escriben `POST /comandes` (al crear) y el sync de WooCommerce
+ * (`transform/comandes.ts`), nunca se vuelve a leer por la API. Se
+ * mantiene igual aquí por higiene de datos (que la columna no quede
+ * desactualizada), no porque afecte ninguna respuesta visible. Ni
+ * `DELETE /comandes/:comandaId/linies/:liniaId` (capa anterior) recalcula
+ * esta columna — gap preexistente, no lo toco acá.
+ */
+async function recalcularTotalComanda(client: PoolClient, comandaUuid: string): Promise<void> {
+  await client.query(
+    `UPDATE comanda SET total = (
+       SELECT COALESCE(SUM(unitats_demanades * preu_unitari), 0)::numeric(14,2)
+       FROM comanda_linia WHERE comanda_id = $1 AND NOT esborrat
+     )
+     WHERE id = $1`,
+    [comandaUuid],
+  );
 }
 
 async function resolverComandaOResponder(
@@ -672,6 +699,261 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
         cos.adrecaLliurament ?? null,
       ],
     );
+
+    return carregarDetallPerUuid(comandaUuid);
+  });
+
+  /**
+   * Capa 30 — agregar una línea a un pedido YA creado. Hasta ahora sólo se
+   * podían cargar líneas embebidas en `POST /comandes` (alta completa) —
+   * la única forma de corregir un pedido existente era borrarlo entero y
+   * recargarlo de cero, perdiendo el número de pedido original.
+   *
+   * Precio: MISMA cascada que `POST /comandes` (`resolverPreuLinia`), sin
+   * duplicar la lógica. La tarifa que se usa es la del CLIENTE asignado a
+   * la comanda (resuelta fresca acá, igual que al crear) — OJO:
+   * `comanda.tarifa_id` (editable vía `PATCH /comandes/:id`) es sólo
+   * informativo, `resolverPreuLinia` nunca lo consulta; esto no lo cambia
+   * esta capa, sólo lo replica tal cual ya funcionaba.
+   */
+  fastify.post('/comandes/:comandaId/linies', async (req, reply) => {
+    const comandaUuid = await resolverComandaOResponder(
+      reply,
+      (req.params as { comandaId: string }).comandaId,
+    );
+    if (comandaUuid === null) return;
+
+    if (await estaCongelada(pool, comandaUuid)) {
+      return enviarConflicte(reply, 'La comanda està congelada i ja no admet canvis');
+    }
+
+    const cos = req.body as Partial<{
+      producteId: number;
+      unitatsDemanades: number;
+      kgDemanats: string;
+    }>;
+
+    if (cos.producteId === undefined) {
+      return enviarValidacio(reply, 'producteId és obligatori', [
+        { camp: 'producteId', missatge: 'és obligatori' },
+      ]);
+    }
+    if (!Number.isInteger(cos.unitatsDemanades) || cos.unitatsDemanades! <= 0) {
+      return enviarValidacio(reply, 'Les unitats demanades no poden ser zero', [
+        { camp: 'unitatsDemanades', missatge: 'ha de ser més gran que zero' },
+      ]);
+    }
+
+    const producte = await pool.query<{
+      id: string;
+      pes_kg: string | null;
+      preu_venda: string | null;
+    }>('SELECT id, pes_kg, preu_venda FROM producte WHERE id_seq = $1', [cos.producteId]);
+    if (!producte.rows[0]) {
+      return enviarValidacio(reply, 'El producte indicat no existeix', [
+        { camp: 'producteId', missatge: 'no existeix' },
+      ]);
+    }
+    const { id: producteUuid, pes_kg: pesFitxaKg, preu_venda: preuVenda } = producte.rows[0];
+
+    let pesCalculatKg: string;
+    let pesEditable: boolean;
+    if (pesFitxaKg !== null) {
+      pesCalculatKg = (cos.unitatsDemanades! * Number(pesFitxaKg)).toFixed(3);
+      pesEditable = false;
+    } else {
+      const kgDemanats = cos.kgDemanats !== undefined ? Number(cos.kgDemanats) : NaN;
+      if (!Number.isFinite(kgDemanats) || kgDemanats <= 0) {
+        return enviarValidacio(reply, 'Els kg demanats no poden ser zero', [
+          { camp: 'kgDemanats', missatge: 'ha de ser més gran que zero (article a mida)' },
+        ]);
+      }
+      pesCalculatKg = kgDemanats.toFixed(3);
+      pesEditable = true;
+    }
+
+    const clientTarifaFila = await pool.query<{ tarifa_id: string | null }>(
+      `SELECT cl.tarifa_id FROM comanda c LEFT JOIN client cl ON cl.id = c.client_id WHERE c.id = $1`,
+      [comandaUuid],
+    );
+    const clientTarifaId = clientTarifaFila.rows[0]?.tarifa_id ?? null;
+
+    const { preuUnitari, sensePreu } = await resolverPreuLinia(
+      pool,
+      clientTarifaId,
+      producteUuid,
+      preuVenda,
+    );
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const ordinalFila = await client.query<{ seguent: number }>(
+        `SELECT COALESCE(max(ordinal), -1) + 1 AS seguent FROM comanda_linia WHERE comanda_id = $1`,
+        [comandaUuid],
+      );
+      const ordinal = ordinalFila.rows[0]!.seguent;
+
+      await client.query(
+        `INSERT INTO comanda_linia (comanda_id, ordinal, producte_id, unitats_demanades,
+                                     preu_unitari, pes_fitxa_kg, pes_calculat_kg, pes_editable)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          comandaUuid,
+          ordinal,
+          producteUuid,
+          cos.unitatsDemanades,
+          preuUnitari,
+          pesFitxaKg,
+          pesCalculatKg,
+          pesEditable,
+        ],
+      );
+
+      // Mismo criterio que POST /comandes: una línea sin precio resuelto
+      // nunca queda silenciosa — se registra la incidencia, y la comanda
+      // pasa a amb_incidencia si todavía no lo estaba (mismo motivo por el
+      // que un pedido nace amb_incidencia si nace con una línea así).
+      if (sensePreu) {
+        await client.query(
+          `INSERT INTO incidencia_comanda (comanda_id, tipus, detall) VALUES ($1, 'sense_preu', $2)`,
+          [
+            comandaUuid,
+            `Línia afegida (producte ${cos.producteId}): no té preu resolt (sense tarifa amb preu ni preu base) — preuUnitari es va deixar en 0.00.`,
+          ],
+        );
+        await client.query(
+          `UPDATE comanda SET estat = 'amb_incidencia' WHERE id = $1 AND estat != 'amb_incidencia'`,
+          [comandaUuid],
+        );
+      }
+
+      await recalcularTotalComanda(client, comandaUuid);
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    reply.code(201);
+    return carregarDetallPerUuid(comandaUuid);
+  });
+
+  /**
+   * Capa 30 — editar una línea existente (unitats/kg/dataProduccio/
+   * obsProduccio). NUNCA re-resuelve `preuUnitari` — sólo recalcula
+   * `totalLinia`, y eso ya es automático: `SELECT_COMANDA_LINIA` calcula
+   * `totalLinia` en vivo (`unitats_demanades * preu_unitari`), no es una
+   * columna guardada. Mientras esta ruta no toque `preu_unitari` (nunca lo
+   * hace), cualquier lectura posterior ya sale bien sola.
+   */
+  fastify.patch('/comandes/:comandaId/linies/:liniaId', async (req, reply) => {
+    const params = req.params as { comandaId: string; liniaId: string };
+    const comandaUuid = await resolverComandaOResponder(reply, params.comandaId);
+    if (comandaUuid === null) return;
+
+    if (await estaCongelada(pool, comandaUuid)) {
+      return enviarConflicte(reply, 'La comanda està congelada i ja no admet canvis');
+    }
+
+    const liniaIdPublic = parsearIdPublic(params.liniaId);
+    if (liniaIdPublic === null) return enviarNoTrobat(reply, 'Línia no trobada');
+
+    const cos = req.body as Partial<{
+      unitatsDemanades: number;
+      kgDemanats: string;
+      dataProduccio: string | null;
+      obsProduccio: string | null;
+    }>;
+
+    if (
+      cos.unitatsDemanades !== undefined &&
+      (!Number.isInteger(cos.unitatsDemanades) || cos.unitatsDemanades <= 0)
+    ) {
+      return enviarValidacio(reply, 'Les unitats demanades no poden ser zero', [
+        { camp: 'unitatsDemanades', missatge: 'ha de ser més gran que zero' },
+      ]);
+    }
+    if (cos.kgDemanats !== undefined) {
+      const kgNum = Number(cos.kgDemanats);
+      if (!Number.isFinite(kgNum) || kgNum <= 0) {
+        return enviarValidacio(reply, 'Els kg demanats no poden ser zero', [
+          { camp: 'kgDemanats', missatge: 'ha de ser més gran que zero' },
+        ]);
+      }
+    }
+
+    const liniaActual = await pool.query<{
+      pes_editable: boolean;
+      pes_fitxa_kg: string | null;
+    }>(
+      `SELECT pes_editable, pes_fitxa_kg FROM comanda_linia WHERE id_seq = $1 AND comanda_id = $2`,
+      [liniaIdPublic, comandaUuid],
+    );
+    if (!liniaActual.rows[0]) return enviarNoTrobat(reply, 'Línia no trobada');
+    const { pes_editable: pesEditable, pes_fitxa_kg: pesFitxaKg } = liniaActual.rows[0];
+
+    if (cos.kgDemanats !== undefined && !pesEditable) {
+      return enviarValidacio(reply, "El pes d'aquest article no és editable (té fitxa)", [
+        { camp: 'kgDemanats', missatge: 'no editable — es calcula des de unitatsDemanades' },
+      ]);
+    }
+
+    // Si cambian las unidades de un artículo CON fitxa, el peso se
+    // recalcula solo (mismo criterio que POST /comandes) — kgDemanats no
+    // se acepta en ese caso (ya rechazado arriba). Para un artículo "a
+    // medida", el peso es lo que venga en kgDemanats, sin relación con
+    // unitatsDemanades.
+    let pesCalculatKgNou: string | undefined;
+    if (cos.unitatsDemanades !== undefined && pesFitxaKg !== null) {
+      pesCalculatKgNou = (cos.unitatsDemanades * Number(pesFitxaKg)).toFixed(3);
+    } else if (cos.kgDemanats !== undefined) {
+      pesCalculatKgNou = Number(cos.kgDemanats).toFixed(3);
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const resultat = await client.query<{ id: string }>(
+        `UPDATE comanda_linia SET
+           unitats_demanades = CASE WHEN $3 THEN $4 ELSE unitats_demanades END,
+           pes_calculat_kg = CASE WHEN $5 THEN $6 ELSE pes_calculat_kg END,
+           data_produccio = CASE WHEN $7 THEN $8 ELSE data_produccio END,
+           obs_produccio = CASE WHEN $9 THEN $10 ELSE obs_produccio END
+         WHERE id_seq = $1 AND comanda_id = $2
+         RETURNING id`,
+        [
+          liniaIdPublic,
+          comandaUuid,
+          cos.unitatsDemanades !== undefined,
+          cos.unitatsDemanades ?? null,
+          pesCalculatKgNou !== undefined,
+          pesCalculatKgNou ?? null,
+          cos.dataProduccio !== undefined,
+          cos.dataProduccio ?? null,
+          cos.obsProduccio !== undefined,
+          cos.obsProduccio ?? null,
+        ],
+      );
+      if (!resultat.rows[0]) {
+        await client.query('ROLLBACK');
+        return enviarNoTrobat(reply, 'Línia no trobada');
+      }
+
+      await recalcularTotalComanda(client, comandaUuid);
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
 
     return carregarDetallPerUuid(comandaUuid);
   });
