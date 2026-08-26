@@ -482,27 +482,31 @@ Filtros: `?cerca=nom&tarifaId=2&actiu=true`
 }
 ```
 
-> **`codi` (capa 25):** ya no queda vacío para ningún cliente. Los clientes
-> resueltos por el sync de WooCommerce (`resolverOCrearClient`) reciben uno
-> autogenerado, `CLI` + `id` (el mismo `id` público de este mismo objeto),
-> **sin ancho fijo** — `CLI45`, `CLI4916`, `CLI15118`, lo que corresponda.
-> (Un intento inicial rellenaba con ceros a 3 dígitos como en el ejemplo de
-> arriba; se descartó porque TRUNCABA en vez de ensanchar en cuanto el id
-> llegaba a 4 cifras — dos clientes reales con id 4916 y 4918 generaban el
-> mismo código y chocaban contra el índice único.) Los clientes existentes
-> de antes de la capa 25 se completaron una sola vez con un script de
-> backfill. `POST /clients` (alta manual, más abajo) sigue pidiendo `codi`
-> explícito — nunca se autogenera ahí, es decisión de quien carga el
-> pedido.
+> **`codi`:** nunca queda vacío para ningún cliente, sin importar el
+> origen. Siempre autogenerado, `CLI` + `id` (el mismo `id` público de este
+> mismo objeto), **sin ancho fijo** — `CLI45`, `CLI4916`, `CLI15118`, lo
+> que corresponda. (Un intento inicial rellenaba con ceros a 3 dígitos
+> como en el ejemplo de arriba; se descartó porque TRUNCABA en vez de
+> ensanchar en cuanto el id llegaba a 4 cifras — dos clientes reales con id
+> 4916 y 4918 generaban el mismo código y chocaban contra el índice
+> único.) Empezó con los clientes resueltos por el sync de WooCommerce
+> (capa 25; los que ya existían se completaron una sola vez con un script
+> de backfill) y **desde la capa 29 aplica igual al alta manual**
+> (`POST /clients`, abajo) — mismo mecanismo para los dos orígenes, sin
+> distinción. **Es de sólo lectura para siempre**: ningún endpoint lo
+> acepta como entrada editable, ni al crear ni en `PATCH /clients/:id`
+> después — si llega en el body de cualquiera de los dos, se ignora en
+> silencio.
 
-**`PATCH /clients/:id`** — para asignar tarifa o transportista.
+**`PATCH /clients/:id`** — para asignar tarifa o transportista. `codi` no es
+un campo editable (ver nota de arriba) — mandarlo no produce error, sólo se
+ignora.
 
 **`POST /clients`** — alta manual. Es el camino de los pedidos por teléfono y
 WhatsApp, que no traen ningún cliente de WooCommerce que resolver.
 
 ```json
 {
-  "codi": "CLI200",
   "nom": "Forn del Barri",
   "poblacio": "Vic",
   "tarifaId": 2,
@@ -512,12 +516,15 @@ WhatsApp, que no traen ningún cliente de WooCommerce que resolver.
 }
 ```
 
-`codi`, `nom` y `poblacio` son obligatorios (los campos mínimos del
-prototipo). `tarifaId`, `email`, `telefon` y `nif` son opcionales —
+`nom` y `poblacio` son obligatorios (los campos mínimos del prototipo).
+`tarifaId`, `email`, `telefon` y `nif` son opcionales —
 `email`/`telefon`/`nif` no aparecen en el modal del prototipo, pero hacen
-falta como dato de contacto en los pedidos que no vienen de la web.
+falta como dato de contacto en los pedidos que no vienen de la web. `codi`
+**no va en este cuerpo** — se autogenera siempre (ver nota de arriba); si
+se manda igual, se ignora.
 
-Respuesta `201`, misma forma que una fila de `GET /clients`:
+Respuesta `201`, misma forma que una fila de `GET /clients` — con `codi`
+ya asignado:
 
 ```json
 {

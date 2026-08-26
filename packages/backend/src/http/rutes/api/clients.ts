@@ -1,10 +1,13 @@
 import type { ClientApi } from '@dpages/shared';
 import type { FastifyInstance } from 'fastify';
+import { assignarCodiAutogenerat } from '../../../db/client-codi.js';
 import { pool } from '../../../db/pool.js';
 import {
   construirPaginacio,
+  enviarConflicte,
   enviarNoTrobat,
   enviarValidacio,
+  esViolacioCodiUnic,
   parsearIdPublic,
   parsearPaginacio,
   resolverTarifaUuid,
@@ -101,13 +104,20 @@ export function registrarRutesClients(fastify: FastifyInstance): void {
   /**
    * Alta manual (prototipo /pedidos/nuevo): los pedidos por WhatsApp/teléfono
    * no traen ningún cliente de WooCommerce que resolver — oficina lo carga a
-   * mano. codi/nom/poblacio son los campos mínimos confirmados por el
-   * prototipo; email/telefon/nif no aparecen en ese modal pero van a hacer
-   * falta para tener un dato de contacto en esos pedidos.
+   * mano. nom/poblacio son los campos mínimos confirmados por el prototipo;
+   * email/telefon/nif no aparecen en ese modal pero van a hacer falta para
+   * tener un dato de contacto en esos pedidos.
+   *
+   * `codi` NO se lee del cuerpo (capa 29): se autogenera siempre, mismo
+   * mecanismo que ya usa el sync de WooCommerce desde la capa 25
+   * (`assignarCodiAutogenerat`) — decisión de negocio confirmada, sin
+   * distinguir origen. Es de sólo lectura para siempre, así que ni
+   * `ClientCreacioApi` (packages/shared) ni este `Partial<{...}>` declaran
+   * el campo — si llega en el body, se ignora en silencio (mismo criterio
+   * que `firebaseUid`/`email` en `PATCH /usuaris/:id`).
    */
   fastify.post('/clients', async (req, reply) => {
     const cos = req.body as Partial<{
-      codi: string;
       nom: string;
       poblacio: string;
       tarifaId: number;
@@ -117,9 +127,6 @@ export function registrarRutesClients(fastify: FastifyInstance): void {
     }>;
 
     const detalls: { camp: string; missatge: string }[] = [];
-    if (!cos.codi || cos.codi.trim() === '') {
-      detalls.push({ camp: 'codi', missatge: 'és obligatori' });
-    }
     if (!cos.nom || cos.nom.trim() === '') {
       detalls.push({ camp: 'nom', missatge: 'és obligatori' });
     }
@@ -140,12 +147,11 @@ export function registrarRutesClients(fastify: FastifyInstance): void {
       }
     }
 
-    const insertat = await pool.query<{ id_seq: string }>(
-      `INSERT INTO client (codi, nom, poblacio, tarifa_id, email, telefon, nif)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id_seq`,
+    const insertat = await pool.query<{ id: string; id_seq: string }>(
+      `INSERT INTO client (nom, poblacio, tarifa_id, email, telefon, nif)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, id_seq`,
       [
-        cos.codi!.trim(),
         cos.nom!.trim(),
         cos.poblacio!.trim(),
         tarifaUuid,
@@ -154,6 +160,19 @@ export function registrarRutesClients(fastify: FastifyInstance): void {
         cos.nif ?? null,
       ],
     );
+
+    // Defensa en profundidad (mismo criterio que categories.ts/tarifes.ts):
+    // con id_seq único por fila, CLI+id_seq nunca debería colisionar de
+    // verdad — pero si alguna vez pasara (idx_client_codi es un índice
+    // único real), mejor un 409 claro que un 500 crudo.
+    try {
+      await assignarCodiAutogenerat(pool, insertat.rows[0]!.id, insertat.rows[0]!.id_seq);
+    } catch (err) {
+      if (esViolacioCodiUnic(err)) {
+        return enviarConflicte(reply, 'Ja existeix un client amb aquest codi');
+      }
+      throw err;
+    }
 
     const creat = await pool.query<FilaClient>(`${SELECT_CLIENT} WHERE cl.id_seq = $1`, [
       insertat.rows[0]!.id_seq,
@@ -166,8 +185,10 @@ export function registrarRutesClients(fastify: FastifyInstance): void {
     const idPublic = parsearIdPublic((req.params as { id: string }).id);
     if (idPublic === null) return enviarNoTrobat(reply);
 
+    // codi és immutable un cop assignat (capa 29, autogenerat sempre) — no
+    // es llegeix del cos encara que vingui, no hi ha camp per a ell acà
+    // (mateix criteri que firebaseUid/email a PATCH /usuaris/:id).
     const cos = req.body as Partial<{
-      codi: string | null;
       nom: string | null;
       nif: string | null;
       email: string | null;
@@ -208,21 +229,18 @@ export function registrarRutesClients(fastify: FastifyInstance): void {
 
     const resultat = await pool.query<{ id: string }>(
       `UPDATE client SET
-         codi = CASE WHEN $2 THEN $3 ELSE codi END,
-         nom = CASE WHEN $4 THEN $5 ELSE nom END,
-         nif = CASE WHEN $6 THEN $7 ELSE nif END,
-         email = CASE WHEN $8 THEN $9 ELSE email END,
-         telefon = CASE WHEN $10 THEN $11 ELSE telefon END,
-         poblacio = CASE WHEN $12 THEN $13 ELSE poblacio END,
-         tarifa_id = CASE WHEN $14 THEN $15 ELSE tarifa_id END,
-         transportista_defecte_id = CASE WHEN $16 THEN $17 ELSE transportista_defecte_id END,
-         actiu = COALESCE($18, actiu)
+         nom = CASE WHEN $2 THEN $3 ELSE nom END,
+         nif = CASE WHEN $4 THEN $5 ELSE nif END,
+         email = CASE WHEN $6 THEN $7 ELSE email END,
+         telefon = CASE WHEN $8 THEN $9 ELSE telefon END,
+         poblacio = CASE WHEN $10 THEN $11 ELSE poblacio END,
+         tarifa_id = CASE WHEN $12 THEN $13 ELSE tarifa_id END,
+         transportista_defecte_id = CASE WHEN $14 THEN $15 ELSE transportista_defecte_id END,
+         actiu = COALESCE($16, actiu)
        WHERE id_seq = $1
        RETURNING id`,
       [
         idPublic,
-        cos.codi !== undefined,
-        cos.codi ?? null,
         cos.nom !== undefined,
         cos.nom ?? null,
         cos.nif !== undefined,

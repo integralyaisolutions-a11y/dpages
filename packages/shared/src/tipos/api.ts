@@ -145,6 +145,15 @@ export interface MatriuTarifesApi {
 
 export interface ClientApi {
   id: number;
+  /**
+   * Autogenerado siempre (`CLI` + `id`, sin padding fijo) — capa 25 para
+   * clientes de WooCommerce, capa 29 para alta manual (`POST /clients`).
+   * De sólo lectura para siempre: ningún endpoint lo acepta como entrada
+   * editable, ni al crear ni en `PATCH /clients/:id` después. El tipo
+   * sigue siendo `string | null` por los clientes cargados antes de la
+   * capa 25 (backfill ya corrido en local/producción, pero el tipo no
+   * fuerza esa garantía histórica).
+   */
   codi: string | null;
   nom: string | null;
   nif: string | null;
@@ -156,9 +165,16 @@ export interface ClientApi {
   actiu: boolean;
 }
 
-/** `POST /clients` — alta manual (teléfono/WhatsApp no traen cliente de WooCommerce que resolver). */
+/**
+ * `POST /clients` — alta manual (teléfono/WhatsApp no traen cliente de
+ * WooCommerce que resolver).
+ *
+ * Capa 29: `codi` NO va acá — se autogenera siempre (`CLI` + `id`), igual
+ * que ya hacía el sync de WooCommerce desde la capa 25. Es de sólo lectura
+ * para siempre, en los dos orígenes por igual (ver `ClientApi.codi`);
+ * ningún endpoint lo acepta como entrada, ni al crear ni después.
+ */
 export interface ClientCreacioApi {
-  codi: string;
   nom: string;
   poblacio: string;
   tarifaId?: number;

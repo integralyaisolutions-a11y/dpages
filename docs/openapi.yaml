@@ -449,7 +449,8 @@ paths:
       summary: >
         Alta manual de cliente. Necesario cuando un pedido entra por
         teléfono/WhatsApp/email de alguien que todavía no existe en el
-        sistema.
+        sistema. codi NO se manda acá — se autogenera siempre (capa 29,
+        mismo mecanismo que el sync de WooCommerce desde la capa 25).
       requestBody:
         required: true
         content:
@@ -457,16 +458,26 @@ paths:
             schema: { $ref: '#/components/schemas/ClientEntrada' }
       responses:
         '201':
-          description: Cliente creado
+          description: Cliente creado, con codi ya autogenerado
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Client' }
         '400': { $ref: '#/components/responses/Validacio' }
+        '409':
+          description: >-
+            Defensa en profundidad: colisión de codi autogenerado (no
+            debería poder pasar con id_seq único, ver capa 29).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /api/v1/clients/{id}:
     patch:
       tags: [Clients]
-      summary: Actualizar un cliente (parcial) — asignar tarifa o transportista por defecto
+      summary: >-
+        Actualizar un cliente (parcial) — asignar tarifa o transportista
+        por defecto. codi no es editable (capa 29, sólo lectura para
+        siempre) — si se manda, se ignora sin error.
       parameters:
         - $ref: '#/components/parameters/IdPath'
       requestBody:
@@ -1289,11 +1300,14 @@ components:
         codi:
           type: string
           description: >-
-            Capa 25: nunca vacío. Los clientes resueltos por el sync de
-            WooCommerce reciben uno autogenerado ("CLI" + id, SIN ancho
-            fijo — CLI45, CLI4916 — un padding fijo a 3 dígitos truncaba
-            en vez de ensanchar con ids de 4+ cifras); POST /clients (alta
-            manual) sigue pidiéndolo explícito.
+            Nunca vacío, sin importar el origen. Siempre autogenerado
+            ("CLI" + id, SIN ancho fijo — CLI45, CLI4916 — un padding fijo
+            a 3 dígitos truncaba en vez de ensanchar con ids de 4+
+            cifras): capa 25 para clientes del sync de WooCommerce, capa
+            29 para alta manual (POST /clients) — mismo mecanismo para
+            los dos. De sólo lectura para siempre: ningún endpoint lo
+            acepta como entrada editable, ni al crear ni en
+            PATCH /clients/{id} después.
         nom: { type: string }
         nif: { type: string, nullable: true }
         email: { type: string, nullable: true }
@@ -1315,10 +1329,12 @@ components:
 
     ClientEntrada:
       type: object
-      required: [codi, nom, poblacio]
-      description: Mínimo confirmado por el prototipo. El resto son opcionales.
+      required: [nom, poblacio]
+      description: >-
+        Mínimo confirmado por el prototipo. El resto son opcionales. codi
+        NO va acá (capa 29) — se autogenera siempre, igual que ya hacía el
+        sync de WooCommerce desde la capa 25; si se manda igual, se ignora.
       properties:
-        codi: { type: string }
         nom: { type: string }
         poblacio: { type: string }
         tarifaId: { type: integer, nullable: true }

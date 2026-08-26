@@ -1,6 +1,7 @@
 import { DatabaseError } from 'pg';
 import type { Client, Pool, PoolClient } from 'pg';
 import type { WooMetaData, WooOrder } from '@dpages/shared';
+import { assignarCodiAutogenerat } from '../db/client-codi.js';
 
 /** Sólo hace falta `.query()` — acepta Pool, PoolClient o Client suelto (mismo criterio que resolucio-article.ts). */
 type Consultable = Pool | PoolClient | Client;
@@ -139,25 +140,12 @@ export async function resolverOCrearClient(
     );
     await client.query('RELEASE SAVEPOINT resolucio_client');
 
-    // Capa 25: todo cliente creado por el sync recibe un `codi` autogenerado
-    // — es el único camino de alta de `client` que no lo pide (a diferencia
-    // de `POST /clients`, donde es obligatorio). Patrón `CLI` + id_seq, SIN
-    // padding fijo — un ancho fijo de 3 dígitos truncaba en vez de
-    // ensanchar en cuanto `id_seq` llegaba a 4 cifras (bug real encontrado
-    // contra datos reales: id_seq 4916/4918 colisionaban en el mismo
-    // "CLI491", violando el índice único `idx_client_codi`). Los ejemplos
-    // del contrato (`CLI045`, `CLI200`) tenían ids chicos por casualidad,
-    // no reflejaban una regla de ancho fijo. `id_seq` recién se conoce
-    // DESPUÉS del INSERT (columna IDENTITY) — no se puede resolver en la
-    // misma sentencia. `WHERE codi IS NULL` cubre los dos caminos de este
-    // upsert sin distinguirlos: un cliente nuevo siempre tiene `codi` null
-    // recién insertado; uno existente resuelto por `ON CONFLICT` puede ya
-    // tener `codi` (manual o de una sincronización anterior) y no se toca.
-    const codiGenerat = `CLI${res.rows[0]!.id_seq}`;
-    await client.query(
-      `UPDATE client SET codi = $1 WHERE id = $2 AND (codi IS NULL OR codi = '')`,
-      [codiGenerat, res.rows[0]!.id],
-    );
+    // Capa 25/29: todo cliente recibe un `codi` autogenerado, sin importar
+    // el origen (sync o alta manual) — ver assignarCodiAutogenerat. Acá
+    // cubre los dos caminos de este upsert sin distinguirlos: un cliente
+    // nuevo siempre tiene `codi` null recién insertado; uno existente
+    // resuelto por `ON CONFLICT` puede ya tener `codi` y no se toca.
+    await assignarCodiAutogenerat(client, res.rows[0]!.id, res.rows[0]!.id_seq);
 
     return res.rows[0]!.id;
   } catch (err) {
