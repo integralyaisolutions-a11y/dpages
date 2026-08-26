@@ -866,4 +866,160 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       await fastify.close();
     });
   });
+
+  describe('capa 31 — canvi manual d’estat (PATCH /comandes/:id)', () => {
+    it('PATCH /comandes/:id: canvi lliure entre oberta/en_proces/tancada, sense restricció de transició', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      expect(comandaCreada.estat).toBe('oberta');
+
+      const aEnProces = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { estat: 'en_proces' },
+      });
+      expect(aEnProces.statusCode).toBe(200);
+      expect(cuerpoJson<ComandaDetallApi>(aEnProces).estat).toBe('en_proces');
+
+      // De en_proces directo a tancada, sin pasar por ningún otro estado
+      // intermedio — no hay máquina de estados que lo impida.
+      const aTancada = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { estat: 'tancada' },
+      });
+      expect(aTancada.statusCode).toBe(200);
+      expect(cuerpoJson<ComandaDetallApi>(aTancada).estat).toBe('tancada');
+
+      // Y de vuelta a oberta, igual de libre.
+      const aOberta = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { estat: 'oberta' },
+      });
+      expect(aOberta.statusCode).toBe(200);
+      expect(cuerpoJson<ComandaDetallApi>(aOberta).estat).toBe('oberta');
+
+      await fastify.close();
+    });
+
+    it('PATCH /comandes/:id: estat amb_incidencia sense detall rebutja amb 400 VALIDACIO', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { estat: 'amb_incidencia' },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+      // No quedó a medio aplicar: ni el estado ni ninguna incidencia nueva.
+      const detall = await fastify.inject({
+        method: 'GET',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+      });
+      const cuerpo = cuerpoJson<ComandaDetallApi>(detall);
+      expect(cuerpo.estat).toBe('oberta');
+      expect(cuerpo.incidencies).toHaveLength(0);
+
+      await fastify.close();
+    });
+
+    it('PATCH /comandes/:id: estat amb_incidencia amb detall aplica i registra incidència manual', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { estat: 'amb_incidencia', detall: 'Client es va queixar de la qualitat' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const cuerpo = cuerpoJson<ComandaDetallApi>(res);
+      expect(cuerpo.estat).toBe('amb_incidencia');
+      const incidenciaManual = cuerpo.incidencies.find((i) => i.tipus === 'manual');
+      expect(incidenciaManual?.detall).toBe('Client es va queixar de la qualitat');
+
+      await fastify.close();
+    });
+
+    it('PATCH /comandes/:id: canvi d’estat en comanda congelada rebutja amb 409 CONFLICTE', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      await entorn.poolTest.query(`UPDATE comanda SET congelat_a = now() WHERE id_seq = $1`, [
+        comandaCreada.id,
+      ]);
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { estat: 'tancada' },
+      });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toMatchObject({ error: { codi: 'CONFLICTE' } });
+
+      await fastify.close();
+    });
+
+    it('PATCH /comandes/:id: valor d’estat invàlid rebutja amb 400 VALIDACIO', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { estat: 'no_existeix' },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+      await fastify.close();
+    });
+  });
 });

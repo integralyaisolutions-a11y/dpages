@@ -21,6 +21,11 @@ import {
   resolverTransportistaUuid,
 } from './comu.js';
 
+// Capa 31 — únicos 4 valors admesos per comanda.estat (mateixa llista que el
+// CHECK constraint de la taula, migració 0003). No hi havia cap constant
+// reutilitzable per a això abans d'aquesta capa.
+const ESTATS_COMANDA_VALIDS = ['oberta', 'en_proces', 'tancada', 'amb_incidencia'] as const;
+
 interface FilaComandaResum {
   id_seq: string;
   num: string;
@@ -626,7 +631,27 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       obsLliurament: string | null;
       poblacioDesti: string | null;
       adrecaLliurament: string | null;
+      estat: string;
+      detall: string;
     }>;
+
+    if (cos.estat !== undefined) {
+      if (!ESTATS_COMANDA_VALIDS.includes(cos.estat as (typeof ESTATS_COMANDA_VALIDS)[number])) {
+        return enviarValidacio(reply, 'El estat indicat no és vàlid', [
+          { camp: 'estat', missatge: `ha de ser un de: ${ESTATS_COMANDA_VALIDS.join(', ')}` },
+        ]);
+      }
+      // Capa 31 — decisión de negocio: transiciones libres entre los 4
+      // estados, sin máquina de estados. Única excepción: pasar a
+      // amb_incidencia manualmente exige un motivo (detall), porque a
+      // diferencia de las incidencias automáticas (sense_preu, etc.) acá no
+      // hay ningún dato del sistema del que derivarlo.
+      if (cos.estat === 'amb_incidencia' && (!cos.detall || cos.detall.trim() === '')) {
+        return enviarValidacio(reply, 'El detall és obligatori per marcar amb_incidencia', [
+          { camp: 'detall', missatge: 'és obligatori quan estat és amb_incidencia' },
+        ]);
+      }
+    }
 
     let clientUuid: string | null | undefined;
     if (cos.clientId !== undefined) {
@@ -659,46 +684,72 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       }
     }
 
-    await pool.query(
-      `UPDATE comanda SET
-         client_id = CASE WHEN $2 THEN $3 ELSE client_id END,
-         tarifa_id = CASE WHEN $4 THEN $5 ELSE tarifa_id END,
-         transportista_id = CASE WHEN $6 THEN $7 ELSE transportista_id END,
-         data_produccio = CASE WHEN $8 THEN $9 ELSE data_produccio END,
-         data_expedicio = CASE WHEN $10 THEN $11 ELSE data_expedicio END,
-         data_lliurament = CASE WHEN $12 THEN $13 ELSE data_lliurament END,
-         bultos = CASE WHEN $14 THEN $15 ELSE bultos END,
-         obs_produccio = CASE WHEN $16 THEN $17 ELSE obs_produccio END,
-         obs_lliurament = CASE WHEN $18 THEN $19 ELSE obs_lliurament END,
-         poblacio_desti = CASE WHEN $20 THEN $21 ELSE poblacio_desti END,
-         adreca_lliurament = CASE WHEN $22 THEN $23 ELSE adreca_lliurament END
-       WHERE id = $1`,
-      [
-        comandaUuid,
-        clientUuid !== undefined,
-        clientUuid ?? null,
-        tarifaUuid !== undefined,
-        tarifaUuid ?? null,
-        transportistaUuid !== undefined,
-        transportistaUuid ?? null,
-        cos.dataProduccio !== undefined,
-        cos.dataProduccio ?? null,
-        cos.dataExpedicio !== undefined,
-        cos.dataExpedicio ?? null,
-        cos.dataLliurament !== undefined,
-        cos.dataLliurament ?? null,
-        cos.bultos !== undefined,
-        cos.bultos ?? null,
-        cos.obsProduccio !== undefined,
-        cos.obsProduccio ?? null,
-        cos.obsLliurament !== undefined,
-        cos.obsLliurament ?? null,
-        cos.poblacioDesti !== undefined,
-        cos.poblacioDesti ?? null,
-        cos.adrecaLliurament !== undefined,
-        cos.adrecaLliurament ?? null,
-      ],
-    );
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      await client.query(
+        `UPDATE comanda SET
+           client_id = CASE WHEN $2 THEN $3 ELSE client_id END,
+           tarifa_id = CASE WHEN $4 THEN $5 ELSE tarifa_id END,
+           transportista_id = CASE WHEN $6 THEN $7 ELSE transportista_id END,
+           data_produccio = CASE WHEN $8 THEN $9 ELSE data_produccio END,
+           data_expedicio = CASE WHEN $10 THEN $11 ELSE data_expedicio END,
+           data_lliurament = CASE WHEN $12 THEN $13 ELSE data_lliurament END,
+           bultos = CASE WHEN $14 THEN $15 ELSE bultos END,
+           obs_produccio = CASE WHEN $16 THEN $17 ELSE obs_produccio END,
+           obs_lliurament = CASE WHEN $18 THEN $19 ELSE obs_lliurament END,
+           poblacio_desti = CASE WHEN $20 THEN $21 ELSE poblacio_desti END,
+           adreca_lliurament = CASE WHEN $22 THEN $23 ELSE adreca_lliurament END,
+           estat = CASE WHEN $24 THEN $25 ELSE estat END
+         WHERE id = $1`,
+        [
+          comandaUuid,
+          clientUuid !== undefined,
+          clientUuid ?? null,
+          tarifaUuid !== undefined,
+          tarifaUuid ?? null,
+          transportistaUuid !== undefined,
+          transportistaUuid ?? null,
+          cos.dataProduccio !== undefined,
+          cos.dataProduccio ?? null,
+          cos.dataExpedicio !== undefined,
+          cos.dataExpedicio ?? null,
+          cos.dataLliurament !== undefined,
+          cos.dataLliurament ?? null,
+          cos.bultos !== undefined,
+          cos.bultos ?? null,
+          cos.obsProduccio !== undefined,
+          cos.obsProduccio ?? null,
+          cos.obsLliurament !== undefined,
+          cos.obsLliurament ?? null,
+          cos.poblacioDesti !== undefined,
+          cos.poblacioDesti ?? null,
+          cos.adrecaLliurament !== undefined,
+          cos.adrecaLliurament ?? null,
+          cos.estat !== undefined,
+          cos.estat ?? null,
+        ],
+      );
+
+      // Capa 31 — a diferencia de las incidencias automáticas (sense_preu,
+      // article_no_resolt, etc.), ésta la dispara un usuario de oficina a
+      // mano, sin que el sistema haya detectado nada por sí solo. Mismo
+      // array/tabla (incidencia_comanda), tipus distinto para diferenciarla.
+      if (cos.estat === 'amb_incidencia') {
+        await client.query(
+          `INSERT INTO incidencia_comanda (comanda_id, tipus, detall) VALUES ($1, 'manual', $2)`,
+          [comandaUuid, cos.detall],
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
 
     return carregarDetallPerUuid(comandaUuid);
   });

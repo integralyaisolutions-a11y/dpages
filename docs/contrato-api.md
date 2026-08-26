@@ -209,11 +209,12 @@ enum cerrado en el backend — es texto libre en base, para no exigir una
 migración cada vez que aparece un motivo nuevo. Los valores que existen hoy
 en datos reales:
 
-| Valor                        | Significado                                                              |
-| ---------------------------- | ------------------------------------------------------------------------ |
-| `article_no_resolt`          | Una línea del pedido no pudo resolverse a ningún artículo del catálogo.  |
-| `conflicte_identitat_client` | El NIF/email resuelto contradice el ya registrado para ese cliente.      |
-| `sense_dades_client`         | El pedido no trae ni NIF ni email utilizable — no se pudo crear cliente. |
+| Valor                        | Significado                                                                                                                              |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `article_no_resolt`          | Una línea del pedido no pudo resolverse a ningún artículo del catálogo.                                                                  |
+| `conflicte_identitat_client` | El NIF/email resuelto contradice el ya registrado para ese cliente.                                                                      |
+| `sense_dades_client`         | El pedido no trae ni NIF ni email utilizable — no se pudo crear cliente.                                                                 |
+| `manual`                     | (capa 31) Un usuario de oficina marcó el pedido `amb_incidencia` a mano, con un motivo (`detall`) que el sistema no podía detectar solo. |
 
 No lo trates como un enum fijo en el frontend: mostrá `tipus` tal cual si no
 lo reconocés, en vez de asumir que la lista de arriba es exhaustiva.
@@ -772,6 +773,24 @@ correo y WhatsApp, que son la mayoría del volumen real.
 > **`congelada`** en `true` significa que el pedido entró en producción y ya no
 > admite cambios desde la web. Cualquier intento de modificarlo devuelve
 > `409 CONFLICTE`. Mostralo visualmente.
+
+**`estat` en `PATCH /comandes/:id`** (capa 31) — permite mover el pedido a
+mano entre los 4 valores de `EstatComanda`, sin restricción de transición
+(cualquier estado puede pasar a cualquier otro). Pensado para los casos que
+el sistema no puede detectar solo: marcar incidencia por una queja del
+cliente o falta de stock, o volver de `amb_incidencia` a otro estado una vez
+resuelta.
+
+```json
+{ "estat": "amb_incidencia", "detall": "Client va trucar per queixar-se de la qualitat" }
+```
+
+Si `estat` es `"amb_incidencia"`, `detall` es **obligatorio en el mismo
+body** — sin eso, `400 VALIDACIO`. Al aplicar, se registra una incidencia
+nueva (`tipus: "manual"`, ver sección 3) en `incidencies[]`, igual que las
+automáticas. Para cualquier otro valor de `estat`, `detall` se ignora si
+viene. Un `estat` que no sea uno de los 4 valores válidos también es
+`400 VALIDACIO`. Mismo `409 CONFLICTE` si el pedido está congelado.
 
 **`POST /comandes/:comandaId/linies`** (capa 30) — agregar una línea a un
 pedido **ya creado**. Hasta esta capa, la única forma de corregir un pedido

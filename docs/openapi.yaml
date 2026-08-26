@@ -640,6 +640,12 @@ paths:
     patch:
       tags: [Comandes]
       summary: Actualizar cabecera del pedido (parcial)
+      description: >-
+        Capa 31. Incluye `estat`: transición libre entre los 4 valores de
+        EstatComanda, sin máquina de estados. Si `estat` es "amb_incidencia",
+        `detall` es obligatorio en el mismo body (400 si falta) y se registra
+        como una incidencia nueva (tipus "manual"). 409 si la comanda está
+        congelada.
       parameters:
         - $ref: '#/components/parameters/IdPath'
       requestBody:
@@ -652,6 +658,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ComandaDetall' }
+        '400': { $ref: '#/components/responses/Validacio' }
         '404': { $ref: '#/components/responses/NoTrobat' }
         '409': { $ref: '#/components/responses/Conflicte' }
 
@@ -1647,6 +1654,20 @@ components:
         bultos: { type: integer, nullable: true }
         obsProduccio: { type: string, nullable: true }
         obsLliurament: { type: string, nullable: true }
+        estat:
+          allOf: [{ $ref: '#/components/schemas/EstatComanda' }]
+          description: >-
+            Capa 31. Transición libre entre los 4 estados, sin máquina de
+            estados. Si el valor es "amb_incidencia", `detall` es obligatorio
+            en el mismo body y se registra como una incidencia nueva
+            (tipus "manual") — a diferencia de las incidencias automáticas
+            (sense_preu, etc.), ésta la dispara un usuario a mano.
+        detall:
+          type: string
+          nullable: true
+          description: >-
+            Sólo se usa (y es obligatorio) cuando estat = "amb_incidencia".
+            Se ignora en cualquier otro caso.
 
     FilaPanellObrador:
       type: object
