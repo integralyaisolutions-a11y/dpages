@@ -197,7 +197,7 @@ const SELECT_COMANDA_LINIA = `
   FROM comanda_linia cl
   LEFT JOIN producte p ON p.id = cl.producte_id
   LEFT JOIN categoria_producte cat ON cat.id = p.categoria_id
-  WHERE cl.comanda_id = $1
+  WHERE cl.comanda_id = $1 AND NOT cl.esborrat
   ORDER BY cl.ordinal ASC
 `;
 

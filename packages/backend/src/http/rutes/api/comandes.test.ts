@@ -1178,4 +1178,77 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       await fastify.close();
     });
   });
+
+  describe('capa 33 — SELECT_COMANDA_LINIA no ha de tornar línies esborrades', () => {
+    it('GET /comandes/:id: després d’esborrar una línia, linies[] només mostra la que queda activa', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [
+            { producteId: producteFitxaId, unitatsDemanades: 1 },
+            { producteId: producteAMidaId, unitatsDemanades: 2, kgDemanats: '1.500' },
+          ],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      expect(comandaCreada.linies).toHaveLength(2);
+      const liniaAEsborrar = comandaCreada.linies.find((l) => l.producte?.id === producteFitxaId)!;
+      const liniaQueQueda = comandaCreada.linies.find((l) => l.producte?.id === producteAMidaId)!;
+
+      const esborrar = await fastify.inject({
+        method: 'DELETE',
+        url: `/api/v1/comandes/${comandaCreada.id}/linies/${liniaAEsborrar.id}`,
+      });
+      expect(esborrar.statusCode).toBe(204);
+
+      const detall = await fastify.inject({
+        method: 'GET',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+      });
+      expect(detall.statusCode).toBe(200);
+      const cuerpo = cuerpoJson<ComandaDetallApi>(detall);
+      expect(cuerpo.linies).toHaveLength(1);
+      expect(cuerpo.linies[0]?.id).toBe(liniaQueQueda.id);
+      expect(cuerpo.linies.some((l) => l.id === liniaAEsborrar.id)).toBe(false);
+
+      await fastify.close();
+    });
+
+    it('POST /comandes/:comandaId/linies: després d’esborrar una línia i afegir-ne una altra, la resposta segueix sense mostrar l’esborrada', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      const liniaAEsborrar = comandaCreada.linies[0]!;
+
+      const esborrar = await fastify.inject({
+        method: 'DELETE',
+        url: `/api/v1/comandes/${comandaCreada.id}/linies/${liniaAEsborrar.id}`,
+      });
+      expect(esborrar.statusCode).toBe(204);
+
+      const res = await fastify.inject({
+        method: 'POST',
+        url: `/api/v1/comandes/${comandaCreada.id}/linies`,
+        payload: { producteId: producteAMidaId, unitatsDemanades: 1, kgDemanats: '1.000' },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const cuerpo = cuerpoJson<ComandaDetallApi>(res);
+      expect(cuerpo.linies).toHaveLength(1);
+      expect(cuerpo.linies[0]?.producte?.id).toBe(producteAMidaId);
+      expect(cuerpo.linies.some((l) => l.id === liniaAEsborrar.id)).toBe(false);
+
+      await fastify.close();
+    });
+  });
 });

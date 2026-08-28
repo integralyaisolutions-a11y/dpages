@@ -1550,7 +1550,12 @@ components:
             (Producte.preuVenda); 3) si tampoco hay, "0.00" con incidencia
             registrada.
         totalLinia: { type: string }
-        esborrat: { type: boolean }
+        esborrat:
+          type: boolean
+          description: >-
+            Siempre false en linies[] — una línea borrada (borrado lógico)
+            nunca vuelve a aparecer aquí (capa 33). El campo queda por
+            compatibilidad.
 
     Incidencia:
       type: object

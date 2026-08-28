@@ -729,6 +729,17 @@ Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-
 > de `poblacioDesti`, que es sólo la población/ciudad. Editable vía
 > `PATCH /comandes/:id`, igual que `poblacioDesti`.
 >
+> **`linies[]` sólo trae líneas activas** — una línea borrada
+> (`DELETE /comandes/:comandaId/linies/:liniaId`, borrado lógico, ver
+> ADR-006) nunca vuelve a aparecer en `linies[]`, en ninguna respuesta que
+> incluya el detalle del pedido (`GET`/`POST`/`PATCH /comandes/:id` y los
+> dos endpoints de línea de la capa 30). Por eso `esborrat` siempre sale
+> `false` en `linies[]` — el campo queda por compatibilidad, no hace falta
+> mirarlo para saber si una línea está activa. **(Capa 33)** — hasta esta
+> capa esto tenía un bug puntual: `SELECT_COMANDA_LINIA`, el único punto de
+> verdad de `linies[]`, no filtraba `esborrat`, así que las líneas borradas
+> sí volvían a aparecer.
+>
 > **`linies[].dataProduccio`** es la fecha de producción de ESA línea en
 > particular, distinta de `dataProduccio` a nivel de cabecera (la de arriba,
 > que es del pedido completo). El prototipo muestra ambas como editables por
