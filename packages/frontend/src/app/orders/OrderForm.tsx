@@ -4,6 +4,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DataCard, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
+import { DecimalInput } from "@/components/ui/DecimalInput";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { TextField } from "@/components/ui/TextField";
 import type { OrderFormValues, OrderLineChanges } from "@/hooks/useOrders";
@@ -312,12 +313,10 @@ function LineFormCard({
               className="w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-right text-sm text-gray-400"
             />
           ) : (
-            <input
-              type="number"
-              step="0.001"
+            <DecimalInput
               disabled={disabled}
               value={line.kgDemanats}
-              onChange={(event) => onUpdate({ kgDemanats: Number(event.target.value).toFixed(3) })}
+              onChange={(value) => onUpdate({ kgDemanats: Number(value).toFixed(3) })}
               className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
             />
           )}
@@ -806,12 +805,10 @@ export const OrderForm = forwardRef<
                           className="w-full rounded-md border border-gray-200 bg-gray-50 px-1.5 py-1 text-right text-sm text-gray-400"
                         />
                       ) : (
-                        <input
-                          type="number"
-                          step="0.001"
+                        <DecimalInput
                           disabled={isFrozen}
                           value={line.kgDemanats}
-                          onChange={(event) => updateLine(line.id, { kgDemanats: Number(event.target.value).toFixed(3) })}
+                          onChange={(value) => updateLine(line.id, { kgDemanats: Number(value).toFixed(3) })}
                           className="w-full rounded-md border border-gray-300 px-1.5 py-1 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
                         />
                       )}

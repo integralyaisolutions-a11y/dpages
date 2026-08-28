@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DecimalInput } from "@/components/ui/DecimalInput";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { TextField } from "@/components/ui/TextField";
 import { useCategories } from "@/hooks/useCategories";
@@ -142,20 +143,8 @@ export function ProductForm({
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <TextField
-            label="Pes (kg)"
-            type="number"
-            step="0.001"
-            value={pesKg}
-            onChange={(event) => setPesKg(event.target.value)}
-          />
-          <TextField
-            label="Preu base (€)"
-            type="number"
-            step="0.01"
-            value={preuVenda}
-            onChange={(event) => setPreuVenda(event.target.value)}
-          />
+          <DecimalInput label="Pes (kg)" value={pesKg} onChange={setPesKg} />
+          <DecimalInput label="Preu base (€)" value={preuVenda} onChange={setPreuVenda} />
         </div>
 
         {formError && <p className="text-sm text-red-600">{formError}</p>}

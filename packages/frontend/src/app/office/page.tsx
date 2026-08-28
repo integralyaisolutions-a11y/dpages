@@ -1,22 +1,21 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { DataCard, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
 import { DateRangeInput } from "@/components/ui/DateRangeInput";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { StatCard } from "@/components/ui/StatCard";
 import { useCarriers } from "@/hooks/useCarriers";
 import { useClientTariffs } from "@/hooks/useClientTariffs";
-import { useMockOrdersDetail } from "@/hooks/useMockOrdersDetail";
+import { usePanellOficina } from "@/hooks/usePanellOficina";
 import { useRates } from "@/hooks/useRates";
-import type { ComandaDetallApi } from "@/lib/api";
+import type { ClientApi, FilaPanellOficinaApi } from "@/lib/api";
 import { formatData } from "@/lib/dates";
-import { sumOrderedWeightKg } from "@/lib/orderCalculations";
+import { formatDecimal } from "@/lib/decimals";
 
 const ALL = "Tots";
 const ALL_FEM = "Totes";
@@ -28,17 +27,17 @@ const ESTAT_LABELS: Record<string, string> = {
   amb_incidencia: "Amb incidència",
 };
 
-function formatKg(value: number) {
-  return `${value.toFixed(3).replace(".", ",")}`;
+function clientLabel(client: ClientApi) {
+  return `${client.codi ?? client.id} · ${client.nom ?? ""}`;
 }
 
-function OfficeOrderCard({ order, onClick }: { order: ComandaDetallApi; onClick: () => void }) {
+function OfficeOrderCard({ order, onClick }: { order: FilaPanellOficinaApi; onClick: () => void }) {
   return (
     <DataCard onClick={onClick}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-semibold text-gray-900">{order.num}</p>
-          <p className="text-sm text-gray-500">{order.client?.nom ?? "—"}</p>
+          <p className="text-sm text-gray-500">{order.client ?? "—"}</p>
         </div>
         <Badge variant={order.estat === "amb_incidencia" ? "negative" : "info"}>
           {ESTAT_LABELS[order.estat] ?? order.estat}
@@ -48,25 +47,29 @@ function OfficeOrderCard({ order, onClick }: { order: ComandaDetallApi; onClick:
       <div className="mt-3">
         <DataCardGrid>
           <DataCardField label="Població de destí">{order.poblacioDesti || "—"}</DataCardField>
-          <DataCardField label="Tarifa">{order.tarifa?.nom ?? "—"}</DataCardField>
-          <DataCardField label="Transportista">{order.transportista?.nom ?? "—"}</DataCardField>
-          <DataCardField label="Total kg demanats">{formatKg(sumOrderedWeightKg(order.linies))}</DataCardField>
-          <DataCardField label="Data comanda">{formatData(order.dataComanda, false)}</DataCardField>
+          <DataCardField label="Tarifa">{order.tarifa ?? "—"}</DataCardField>
+          <DataCardField label="Transportista">{order.transportista ?? "—"}</DataCardField>
+          <DataCardField label="Total kg demanats">{formatDecimal(order.totalKg, 3)}</DataCardField>
+          <DataCardField label="Núm. bultos">{order.bultos ?? "—"}</DataCardField>
+          <DataCardField label="Data comanda">{formatData(order.dataComanda, true)}</DataCardField>
           <DataCardField label="Data expedició">
-            {order.dataExpedicio ? formatData(order.dataExpedicio, true) : "—"}
+            {order.dataExpedicio ? formatData(order.dataExpedicio, false) : "—"}
           </DataCardField>
           <DataCardField label="Data lliurament">
-            {order.dataLliurament ? formatData(order.dataLliurament, true) : "—"}
+            {order.dataLliurament ? formatData(order.dataLliurament, false) : "—"}
           </DataCardField>
-          <DataCardField label="Núm. bultos">{order.bultos ?? "—"}</DataCardField>
         </DataCardGrid>
       </div>
 
       <div className="mt-3 flex gap-6 border-t border-gray-100 pt-3">
         <label className="flex items-center gap-2 text-sm text-gray-700">
+          {/* Capa 35 — FilaPanellOficinaApi.obsProduccio ya es boolean acá
+              (cabecera O línia activa), el backend ja fa el càlcul. NO és
+              string: cap .trim() acá (a diferència del detall, on
+              ComandaLiniaApi.obsProduccio segueix sent string | null). */}
           <input
             type="checkbox"
-            checked={(order.obsProduccio ?? "").trim().length > 0}
+            checked={order.obsProduccio}
             disabled
             className="h-4 w-4 rounded border-gray-300 text-ink"
           />
@@ -88,12 +91,12 @@ function OfficeOrderCard({ order, onClick }: { order: ComandaDetallApi; onClick:
 
 export default function OfficePage() {
   const router = useRouter();
-  const { data, isLoading, error } = useMockOrdersDetail();
   const { data: clients } = useClientTariffs();
   const { tariffColumns } = useRates();
   const { data: carriers } = useCarriers();
 
-  const [clientSearch, setClientSearch] = useState("");
+  // Capa 35 — els 8 filtres reals de GET /panells/oficina, tots connectats.
+  const [clientFilter, setClientFilter] = useState(ALL);
   const [statusFilter, setStatusFilter] = useState(ALL);
   const [carrierFilter, setCarrierFilter] = useState(ALL);
   const [tariffFilter, setTariffFilter] = useState(ALL_FEM);
@@ -105,48 +108,97 @@ export default function OfficePage() {
   const [deliveryDateFrom, setDeliveryDateFrom] = useState("");
   const [deliveryDateTo, setDeliveryDateTo] = useState("");
 
-  const destinationOptions = useMemo(
-    () => [ALL_FEM, ...Array.from(new Set(data.map((order) => order.poblacioDesti ?? "—")))],
-    [data],
+  const statusCode = useMemo(
+    () => Object.entries(ESTAT_LABELS).find(([, label]) => label === statusFilter)?.[0],
+    [statusFilter],
+  );
+  const carrierId = useMemo(
+    () => (carrierFilter !== ALL ? carriers.find((item) => item.nom === carrierFilter)?.id : undefined),
+    [carrierFilter, carriers],
+  );
+  const clientId = useMemo(
+    () => (clientFilter !== ALL ? clients.find((item) => clientLabel(item) === clientFilter)?.id : undefined),
+    [clientFilter, clients],
+  );
+  const tariffId = useMemo(
+    () => (tariffFilter !== ALL_FEM ? tariffColumns.find((item) => item.nom === tariffFilter)?.id : undefined),
+    [tariffFilter, tariffColumns],
   );
 
-  const filtered = data.filter((order) => {
-    if (clientSearch) {
-      // El resumen del pedido sólo trae {id, nom} del cliente — el codi se
-      // cruza contra el listado completo de clients (contrato §4.4).
-      const client = clients.find((item) => item.id === order.client?.id);
-      const term = clientSearch.toLowerCase();
-      const matches =
-        order.client?.nom.toLowerCase().includes(term) || (client?.codi ?? "").toLowerCase().includes(term);
-      if (!matches) return false;
-    }
-    if (statusFilter !== ALL && (ESTAT_LABELS[order.estat] ?? order.estat) !== statusFilter) return false;
-    if (carrierFilter !== ALL && (order.transportista?.nom ?? "—") !== carrierFilter) return false;
-    if (tariffFilter !== ALL_FEM && (order.tarifa?.nom ?? "—") !== tariffFilter) return false;
-    if (destinationFilter !== ALL_FEM && (order.poblacioDesti ?? "—") !== destinationFilter) return false;
-    const dataComanda = order.dataComanda.slice(0, 10);
-    const dataExpedicio = order.dataExpedicio?.slice(0, 10);
-    const dataLliurament = order.dataLliurament?.slice(0, 10);
-    if (orderDateFrom && dataComanda < orderDateFrom) return false;
-    if (orderDateTo && dataComanda > orderDateTo) return false;
-    if (shippingDateFrom && (!dataExpedicio || dataExpedicio < shippingDateFrom)) return false;
-    if (shippingDateTo && (!dataExpedicio || dataExpedicio > shippingDateTo)) return false;
-    if (deliveryDateFrom && (!dataLliurament || dataLliurament < deliveryDateFrom)) return false;
-    if (deliveryDateTo && (!dataLliurament || dataLliurament > deliveryDateTo)) return false;
-    return true;
-  });
+  const filters = useMemo(
+    () => ({
+      ...(statusCode ? { estat: statusCode } : {}),
+      ...(carrierId !== undefined ? { transportistaId: carrierId } : {}),
+      ...(clientId !== undefined ? { clientId } : {}),
+      ...(tariffId !== undefined ? { tarifaId: tariffId } : {}),
+      ...(destinationFilter !== ALL_FEM ? { poblacioDesti: destinationFilter } : {}),
+      ...(orderDateFrom ? { dataComandaDes: orderDateFrom } : {}),
+      ...(orderDateTo ? { dataComandaFins: orderDateTo } : {}),
+      ...(shippingDateFrom ? { dataExpedicioDes: shippingDateFrom } : {}),
+      ...(shippingDateTo ? { dataExpedicioFins: shippingDateTo } : {}),
+      ...(deliveryDateFrom ? { dataLliuramentDes: deliveryDateFrom } : {}),
+      ...(deliveryDateTo ? { dataLliuramentFins: deliveryDateTo } : {}),
+    }),
+    [
+      statusCode,
+      carrierId,
+      clientId,
+      tariffId,
+      destinationFilter,
+      orderDateFrom,
+      orderDateTo,
+      shippingDateFrom,
+      shippingDateTo,
+      deliveryDateFrom,
+      deliveryDateTo,
+    ],
+  );
+
+  const { data, totals, isLoading, error, refetch } = usePanellOficina(filters);
+
+  // Població de destí no té cap catàleg propi (és text lliure a
+  // `comanda.poblacio_desti`, no una entitat com client/tarifa/
+  // transportista) — les opcions es deriven de `data`, l'únic univers
+  // disponible sense un endpoint dedicat. Es descarten els nulls: no hi ha
+  // manera de filtrar per "sense població" contra un backend que compara
+  // per igualtat exacta de text (enviar-ho literal no matchejaria res).
+  const destinationOptions = useMemo(
+    () => [
+      ALL_FEM,
+      ...Array.from(new Set(data.map((order) => order.poblacioDesti).filter((value): value is string => value !== null))),
+    ],
+    [data],
+  );
 
   return (
     <div>
       <PageHeader
         title="Panell d'Oficina"
         subtitle="Vista tabular de totes les comandes. Fes clic en una fila per veure'n les línies."
-        right={<StatCard label="COMANDES VISIBLES" value={filtered.length} />}
+        right={<StatCard label="COMANDES VISIBLES" value={totals?.comandes ?? 0} />}
       />
+
+      {error && (
+        <div className="mb-4 flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm text-red-600">No s&apos;han pogut carregar les comandes: {error.message}</p>
+          <button
+            type="button"
+            onClick={refetch}
+            className="shrink-0 rounded-full border border-red-300 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
 
       <FilterBar>
         <div className="flex w-full flex-wrap gap-4">
-          <SearchInput label="Client" value={clientSearch} onChange={setClientSearch} />
+          <SelectFilter
+            label="Client"
+            options={[ALL, ...clients.map((item) => clientLabel(item))]}
+            value={clientFilter}
+            onChange={setClientFilter}
+          />
           <SelectFilter
             label="Estat"
             options={[ALL, ...Object.values(ESTAT_LABELS)]}
@@ -198,13 +250,16 @@ export default function OfficePage() {
       </FilterBar>
 
       {isLoading && <p className="text-sm text-gray-500">Carregant...</p>}
-      {error && <p className="text-sm text-red-600">No s&apos;han pogut carregar les comandes.</p>}
 
       {!isLoading && !error && (
         <>
           <div className="flex flex-col gap-3 xl:hidden">
-            {filtered.map((order) => (
-              <OfficeOrderCard key={order.num} order={order} onClick={() => router.push(`/office/${order.num}`)} />
+            {data.map((order) => (
+              <OfficeOrderCard
+                key={order.comandaId}
+                order={order}
+                onClick={() => router.push(`/office/${order.comandaId}`)}
+              />
             ))}
           </div>
 
@@ -236,39 +291,37 @@ export default function OfficePage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((order) => (
+                {data.map((order) => (
                   <tr
-                    key={order.num}
-                    onClick={() => router.push(`/office/${order.num}`)}
+                    key={order.comandaId}
+                    onClick={() => router.push(`/office/${order.comandaId}`)}
                     className="cursor-pointer border-b border-gray-100 last:border-0 hover:bg-gray-50"
                   >
                     <td className="px-2 py-3 break-words">
                       <span className="font-semibold text-gray-900">{order.num}</span>
                     </td>
-                    <td className="px-2 py-3 break-words text-gray-900">{order.client?.nom ?? "—"}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">{order.client ?? "—"}</td>
                     <td className="px-2 py-3 break-words text-gray-900">{order.poblacioDesti || "—"}</td>
-                    <td className="px-2 py-3 break-words text-gray-900">{order.tarifa?.nom ?? "—"}</td>
-                    <td className="px-2 py-3 break-words text-gray-900">{order.transportista?.nom ?? "—"}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">{order.tarifa ?? "—"}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">{order.transportista ?? "—"}</td>
                     <td className="px-2 py-3">
                       <Badge variant={order.estat === "amb_incidencia" ? "negative" : "info"}>
                         {ESTAT_LABELS[order.estat] ?? order.estat}
                       </Badge>
                     </td>
-                    <td className="px-2 py-3 break-words text-gray-900">{formatData(order.dataComanda, false)}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">{formatData(order.dataComanda, true)}</td>
                     <td className="px-2 py-3 break-words text-gray-900">
-                      {order.dataExpedicio ? formatData(order.dataExpedicio, true) : "—"}
+                      {order.dataExpedicio ? formatData(order.dataExpedicio, false) : "—"}
                     </td>
                     <td className="px-2 py-3 break-words text-gray-900">
-                      {order.dataLliurament ? formatData(order.dataLliurament, true) : "—"}
+                      {order.dataLliurament ? formatData(order.dataLliurament, false) : "—"}
                     </td>
-                    <td className="px-2 py-3 text-right text-gray-900">
-                      {formatKg(sumOrderedWeightKg(order.linies))}
-                    </td>
+                    <td className="px-2 py-3 text-right text-gray-900">{formatDecimal(order.totalKg, 3)}</td>
                     <td className="px-2 py-3 text-right text-gray-900">{order.bultos ?? "—"}</td>
                     <td className="px-2 py-3 text-center">
                       <input
                         type="checkbox"
-                        checked={(order.obsProduccio ?? "").trim().length > 0}
+                        checked={order.obsProduccio}
                         disabled
                         className="h-4 w-4 rounded border-gray-300 text-ink"
                       />

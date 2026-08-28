@@ -10,12 +10,10 @@ export function EditableCell({
   value,
   onChange,
   formatValue = defaultFormat,
-  step = "0.01",
 }: {
   value: number | null;
   onChange: (value: number | null) => void;
   formatValue?: (value: number) => string;
-  step?: string;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [valueAtEditStart, setValueAtEditStart] = useState<number | null>(null);
@@ -42,10 +40,10 @@ export function EditableCell({
   if (isEditing) {
     return (
       <input
-        type="number"
-        step={step}
+        type="text"
+        inputMode="decimal"
         autoFocus
-        defaultValue={value ?? ""}
+        defaultValue={value !== null ? String(value).replace(".", ",") : ""}
         onChange={(event) => handleChange(event.target.value)}
         onBlur={handleBlur}
         onKeyDown={(event) => {
