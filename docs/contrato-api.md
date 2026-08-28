@@ -765,10 +765,17 @@ correo y WhatsApp, que son la mayoría del volumen real.
   "obsLliurament": "Entregar pels matins",
   "linies": [
     { "producteId": 12, "unitatsDemanades": 10 },
-    { "producteId": 13, "unitatsDemanades": 4, "kgDemanats": "3.200" }
+    { "producteId": 13, "unitatsDemanades": 4, "kgDemanats": "3.200" },
+    { "producteId": 14, "unitatsDemanades": 2, "dataProduccio": "2026-08-19T00:00:00Z" }
   ]
 }
 ```
+
+> **`linies[].dataProduccio` (capa 34) es opcional en la alta**, igual que en
+> `POST /comandes/:comandaId/linies` (más abajo) — antes de esta capa sólo se
+> podía fijar después, vía `PATCH /comandes/:comandaId/linies/:liniaId`. Se
+> valida contra las 6 reglas de coherencia de fechas — ver el bloque
+> dedicado más abajo.
 
 > **`tarifaId` (capa 32) es opcional.** Si viene, se usa ESA tarifa (no la
 > del cliente) para resolver el precio de **todas** las líneas de esta alta,
@@ -784,6 +791,42 @@ correo y WhatsApp, que son la mayoría del volumen real.
 > contra la tarifa del **cliente**, nunca contra `comanda.tarifaId`, tanto
 > si se fijó al crear como si se editó después. Si en algún momento hace
 > falta que ambos casos sigan `comanda.tarifaId`, es un cambio aparte.
+
+> **Coherencia temporal entre fechas (capa 34) — 6 reglas, aplicadas en TODOS
+> los puntos de entrada que pueden fijar una de estas fechas** (`POST
+/comandes`, `POST /comandes/:comandaId/linies`,
+> `PATCH /comandes/:comandaId/linies/:liniaId`, `PATCH /comandes/:id`):
+>
+> 1. `dataLliurament` no anterior a `dataProduccio` (cabecera).
+> 2. `dataExpedicio` no anterior a `dataProduccio` (cabecera).
+> 3. `dataExpedicio` no posterior a `dataLliurament`.
+> 4. `linies[].dataProduccio` no anterior a `dataProduccio` de cabecera.
+> 5. `linies[].dataProduccio` no posterior a `dataLliurament`.
+> 6. `linies[].dataProduccio` no posterior a `dataExpedicio`.
+>
+> Cada regla sólo aplica cuando **ambas** fechas comparadas tienen valor —
+> si falta alguna de las dos, esa regla puntual no bloquea nada. "anterior"/
+> "posterior" es **estricto**: fechas iguales están permitidas (no había una
+> resolución explícita del cliente sobre este caso límite; queda como
+> criterio documentado, no un misterio). Violación → `400 VALIDACIO` con el
+> detalle de qué regla falló.
+>
+> **El caso delicado es `PATCH /comandes/:id`:** si el body cambia
+> `dataProduccio`/`dataExpedicio`/`dataLliurament` de cabecera, se valida el
+> estado **resultante** (valor nuevo si vino, si no el que ya estaba
+> guardado) contra las reglas 1/2/3, pero también las reglas 4/5/6 contra
+> **todas** las líneas activas del pedido — no sólo las que este PATCH esté
+> tocando (no toca ninguna: este endpoint no edita líneas). Un cambio de
+> fecha de cabecera puede volver inválida una línea de la que nadie se está
+> ocupando en ese momento, y el pedido lo rechaza igual.
+>
+> En `POST /comandes/:comandaId/linies` y
+> `PATCH /comandes/:comandaId/linies/:liniaId`, la comparación es contra las
+> fechas de cabecera **ya guardadas** del pedido (no las del propio body,
+> que en esos dos endpoints no toca cabecera). En `POST /comandes`
+> (alta), como `dataProduccio`/`dataExpedicio` de cabecera no son campos de
+> ese body (sólo existen después, vía `PATCH /comandes/:id`), en la
+> práctica ahí sólo puede dispararse la regla 5 (línea vs. `dataLliurament`).
 
 **`PATCH /comandes/:id`** · **`DELETE /comandes/:id/linies/:liniaId`**
 
@@ -825,22 +868,27 @@ existente era borrarlo entero y recargarlo de cero, perdiendo el número de
 pedido original.
 
 ```json
-{ "producteId": 12, "unitatsDemanades": 5 }
+{ "producteId": 12, "unitatsDemanades": 5, "dataProduccio": "2026-08-19T00:00:00Z" }
 ```
 
 Mismo shape que una línea de `POST /comandes` (`producteId`,
 `unitatsDemanades`, `kgDemanats` opcional — sólo tiene sentido si el
-artículo es "a medida"). Respuesta `201`, **la comanda completa
-actualizada** (mismo shape que `GET /comandes/:id`), no sólo la línea
-nueva — para refrescar toda la pantalla de una. `409 CONFLICTE` si la
-comanda está congelada, igual que el resto de las escrituras sobre un
-pedido.
+artículo es "a medida" —, `dataProduccio` opcional, capa 34). Respuesta
+`201`, **la comanda completa actualizada** (mismo shape que
+`GET /comandes/:id`), no sólo la línea nueva — para refrescar toda la
+pantalla de una. `409 CONFLICTE` si la comanda está congelada, igual que el
+resto de las escrituras sobre un pedido.
 
 > El precio de la línea nueva se resuelve con la **misma cascada** que al
 > crear el pedido (tarifa del cliente → precio de catálogo → `"0.00"` con
 > incidencia). Si la línea queda sin precio resuelto, se registra la
 > incidencia `sense_preu` y el pedido pasa a `amb_incidencia` si no lo
 > estaba ya — mismo criterio que un pedido que nace con una línea así.
+>
+> **`dataProduccio` (capa 34)** se valida contra las 6 reglas de coherencia
+> de fechas (ver el bloque dedicado más arriba) — contra las fechas de
+> cabecera ya guardadas del pedido, no las de este mismo body (este endpoint
+> no toca cabecera).
 
 **`PATCH /comandes/:comandaId/linies/:liniaId`** (capa 30) — editar una
 línea existente.
@@ -863,6 +911,11 @@ se recalcula solo a partir de `unitatsDemanades`, igual que al crear).
 > vino). Si en algún momento hace falta re-resolver precio a propósito
 > (por ejemplo, la tarifa del cliente cambió después de crear el pedido),
 > es una acción separada — todavía no existe un endpoint para eso.
+>
+> **`dataProduccio` (capa 34):** si se cambia, se valida contra las 6 reglas
+> de coherencia de fechas (ver el bloque dedicado más arriba) — contra las
+> fechas de cabecera ya guardadas del pedido. Si no viene en el body, no se
+> re-valida nada (no cambió).
 
 ---
 

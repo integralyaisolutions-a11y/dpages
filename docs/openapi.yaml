@@ -611,6 +611,12 @@ paths:
     post:
       tags: [Comandes]
       summary: Alta manual de pedido (teléfono, email, WhatsApp)
+      description: >-
+        Capa 34: linies[].dataProduccio (si viene) se valida contra las 6
+        reglas de coherencia temporal (ver ComandaEntradaParcial.
+        dataProduccio) — en este endpoint, como dataProduccio/dataExpedicio
+        de cabecera no son campos de este body, en la práctica sólo puede
+        dispararse la regla 5 (línea vs. dataLliurament).
       requestBody:
         required: true
         content:
@@ -644,7 +650,11 @@ paths:
         Capa 31. Incluye `estat`: transición libre entre los 4 valores de
         EstatComanda, sin máquina de estados. Si `estat` es "amb_incidencia",
         `detall` es obligatorio en el mismo body (400 si falta) y se registra
-        como una incidencia nueva (tipus "manual"). 409 si la comanda está
+        como una incidencia nueva (tipus "manual"). Capa 34: si cambia
+        alguna fecha de cabecera, se valida contra las 6 reglas de
+        coherencia temporal (ver ComandaEntradaParcial.dataProduccio),
+        incluyendo TODAS las líneas activas del pedido, no sólo las que este
+        request esté tocando (no toca ninguna). 409 si la comanda está
         congelada.
       parameters:
         - $ref: '#/components/parameters/IdPath'
@@ -674,7 +684,10 @@ paths:
         (tarifa del cliente → precio de catálogo → "0.00" + incidencia).
         Si la línea queda sin precio resuelto, se registra la incidencia
         sense_preu y el pedido pasa a amb_incidencia si no lo estaba ya.
-        409 si la comanda está congelada.
+        Capa 34: si dataProduccio viene, se valida contra las 6 reglas de
+        coherencia temporal (ver ComandaEntradaParcial.dataProduccio) usando
+        las fechas de cabecera ya guardadas del pedido. 409 si la comanda
+        está congelada.
       parameters:
         - name: comandaId
           in: path
@@ -706,8 +719,10 @@ paths:
         todavía no existe un endpoint para eso. kgDemanats sólo se acepta
         si el artículo es "a medida" (kgEditable true en esa línea) —
         rechaza con 400 si el artículo tiene ficha de peso (el peso se
-        recalcula solo desde unitatsDemanades). 409 si la comanda está
-        congelada.
+        recalcula solo desde unitatsDemanades). Capa 34: si dataProduccio
+        cambia, se valida contra las 6 reglas de coherencia temporal
+        (ver ComandaEntradaParcial.dataProduccio) usando las fechas de
+        cabecera ya guardadas del pedido. 409 si la comanda está congelada.
       parameters:
         - name: comandaId
           in: path
@@ -1655,6 +1670,17 @@ components:
           type: string
           nullable: true
           description: Sólo si el artículo es «a medida» (sin pesKg)
+        dataProduccio:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            Capa 34. Opcional. Se valida contra las 6 reglas de coherencia
+            temporal (ComandaEntradaParcial.dataProduccio) — en la alta
+            (ComandaEntrada) sólo contra dataLliurament, la única fecha de
+            cabecera que existe en ese body; en
+            POST /comandes/{comandaId}/linies contra las 3 fechas de
+            cabecera ya guardadas del pedido.
 
     ComandaEntradaParcial:
       type: object
@@ -1663,7 +1689,18 @@ components:
         transportistaId: { type: integer, nullable: true }
         poblacioDesti: { type: string, nullable: true }
         adrecaLliurament: { type: string, nullable: true }
-        dataProduccio: { type: string, format: date-time, nullable: true }
+        dataProduccio:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            Capa 34. Si cambia cualquiera de dataProduccio/dataExpedicio/
+            dataLliurament, se valida el estado resultante (valor nuevo si
+            vino, si no el ya guardado) contra las 6 reglas de coherencia
+            temporal (ver docs/contrato-api.md § 4.5) — no sólo contra las
+            otras 2 fechas de cabecera (reglas 1/2/3), sino también contra
+            TODAS las líneas activas del pedido (reglas 4/5/6), aunque
+            ninguna se esté tocando en este mismo request.
         dataExpedicio: { type: string, format: date-time, nullable: true }
         dataLliurament: { type: string, format: date-time, nullable: true }
         bultos: { type: integer, nullable: true }

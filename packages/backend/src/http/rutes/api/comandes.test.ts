@@ -1251,4 +1251,266 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       await fastify.close();
     });
   });
+
+  describe('capa 34 — coherència temporal entre dates de capçalera i de línia', () => {
+    it('POST /comandes: regla 5 — dataProduccio de línia posterior a dataLliurament rebutja amb 400 VALIDACIO', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          dataLliurament: '2026-08-20T00:00:00Z',
+          linies: [
+            {
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+              dataProduccio: '2026-08-25T00:00:00Z',
+            },
+          ],
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+      await fastify.close();
+    });
+
+    it('POST /comandes: dates iguals (dataProduccio de línia = dataLliurament) està permès — "posterior" és estricte', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          dataLliurament: '2026-08-20T00:00:00Z',
+          linies: [
+            {
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+              dataProduccio: '2026-08-20T00:00:00Z',
+            },
+          ],
+        },
+      });
+
+      expect(res.statusCode).toBe(201);
+
+      await fastify.close();
+    });
+
+    it('POST /comandes: dataProduccio de línia sense dataLliurament a la capçalera no bloqueja res', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [
+            {
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+              dataProduccio: '2026-08-25T00:00:00Z',
+            },
+          ],
+        },
+      });
+
+      expect(res.statusCode).toBe(201);
+
+      await fastify.close();
+    });
+
+    it('PATCH /comandes/:id: regla 1 — dataLliurament anterior a dataProduccio rebutja amb 400 VALIDACIO', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: {
+          dataProduccio: '2026-08-20T00:00:00Z',
+          dataLliurament: '2026-08-15T00:00:00Z',
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+      await fastify.close();
+    });
+
+    it('PATCH /comandes/:id: regla 2 — dataExpedicio anterior a dataProduccio rebutja amb 400 VALIDACIO', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: {
+          dataProduccio: '2026-08-20T00:00:00Z',
+          dataExpedicio: '2026-08-15T00:00:00Z',
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+      await fastify.close();
+    });
+
+    it('PATCH /comandes/:id: regla 3 — dataExpedicio posterior a dataLliurament rebutja amb 400 VALIDACIO', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: {
+          dataExpedicio: '2026-08-20T00:00:00Z',
+          dataLliurament: '2026-08-15T00:00:00Z',
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+      await fastify.close();
+    });
+
+    it('PATCH /comandes/:id (cas delicat): canviar dataLliurament invalida una línia existent NO tocada en aquest request — rebutja amb 400', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      const liniaId = comandaCreada.linies[0]!.id;
+
+      // La línia queda amb dataProduccio = 25/08, sense cap data de
+      // capçalera guardada encara — aquest PATCH en si no viola res.
+      const patchLinia = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}/linies/${liniaId}`,
+        payload: { dataProduccio: '2026-08-25T00:00:00Z' },
+      });
+      expect(patchLinia.statusCode).toBe(200);
+
+      // Ara la capçalera intenta fixar dataLliurament = 20/08 — anterior a
+      // la dataProduccio de la línia (25/08). Aquest request NO toca la
+      // línia per res, però igualment l'ha de rebutjar (regla 5).
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { dataLliurament: '2026-08-20T00:00:00Z' },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+      // I la capçalera no va quedar a mig aplicar.
+      const detall = cuerpoJson<ComandaDetallApi>(
+        await fastify.inject({ method: 'GET', url: `/api/v1/comandes/${comandaCreada.id}` }),
+      );
+      expect(detall.dataLliurament).toBeNull();
+
+      await fastify.close();
+    });
+
+    it('POST /comandes/:comandaId/linies: regla 4 — línia nova anterior a la dataProduccio de capçalera rebutja amb 400 VALIDACIO', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const patchCapcalera = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { dataProduccio: '2026-08-20T00:00:00Z' },
+      });
+      expect(patchCapcalera.statusCode).toBe(200);
+
+      const res = await fastify.inject({
+        method: 'POST',
+        url: `/api/v1/comandes/${comandaCreada.id}/linies`,
+        payload: {
+          producteId: producteFitxaId,
+          unitatsDemanades: 1,
+          dataProduccio: '2026-08-15T00:00:00Z',
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+      await fastify.close();
+    });
+
+    it('PATCH /comandes/:comandaId/linies/:liniaId: regla 6 — línia posterior a la dataExpedicio de capçalera rebutja amb 400 VALIDACIO', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      const liniaId = comandaCreada.linies[0]!.id;
+
+      const patchCapcalera = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { dataExpedicio: '2026-08-20T00:00:00Z' },
+      });
+      expect(patchCapcalera.statusCode).toBe(200);
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}/linies/${liniaId}`,
+        payload: { dataProduccio: '2026-08-25T00:00:00Z' },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+      await fastify.close();
+    });
+  });
 });

@@ -325,6 +325,15 @@ export interface LiniaCreacioApi {
   unitatsDemanades: number;
   /** Sólo tiene sentido si el artículo es "a medida" — se ignora si tiene peso de ficha. */
   kgDemanats?: string;
+  /**
+   * Capa 34. Opcional. Se valida contra las fechas de cabecera del pedido
+   * (las 6 reglas de coherencia temporal, ver docs/contrato-api.md § 4.5) —
+   * en `POST /comandes` sólo contra `dataLliurament` (única fecha de
+   * cabecera que existe en ese body); en
+   * `POST /comandes/:comandaId/linies` contra las 3 fechas de cabecera ya
+   * guardadas del pedido.
+   */
+  dataProduccio?: string | null;
 }
 
 export interface ComandaCreacioApi {

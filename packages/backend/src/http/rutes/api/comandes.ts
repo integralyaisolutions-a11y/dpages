@@ -314,6 +314,87 @@ async function recalcularTotalComanda(client: PoolClient, comandaUuid: string): 
   );
 }
 
+interface CapcaleraDatesComanda {
+  dataProduccio: string | Date | null;
+  dataExpedicio: string | Date | null;
+  dataLliurament: string | Date | null;
+}
+
+interface LiniaPerValidarDates {
+  /** Identifica la línia dins del `missatge` d'error — un índex del body en alta ("línia 2") o el número públic d'una línia ja existent ("línia núm. 981"). */
+  etiqueta: string;
+  dataProduccio: string | Date | null | undefined;
+}
+
+/**
+ * Capa 34 — les 6 regles de coherència temporal entre les dates de
+ * capçalera d'un pedido i les dates de producció de les seves línies
+ * (documentades a `docs/contrato-api.md`, secció 4.5). Punt únic de
+ * veritat: NO duplicar aquesta comparació als 4 llocs que la criden
+ * (`POST /comandes`, `POST .../linies`, `PATCH .../linies/:liniaId`,
+ * `PATCH /comandes/:id`).
+ *
+ * Cada regla només aplica si AMBDUES dates comparades tenen valor — si en
+ * falta una, aquesta regla en concret no bloqueja res. "anterior"/
+ * "posterior" és ESTRICTE: dates iguals estan permeses (no hi havia una
+ * resolució explícita del client sobre aquest cas límit; es documenta a
+ * `docs/contrato-api.md` perquè quedi com a criteri explícit, no un
+ * misteri).
+ *
+ * Retorna la PRIMERA violació trobada, o `null` si tot és coherent — no
+ * cal acumular-les totes, amb la primera ja n'hi ha prou per al 400.
+ */
+function validarCoherenciaDatesComanda(
+  capcalera: CapcaleraDatesComanda,
+  linies: LiniaPerValidarDates[],
+): { camp: string; missatge: string } | null {
+  const dp = capcalera.dataProduccio !== null ? new Date(capcalera.dataProduccio).getTime() : null;
+  const de = capcalera.dataExpedicio !== null ? new Date(capcalera.dataExpedicio).getTime() : null;
+  const dl =
+    capcalera.dataLliurament !== null ? new Date(capcalera.dataLliurament).getTime() : null;
+
+  // Regla 1: dataLliurament no anterior a dataProduccio (capçalera).
+  if (dp !== null && dl !== null && dl < dp) {
+    return { camp: 'dataLliurament', missatge: 'no pot ser anterior a dataProduccio' };
+  }
+  // Regla 2: dataExpedicio no anterior a dataProduccio (capçalera).
+  if (dp !== null && de !== null && de < dp) {
+    return { camp: 'dataExpedicio', missatge: 'no pot ser anterior a dataProduccio' };
+  }
+  // Regla 3: dataExpedicio no posterior a dataLliurament.
+  if (de !== null && dl !== null && de > dl) {
+    return { camp: 'dataExpedicio', missatge: 'no pot ser posterior a dataLliurament' };
+  }
+
+  for (const linia of linies) {
+    if (linia.dataProduccio === null || linia.dataProduccio === undefined) continue;
+    const dLinia = new Date(linia.dataProduccio).getTime();
+    // Regla 4: dataProduccio de línia no anterior a dataProduccio de capçalera.
+    if (dp !== null && dLinia < dp) {
+      return {
+        camp: 'linies[].dataProduccio',
+        missatge: `${linia.etiqueta}: dataProduccio no pot ser anterior a la dataProduccio de la comanda`,
+      };
+    }
+    // Regla 5: dataProduccio de línia no posterior a dataLliurament.
+    if (dl !== null && dLinia > dl) {
+      return {
+        camp: 'linies[].dataProduccio',
+        missatge: `${linia.etiqueta}: dataProduccio no pot ser posterior a dataLliurament`,
+      };
+    }
+    // Regla 6: dataProduccio de línia no posterior a dataExpedicio.
+    if (de !== null && dLinia > de) {
+      return {
+        camp: 'linies[].dataProduccio',
+        missatge: `${linia.etiqueta}: dataProduccio no pot ser posterior a dataExpedicio`,
+      };
+    }
+  }
+
+  return null;
+}
+
 async function resolverComandaOResponder(
   reply: FastifyReply,
   idParam: string,
@@ -427,7 +508,12 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       dataLliurament: string;
       transportistaId: number;
       obsLliurament: string;
-      linies: { producteId: number; unitatsDemanades: number; kgDemanats?: string }[];
+      linies: {
+        producteId: number;
+        unitatsDemanades: number;
+        kgDemanats?: string;
+        dataProduccio?: string | null;
+      }[];
     }>;
 
     const detalls: { camp: string; missatge: string }[] = [];
@@ -439,6 +525,18 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
     }
     if (detalls.length > 0) {
       return enviarValidacio(reply, 'Falten dades obligatòries', detalls);
+    }
+
+    // Capa 34 — al crear, la comanda encara no té dataProduccio/dataExpedicio
+    // de capçalera (no són camps d'aquest body, només dataLliurament), així
+    // que de les 6 regles, aquí només poden arribar a disparar-se les que
+    // depenen de dataLliurament (regla 5 per a cada línia).
+    const violacioCreacio = validarCoherenciaDatesComanda(
+      { dataProduccio: null, dataExpedicio: null, dataLliurament: cos.dataLliurament ?? null },
+      cos.linies!.map((l, i) => ({ etiqueta: `línia ${i + 1}`, dataProduccio: l.dataProduccio })),
+    );
+    if (violacioCreacio) {
+      return enviarValidacio(reply, 'Les dates no són coherents', [violacioCreacio]);
     }
 
     // origen ja no és un enum fix (capa 13/14, migració 0013): és el codi
@@ -506,6 +604,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       pesFitxaKg: string | null;
       pesCalculatKg: string;
       pesEditable: boolean;
+      dataProduccio: string | null;
     }[] = [];
 
     for (let i = 0; i < cos.linies!.length; i++) {
@@ -565,6 +664,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
         pesFitxaKg,
         pesCalculatKg,
         pesEditable,
+        dataProduccio: linia.dataProduccio ?? null,
       });
     }
 
@@ -603,8 +703,9 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
         const l = liniesResoltes[i]!;
         await client.query(
           `INSERT INTO comanda_linia (comanda_id, ordinal, producte_id, unitats_demanades,
-                                       preu_unitari, pes_fitxa_kg, pes_calculat_kg, pes_editable)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                                       preu_unitari, pes_fitxa_kg, pes_calculat_kg, pes_editable,
+                                       data_produccio)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
           [
             comandaUuid,
             i,
@@ -614,6 +715,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
             l.pesFitxaKg,
             l.pesCalculatKg,
             l.pesEditable,
+            l.dataProduccio,
           ],
         );
         if (l.sensePreu) {
@@ -678,6 +780,54 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
         return enviarValidacio(reply, 'El detall és obligatori per marcar amb_incidencia', [
           { camp: 'detall', missatge: 'és obligatori quan estat és amb_incidencia' },
         ]);
+      }
+    }
+
+    // Capa 34 — el cas delicat: si aquest PATCH canvia alguna de les 3 dates
+    // de capçalera, cal calcular l'estat RESULTANT (valor nou si ha vingut,
+    // si no el que ja hi havia guardat) i validar-lo no només contra les
+    // altres dates de capçalera (regles 1/2/3), sinó també contra TOTES les
+    // línies actives del pedido (regles 4/5/6) — encara que cap d'elles
+    // s'estigui tocant en aquest request. Un canvi de data de capçalera pot
+    // invalidar una línia de la qual ningú s'està ocupant ara mateix.
+    if (
+      cos.dataProduccio !== undefined ||
+      cos.dataExpedicio !== undefined ||
+      cos.dataLliurament !== undefined
+    ) {
+      const actual = await pool.query<{
+        data_produccio: Date | null;
+        data_expedicio: Date | null;
+        data_lliurament: Date | null;
+      }>('SELECT data_produccio, data_expedicio, data_lliurament FROM comanda WHERE id = $1', [
+        comandaUuid,
+      ]);
+      const filaActual = actual.rows[0]!;
+      const dataProduccioResultant =
+        cos.dataProduccio !== undefined ? cos.dataProduccio : filaActual.data_produccio;
+      const dataExpedicioResultant =
+        cos.dataExpedicio !== undefined ? cos.dataExpedicio : filaActual.data_expedicio;
+      const dataLliuramentResultant =
+        cos.dataLliurament !== undefined ? cos.dataLliurament : filaActual.data_lliurament;
+
+      const liniesExistents = await pool.query<{ id_seq: string; data_produccio: Date | null }>(
+        `SELECT id_seq, data_produccio FROM comanda_linia WHERE comanda_id = $1 AND NOT esborrat`,
+        [comandaUuid],
+      );
+
+      const violacio = validarCoherenciaDatesComanda(
+        {
+          dataProduccio: dataProduccioResultant,
+          dataExpedicio: dataExpedicioResultant,
+          dataLliurament: dataLliuramentResultant,
+        },
+        liniesExistents.rows.map((l) => ({
+          etiqueta: `línia núm. ${l.id_seq}`,
+          dataProduccio: l.data_produccio,
+        })),
+      );
+      if (violacio) {
+        return enviarValidacio(reply, 'Les dates no són coherents', [violacio]);
       }
     }
 
@@ -795,6 +945,13 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
    * el pedido, o editado después vía `PATCH /comandes/:id`), pero esta ruta
    * NUNCA lo consulta, siempre usa `client.tarifa_id`. No es un descuido:
    * la capa 32 sólo tocó el momento de creación, a propósito.
+   *
+   * Capa 34 — el body ahora acepta `dataProduccio` opcional para la línea
+   * nueva (antes no existía este campo acá, sólo se podía fijar después vía
+   * `PATCH .../linies/:liniaId` — lo agregué porque si no, la validación de
+   * coherencia de fechas pedida para este endpoint no tenía nada real que
+   * validar). Si viene, se valida contra las fechas de cabecera YA
+   * GUARDADAS del pedido (reglas 4/5/6 de `validarCoherenciaDatesComanda`).
    */
   fastify.post('/comandes/:comandaId/linies', async (req, reply) => {
     const comandaUuid = await resolverComandaOResponder(
@@ -811,6 +968,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       producteId: number;
       unitatsDemanades: number;
       kgDemanats: string;
+      dataProduccio: string | null;
     }>;
 
     if (cos.producteId === undefined) {
@@ -852,6 +1010,30 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       pesEditable = true;
     }
 
+    // Capa 34 — si la línia nova porta dataProduccio, validar-la contra les
+    // dates de capçalera JA GUARDADES d'aquest pedido, abans d'inserir res.
+    if (cos.dataProduccio !== undefined) {
+      const capcalera = await pool.query<{
+        data_produccio: Date | null;
+        data_expedicio: Date | null;
+        data_lliurament: Date | null;
+      }>('SELECT data_produccio, data_expedicio, data_lliurament FROM comanda WHERE id = $1', [
+        comandaUuid,
+      ]);
+      const fila = capcalera.rows[0]!;
+      const violacio = validarCoherenciaDatesComanda(
+        {
+          dataProduccio: fila.data_produccio,
+          dataExpedicio: fila.data_expedicio,
+          dataLliurament: fila.data_lliurament,
+        },
+        [{ etiqueta: 'línia nova', dataProduccio: cos.dataProduccio }],
+      );
+      if (violacio) {
+        return enviarValidacio(reply, 'Les dates no són coherents', [violacio]);
+      }
+    }
+
     const clientTarifaFila = await pool.query<{ tarifa_id: string | null }>(
       `SELECT cl.tarifa_id FROM comanda c LEFT JOIN client cl ON cl.id = c.client_id WHERE c.id = $1`,
       [comandaUuid],
@@ -877,8 +1059,9 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
 
       await client.query(
         `INSERT INTO comanda_linia (comanda_id, ordinal, producte_id, unitats_demanades,
-                                     preu_unitari, pes_fitxa_kg, pes_calculat_kg, pes_editable)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                                     preu_unitari, pes_fitxa_kg, pes_calculat_kg, pes_editable,
+                                     data_produccio)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
           comandaUuid,
           ordinal,
@@ -888,6 +1071,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
           pesFitxaKg,
           pesCalculatKg,
           pesEditable,
+          cos.dataProduccio ?? null,
         ],
       );
 
@@ -930,6 +1114,10 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
    * `totalLinia` en vivo (`unitats_demanades * preu_unitari`), no es una
    * columna guardada. Mientras esta ruta no toque `preu_unitari` (nunca lo
    * hace), cualquier lectura posterior ya sale bien sola.
+   *
+   * Capa 34 — si `dataProduccio` viene en el body, se valida contra las
+   * fechas de cabecera YA GUARDADAS del pedido (reglas 4/5/6 de
+   * `validarCoherenciaDatesComanda`) antes de escribir nada.
    */
   fastify.patch('/comandes/:comandaId/linies/:liniaId', async (req, reply) => {
     const params = req.params as { comandaId: string; liniaId: string };
@@ -993,6 +1181,32 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       pesCalculatKgNou = (cos.unitatsDemanades * Number(pesFitxaKg)).toFixed(3);
     } else if (cos.kgDemanats !== undefined) {
       pesCalculatKgNou = Number(cos.kgDemanats).toFixed(3);
+    }
+
+    // Capa 34 — si aquest PATCH canvia dataProduccio de la línia, validar-la
+    // contra les dates de capçalera JA GUARDADES d'aquest pedido, abans
+    // d'escriure res. Si dataProduccio NO ve al body, no hi ha res nou a
+    // validar (ni la línia ni la capçalera van a canviar de valor per això).
+    if (cos.dataProduccio !== undefined) {
+      const capcalera = await pool.query<{
+        data_produccio: Date | null;
+        data_expedicio: Date | null;
+        data_lliurament: Date | null;
+      }>('SELECT data_produccio, data_expedicio, data_lliurament FROM comanda WHERE id = $1', [
+        comandaUuid,
+      ]);
+      const fila = capcalera.rows[0]!;
+      const violacio = validarCoherenciaDatesComanda(
+        {
+          dataProduccio: fila.data_produccio,
+          dataExpedicio: fila.data_expedicio,
+          dataLliurament: fila.data_lliurament,
+        },
+        [{ etiqueta: `línia ${liniaIdPublic}`, dataProduccio: cos.dataProduccio }],
+      );
+      if (violacio) {
+        return enviarValidacio(reply, 'Les dates no són coherents', [violacio]);
+      }
     }
 
     const client = await pool.connect();
