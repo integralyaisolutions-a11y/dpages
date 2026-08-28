@@ -9,22 +9,10 @@ import { ApiError, type ClientApi, type TarifaResumApi } from "@/lib/api";
 
 const NO_TARIFF = "Sense tarifa";
 
-// codi ya no es editable acá (ver TODO abajo), así que un error de ese
-// campo no tiene dónde mostrarse junto al input — cae al mensaje genérico.
+// codi no es editable acá: el backend lo autogenera siempre (capa 25/29),
+// así que un error de ese campo no tiene dónde mostrarse junto a un input
+// — cae al mensaje genérico.
 type FieldErrors = { nom?: string; poblacio?: string; tarifaId?: string };
-
-/**
- * TODO(codi-client-auto): temporal, SOLO hasta que Gerardo entregue la
- * generación automática de `codi` en el backend (ticket ya enviado, sin
- * implementar todavía). `POST /clients` sigue exigiendo `codi` no vacío
- * (confirmado en la sesión anterior) — mientras el backend no lo genere
- * él mismo, se manda este valor temporal para no romper el contrato.
- * BORRAR esta función y dejar de mandar `codi` en el alta en cuanto el
- * backend lo autogenere.
- */
-function generarCodiTemporal(): string {
-  return `TMP-${Date.now().toString(36).toUpperCase()}`;
-}
 
 export function ClientFormModal({
   mode,
@@ -41,9 +29,6 @@ export function ClientFormModal({
   onClose: () => void;
   onSave: (values: ClientFormValues) => Promise<void>;
 }) {
-  // Generado una sola vez por apertura del modal (el padre remonta con
-  // key="create" cada vez) para que el valor mostrado sea el mismo que se manda al guardar.
-  const [codiTemporal] = useState(() => (mode === "create" ? generarCodiTemporal() : null));
   const [poblacio, setPoblacio] = useState(initialData?.poblacio ?? "");
   const [nom, setNom] = useState(initialData?.nom ?? "");
   const [tariffName, setTariffName] = useState(initialData?.tarifa?.nom ?? NO_TARIFF);
@@ -61,10 +46,6 @@ export function ClientFormModal({
     setIsSaving(true);
     try {
       await onSave({
-        // Alta: mismo codi temporal ya mostrado en el modal (ver TODO
-        // arriba). Edición: se manda igual al que ya tenía — no editable
-        // desde este formulario.
-        codi: mode === "create" ? codiTemporal : (initialData?.codi ?? null),
         nom: nom.trim(),
         poblacio: poblacio.trim(),
         tarifaId: tarifa?.id ?? null,
@@ -97,18 +78,22 @@ export function ClientFormModal({
     <Modal isOpen={isOpen} onClose={onClose} title={mode === "create" ? "Nou client" : "Modificar client"}>
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-gray-900">Codi</span>
-            <span className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-gray-500">
-              {mode === "create" ? codiTemporal : (initialData?.codi ?? "—")}
-            </span>
+          {mode === "edit" && (
+            <div className="flex flex-col gap-1.5 text-sm">
+              <span className="font-medium text-gray-900">Codi</span>
+              <span className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-gray-500">
+                {initialData?.codi ?? "—"}
+              </span>
+            </div>
+          )}
+          <div className={mode === "create" ? "sm:col-span-2" : undefined}>
+            <TextField
+              label="Població"
+              value={poblacio}
+              onChange={(event) => setPoblacio(event.target.value)}
+              error={fieldErrors.poblacio}
+            />
           </div>
-          <TextField
-            label="Població"
-            value={poblacio}
-            onChange={(event) => setPoblacio(event.target.value)}
-            error={fieldErrors.poblacio}
-          />
         </div>
         <TextField label="Nom" value={nom} onChange={(event) => setNom(event.target.value)} error={fieldErrors.nom} />
         <div>

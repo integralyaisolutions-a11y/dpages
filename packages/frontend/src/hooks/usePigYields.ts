@@ -1,42 +1,56 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { RendimentPorcApi, RendimentPorcEntradaApi } from "@/lib/api";
-import { getMockCatalog } from "@/mocks/catalog";
-import { getMockCategories } from "@/mocks/categories";
-import { addMockPigYield, deleteMockPigYield, getMockPigYields, updateMockPigYield } from "@/mocks/pigYields";
+import {
+  api,
+  ApiError,
+  type RendimentPorcApi,
+  type RendimentPorcEntradaApi,
+  type RespostaPaginada,
+} from "@/lib/api";
 
 export type PigYieldPatch = Partial<Pick<RendimentPorcApi, "unitatsPerPorc" | "kgPerUnitat">>;
+
+export type PigYieldFilters = {
+  categoria?: string;
+};
 
 type UsePigYieldsResult = {
   data: RendimentPorcApi[];
   isLoading: boolean;
-  error: Error | null;
-  createPigYield: (values: RendimentPorcEntradaApi) => void;
-  updatePigYield: (id: number, patch: PigYieldPatch) => void;
-  deletePigYield: (id: number) => void;
+  error: ApiError | null;
+  refetch: () => void;
+  createPigYield: (values: RendimentPorcEntradaApi) => Promise<void>;
+  updatePigYield: (id: number, patch: PigYieldPatch) => Promise<void>;
+  deletePigYield: (id: number) => Promise<void>;
 };
 
-function recomputePesTotal(unitatsPerPorc: string, kgPerUnitat: string): string {
-  return (Number(unitatsPerPorc) * Number(kgPerUnitat)).toFixed(3);
-}
+// El catàleg real té ~111 articles i cada rendiment és 1 línia per producte
+// com a molt — 200 (el màxim de pàgina del contracte) hi cap sencer, mateix
+// criteri que useCatalog.ts.
+const MIDA_LLISTAT = 200;
 
-// TODO: cuando cierre el contrato con el backend, reemplazar getMockPigYields()
-// por api.get<RendimentPorcApi[]>("/rendiments-porcs") sin tocar la forma del hook.
-export function usePigYields(): UsePigYieldsResult {
+export function usePigYields(filters: PigYieldFilters = {}): UsePigYieldsResult {
   const [data, setData] = useState<RendimentPorcApi[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+  const filtersKey = JSON.stringify(filters);
 
   useEffect(() => {
     let cancelled = false;
+    setIsLoading(true);
+    setError(null);
 
-    getMockPigYields()
-      .then((pigYields) => {
-        if (!cancelled) setData(pigYields);
+    api
+      .get<RespostaPaginada<RendimentPorcApi>>("/rendiments-porcs", { mida: MIDA_LLISTAT, ...filters })
+      .then((resposta) => {
+        if (!cancelled) setData(resposta.dades);
       })
       .catch((caught) => {
-        if (!cancelled) setError(caught instanceof Error ? caught : new Error(String(caught)));
+        if (!cancelled) {
+          setError(caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null));
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -45,49 +59,42 @@ export function usePigYields(): UsePigYieldsResult {
     return () => {
       cancelled = true;
     };
-  }, []);
+    // filtersKey serialitza `filters` (objecte pla de primitives) — evita
+    // refer la petició en cada render per canvi d'identitat de l'objecte.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadToken, filtersKey]);
 
-  // TODO: sustituir por mutation real (POST /rendiments-porcs) cuando exista backend.
-  // agrupacioRendiment/categoria/agrupacioProduccio se derivan del producte
-  // elegido (mismo criterio que el backend real, contrato §4.9: son de sólo
-  // lectura, no se envían en la escritura) — acá el mock los resuelve a mano
-  // porque no hay servidor que lo haga todavía.
-  const createPigYield = useCallback((entrada: RendimentPorcEntradaApi) => {
-    Promise.all([getMockCatalog(), getMockCategories()]).then(([products, categories]) => {
-      const product = products.find((item) => item.id === entrada.producteId);
-      const categoria = categories.find((item) => item.id === product?.categoria?.id);
-      addMockPigYield({
-        agrupacioRendiment: categoria?.agrupacioRendiment ?? "KG",
-        categoria: product?.categoria?.nom ?? "—",
-        agrupacioProduccio: product?.agrupacioProduccio ?? null,
-        unitatsPerPorc: entrada.unitatsPerPorc,
-        kgPerUnitat: entrada.kgPerUnitat,
-        pesTotal: recomputePesTotal(entrada.unitatsPerPorc, entrada.kgPerUnitat),
-      }).then(setData);
-    });
-  }, []);
+  const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 
-  // TODO: sustituir por mutation real (PATCH /rendiments-porcs/:id) cuando exista backend.
-  const updatePigYield = useCallback(
-    (id: number, patch: PigYieldPatch) => {
-      const target = data.find((item) => item.id === id);
-      if (!target) return;
-      const unitatsPerPorc = patch.unitatsPerPorc ?? target.unitatsPerPorc;
-      const kgPerUnitat = patch.kgPerUnitat ?? target.kgPerUnitat;
-      updateMockPigYield(id, {
-        ...target,
-        unitatsPerPorc,
-        kgPerUnitat,
-        pesTotal: recomputePesTotal(unitatsPerPorc, kgPerUnitat),
-      }).then(setData);
+  // Sin edición optimista, mismo criterio que useCategories.ts/useCatalog.ts:
+  // refetch tras mutación. agrupacioRendiment/categoria/agrupacioProduccio
+  // NO viatgen mai en aquest POST — el backend els deriva de producteId i els
+  // rebutja/ignora si es manden (investigació confirmada amb curl real).
+  const createPigYield = useCallback(
+    async (entrada: RendimentPorcEntradaApi) => {
+      await api.post<RendimentPorcApi>("/rendiments-porcs", entrada);
+      refetch();
     },
-    [data],
+    [refetch],
   );
 
-  // TODO: sustituir por mutation real (DELETE /rendiments-porcs/:id) contra el backend.
-  const deletePigYield = useCallback((id: number) => {
-    deleteMockPigYield(id).then(setData);
-  }, []);
+  // producteId no forma part del payload de PATCH (el backend no l'accepta,
+  // confirmat: el producte d'una línia és fix un cop creada).
+  const updatePigYield = useCallback(
+    async (id: number, patch: PigYieldPatch) => {
+      await api.patch<RendimentPorcApi>(`/rendiments-porcs/${id}`, patch);
+      refetch();
+    },
+    [refetch],
+  );
 
-  return { data, isLoading, error, createPigYield, updatePigYield, deletePigYield };
+  const deletePigYield = useCallback(
+    async (id: number) => {
+      await api.delete(`/rendiments-porcs/${id}`);
+      refetch();
+    },
+    [refetch],
+  );
+
+  return { data, isLoading, error, refetch, createPigYield, updatePigYield, deletePigYield };
 }

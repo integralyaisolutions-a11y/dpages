@@ -1,7 +1,7 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DataCard, DataCardActions, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
@@ -13,9 +13,8 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { useClientTariffs } from "@/hooks/useClientTariffs";
 import { useOrders } from "@/hooks/useOrders";
-import type { ComandaDetallApi } from "@/lib/api";
+import { ApiError, type ComandaResumApi } from "@/lib/api";
 import { formatData } from "@/lib/dates";
-import { aggregateProductionDates } from "@/lib/orderCalculations";
 
 const ALL = "Tots";
 
@@ -26,12 +25,16 @@ const ESTAT_LABELS: Record<string, string> = {
   amb_incidencia: "Amb incidència",
 };
 
+function productionDates(order: ComandaResumApi): string {
+  return order.datesProduccioLinies.map((data) => formatData(data, false)).join(", ");
+}
+
 function OrderCard({
   order,
   onOpen,
   onMarkIncidence,
 }: {
-  order: ComandaDetallApi;
+  order: ComandaResumApi;
   onOpen: () => void;
   onMarkIncidence: () => void;
 }) {
@@ -42,17 +45,22 @@ function OrderCard({
           <p className="font-semibold text-gray-900">{order.num}</p>
           <p className="text-sm text-gray-500">{order.client?.nom ?? "—"}</p>
         </div>
-        <Badge variant={order.estat === "amb_incidencia" ? "negative" : "info"}>{ESTAT_LABELS[order.estat] ?? order.estat}</Badge>
+        <div className="flex flex-col items-end gap-1">
+          <Badge variant={order.estat === "amb_incidencia" ? "negative" : "info"}>
+            {ESTAT_LABELS[order.estat] ?? order.estat}
+          </Badge>
+          {order.congelada && <Badge variant="neutral">Congelada</Badge>}
+        </div>
       </div>
 
       <div className="mt-3">
         <DataCardGrid>
           <DataCardField label="Tarifa">{order.tarifa?.nom ?? "—"}</DataCardField>
           <DataCardField label="Transportista">{order.transportista?.nom ?? "—"}</DataCardField>
-          <DataCardField label="Data comanda">{formatData(order.dataComanda, false)}</DataCardField>
-          <DataCardField label="Data producció">{aggregateProductionDates(order.linies) || "—"}</DataCardField>
+          <DataCardField label="Data comanda">{formatData(order.dataComanda, true)}</DataCardField>
+          <DataCardField label="Data producció">{productionDates(order) || "—"}</DataCardField>
           <DataCardField label="Data lliurament">
-            {order.dataLliurament ? formatData(order.dataLliurament, true) : "—"}
+            {order.dataLliurament ? formatData(order.dataLliurament, false) : "—"}
           </DataCardField>
           <DataCardField label="Bultos">{order.bultos ?? "—"}</DataCardField>
         </DataCardGrid>
@@ -82,8 +90,6 @@ function OrderCard({
 
 export default function OrdersPage() {
   const router = useRouter();
-  const { data, isLoading, error, markIncidence } = useOrders();
-  const { data: clients } = useClientTariffs();
 
   const [orderNumberSearch, setOrderNumberSearch] = useState("");
   const [clientSearch, setClientSearch] = useState("");
@@ -91,27 +97,61 @@ export default function OrdersPage() {
   const [productionDateFilter, setProductionDateFilter] = useState("");
   const [orderDateFilter, setOrderDateFilter] = useState("");
   const [deliveryDateFilter, setDeliveryDateFilter] = useState("");
-  const [incidenceTarget, setIncidenceTarget] = useState<string | null>(null);
+  const [incidenceTarget, setIncidenceTarget] = useState<ComandaResumApi | null>(null);
+  const [incidenceDetall, setIncidenceDetall] = useState("");
+  const [incidenceError, setIncidenceError] = useState<string | null>(null);
+  const [isMarkingIncidence, setIsMarkingIncidence] = useState(false);
+
+  const statusCode = useMemo(
+    () => Object.entries(ESTAT_LABELS).find(([, label]) => label === statusFilter)?.[0],
+    [statusFilter],
+  );
+
+  // Els 6 filtres de la pantalla tenen suport real a GET /comandes, excepte
+  // la cerca de client per nom (el backend només filtra per clientId
+  // numèric) — aquesta es manté client-side sobre el resultat ja filtrat
+  // pel servidor, mateix criteri que ja feia servir aquesta pantalla.
+  const filters = useMemo(
+    () => ({
+      ...(statusCode ? { estat: statusCode } : {}),
+      ...(orderDateFilter ? { dataDes: orderDateFilter, dataFins: orderDateFilter } : {}),
+      ...(productionDateFilter
+        ? { dataProduccioDes: productionDateFilter, dataProduccioFins: productionDateFilter }
+        : {}),
+      ...(deliveryDateFilter
+        ? { dataLliuramentDes: deliveryDateFilter, dataLliuramentFins: deliveryDateFilter }
+        : {}),
+      ...(orderNumberSearch.trim() ? { cerca: orderNumberSearch.trim() } : {}),
+    }),
+    [statusCode, orderDateFilter, productionDateFilter, deliveryDateFilter, orderNumberSearch],
+  );
+
+  const { data, isLoading, error, refetch, markIncidence } = useOrders(filters);
+  const { data: clients } = useClientTariffs();
 
   const filtered = data.filter((order) => {
-    if (orderNumberSearch && !order.num.includes(orderNumberSearch)) return false;
-    if (clientSearch) {
-      // El resumen del pedido sólo trae {id, nom} del cliente (ComandaResumApi
-      // §4.5) — el codi se cruza contra el listado completo de clients (§4.4).
-      const client = clients.find((item) => item.id === order.client?.id);
-      const term = clientSearch.toLowerCase();
-      const matches =
-        order.client?.nom.toLowerCase().includes(term) || (client?.codi ?? "").toLowerCase().includes(term);
-      if (!matches) return false;
-    }
-    if (statusFilter !== ALL && (ESTAT_LABELS[order.estat] ?? order.estat) !== statusFilter) return false;
-    if (productionDateFilter && !order.linies.some((line) => line.dataProduccio?.slice(0, 10) === productionDateFilter)) {
-      return false;
-    }
-    if (orderDateFilter && order.dataComanda.slice(0, 10) !== orderDateFilter) return false;
-    if (deliveryDateFilter && order.dataLliurament?.slice(0, 10) !== deliveryDateFilter) return false;
-    return true;
+    if (!clientSearch) return true;
+    // ComandaResumApi.client sólo trae {id, nom, poblacio} (contrato §4.5) —
+    // el codi se cruza contra el listado completo de clients (§4.4).
+    const client = clients.find((item) => item.id === order.client?.id);
+    const term = clientSearch.toLowerCase();
+    return order.client?.nom.toLowerCase().includes(term) || (client?.codi ?? "").toLowerCase().includes(term);
   });
+
+  async function handleConfirmIncidence() {
+    if (!incidenceTarget) return;
+    setIsMarkingIncidence(true);
+    setIncidenceError(null);
+    try {
+      await markIncidence(incidenceTarget.id, incidenceDetall.trim());
+      setIncidenceTarget(null);
+      setIncidenceDetall("");
+    } catch (caught) {
+      setIncidenceError(caught instanceof ApiError ? caught.message : "No s'ha pogut marcar la incidència.");
+    } finally {
+      setIsMarkingIncidence(false);
+    }
+  }
 
   return (
     <div>
@@ -136,17 +176,32 @@ export default function OrdersPage() {
       </FilterBar>
 
       {isLoading && <p className="text-sm text-gray-500">Carregant...</p>}
-      {error && <p className="text-sm text-red-600">No s&apos;han pogut carregar les comandes.</p>}
+      {error && (
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm text-red-600">No s&apos;han pogut carregar les comandes: {error.message}</p>
+          <button
+            type="button"
+            onClick={refetch}
+            className="shrink-0 rounded-full border border-red-300 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
 
       {!isLoading && !error && (
         <>
           <div className="flex flex-col gap-3 xl:hidden">
             {filtered.map((order) => (
               <OrderCard
-                key={order.num}
+                key={order.id}
                 order={order}
-                onOpen={() => router.push(`/orders/${order.num}`)}
-                onMarkIncidence={() => setIncidenceTarget(order.num)}
+                onOpen={() => router.push(`/orders/${order.id}`)}
+                onMarkIncidence={() => {
+                  setIncidenceError(null);
+                  setIncidenceDetall("");
+                  setIncidenceTarget(order);
+                }}
               />
             ))}
           </div>
@@ -176,8 +231,8 @@ export default function OrdersPage() {
               <tbody>
                 {filtered.map((order) => (
                   <tr
-                    key={order.num}
-                    onClick={() => router.push(`/orders/${order.num}`)}
+                    key={order.id}
+                    onClick={() => router.push(`/orders/${order.id}`)}
                     className="cursor-pointer border-b border-gray-100 last:border-0 hover:bg-gray-50"
                   >
                     <td className="px-2 py-3 break-words">
@@ -185,32 +240,37 @@ export default function OrdersPage() {
                     </td>
                     <td className="px-2 py-3 break-words text-gray-900">{order.client?.nom ?? "—"}</td>
                     <td className="px-2 py-3 break-words text-gray-900">{order.tarifa?.nom ?? "—"}</td>
-                    <td className="px-2 py-3 break-words text-gray-900">{formatData(order.dataComanda, false)}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">{formatData(order.dataComanda, true)}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">{productionDates(order) || "—"}</td>
                     <td className="px-2 py-3 break-words text-gray-900">
-                      {aggregateProductionDates(order.linies) || "—"}
-                    </td>
-                    <td className="px-2 py-3 break-words text-gray-900">
-                      {order.dataLliurament ? formatData(order.dataLliurament, true) : "—"}
+                      {order.dataLliurament ? formatData(order.dataLliurament, false) : "—"}
                     </td>
                     <td className="px-2 py-3 break-words text-gray-900">{order.transportista?.nom ?? "—"}</td>
                     <td className="px-2 py-3 text-right text-gray-900">{order.bultos ?? "—"}</td>
                     <td className="px-2 py-3 break-words">
-                      <Badge variant={order.estat === "amb_incidencia" ? "negative" : "info"}>
-                        {ESTAT_LABELS[order.estat] ?? order.estat}
-                      </Badge>
+                      <div className="flex flex-col items-start gap-1">
+                        <Badge variant={order.estat === "amb_incidencia" ? "negative" : "info"}>
+                          {ESTAT_LABELS[order.estat] ?? order.estat}
+                        </Badge>
+                        {order.congelada && <Badge variant="neutral">Congelada</Badge>}
+                      </div>
                     </td>
                     <td className="px-2 py-3 text-right">
                       <div onClick={(event) => event.stopPropagation()} className="flex justify-end gap-1">
                         <IconButton
                           variant="edit"
                           label="Editar comanda"
-                          onClick={() => router.push(`/orders/${order.num}`)}
+                          onClick={() => router.push(`/orders/${order.id}`)}
                         />
                         {order.estat !== "amb_incidencia" && (
                           <IconButton
                             variant="warning"
                             label="Marcar com a incidència"
-                            onClick={() => setIncidenceTarget(order.num)}
+                            onClick={() => {
+                              setIncidenceError(null);
+                              setIncidenceDetall("");
+                              setIncidenceTarget(order);
+                            }}
                           />
                         )}
                       </div>
@@ -226,14 +286,24 @@ export default function OrdersPage() {
       <ConfirmDialog
         isOpen={incidenceTarget !== null}
         title="Marcar com a incidència"
-        message={`Vols marcar la comanda ${incidenceTarget ?? ""} com a incidència?`}
+        message={`Vols marcar la comanda ${incidenceTarget?.num ?? ""} com a incidència?`}
         confirmLabel="Marcar"
+        confirmingLabel="Marcant..."
         cancelLabel="Cancel·lar"
-        onConfirm={() => {
-          if (incidenceTarget) markIncidence(incidenceTarget);
-          setIncidenceTarget(null);
+        errorMessage={incidenceError}
+        isConfirming={isMarkingIncidence}
+        detailField={{
+          label: "Motiu",
+          value: incidenceDetall,
+          onChange: setIncidenceDetall,
+          placeholder: "Explica per què es marca aquesta comanda com a incidència",
         }}
-        onCancel={() => setIncidenceTarget(null)}
+        onConfirm={handleConfirmIncidence}
+        onCancel={() => {
+          setIncidenceTarget(null);
+          setIncidenceError(null);
+          setIncidenceDetall("");
+        }}
       />
     </div>
   );

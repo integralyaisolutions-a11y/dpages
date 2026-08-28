@@ -12,7 +12,7 @@ import { SelectFilter } from "@/components/ui/SelectFilter";
 import { StatCard } from "@/components/ui/StatCard";
 import { useCarriers } from "@/hooks/useCarriers";
 import { useClientTariffs } from "@/hooks/useClientTariffs";
-import { useOrders } from "@/hooks/useOrders";
+import { useMockOrdersDetail } from "@/hooks/useMockOrdersDetail";
 import { useRates } from "@/hooks/useRates";
 import type { ComandaDetallApi } from "@/lib/api";
 import { formatData } from "@/lib/dates";
@@ -88,7 +88,7 @@ function OfficeOrderCard({ order, onClick }: { order: ComandaDetallApi; onClick:
 
 export default function OfficePage() {
   const router = useRouter();
-  const { data, isLoading, error } = useOrders();
+  const { data, isLoading, error } = useMockOrdersDetail();
   const { data: clients } = useClientTariffs();
   const { tariffColumns } = useRates();
   const { data: carriers } = useCarriers();

@@ -107,7 +107,7 @@ function RateProductRow({
   format: string;
   tariffColumns: TarifaResumApi[];
   columnWidths: ColumnWidths;
-  onSave: (producteId: number, changes: Record<string, string>) => Promise<CellSaveResult[]>;
+  onSave: (producteId: number, changes: Record<string, string>, deletions: string[]) => Promise<CellSaveResult[]>;
 }) {
   const [cellErrors, setCellErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -122,21 +122,25 @@ function RateProductRow({
   }, [product, tariffColumns]);
 
   const { draft, setField, save, isDirty } = useEditableRow(initialPrices, async (prices) => {
-    // Sólo se manda PATCH de las celdas que realmente cambiaron respecto al
-    // último valor conocido — nunca a null: el backend no tiene forma de
-    // vaciar un precio ya cargado (EditableCell ya bloquea que el draft
-    // llegue a null en esos casos), sólo de sobrescribirlo.
+    // PATCH para las celdas que cambiaron a un valor no vacío; DELETE (capa
+    // 28) para las que tenían precio y el usuario vació — ninguna de las
+    // dos toca las celdas sin cambios reales.
     const changes: Record<string, string> = {};
+    const deletions: string[] = [];
     for (const [tarifaId, value] of Object.entries(prices)) {
-      if (value === null) continue;
-      if (value === initialPrices[tarifaId]) continue;
+      const original = initialPrices[tarifaId] ?? null;
+      if (value === original) continue;
+      if (value === null) {
+        if (original !== null) deletions.push(tarifaId);
+        continue;
+      }
       changes[tarifaId] = parseDecimalInput(value, 2);
     }
-    if (Object.keys(changes).length === 0) return;
+    if (Object.keys(changes).length === 0 && deletions.length === 0) return;
 
     setIsSaving(true);
     setCellErrors({});
-    const results = await onSave(product.producteId, changes);
+    const results = await onSave(product.producteId, changes, deletions);
     setIsSaving(false);
 
     const failures: Record<string, string> = {};
@@ -176,7 +180,6 @@ function RateProductRow({
         <td key={tariff.id} className="px-1 py-3 text-right align-top" style={{ width: TARIFF_COLUMN_WIDTH }}>
           <EditableCell
             value={draft[String(tariff.id)] ?? null}
-            originalValue={initialPrices[String(tariff.id)] ?? null}
             onChange={(value) => setField(String(tariff.id), value)}
           />
           {cellErrors[String(tariff.id)] && (

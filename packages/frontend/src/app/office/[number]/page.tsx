@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { DataCard, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
-import { useOrders } from "@/hooks/useOrders";
+import { useMockOrdersDetail } from "@/hooks/useMockOrdersDetail";
 import type { ComandaLiniaApi } from "@/lib/api";
 import { formatData } from "@/lib/dates";
 import { formatDecimal } from "@/lib/decimals";
@@ -71,7 +71,7 @@ function OrderLineCard({ line }: { line: ComandaLiniaApi }) {
 
 export default function OfficeOrderDetailPage() {
   const params = useParams<{ number: string }>();
-  const { data: orders, isLoading, error } = useOrders();
+  const { data: orders, isLoading, error } = useMockOrdersDetail();
 
   const order = orders.find((item) => item.num === params.number);
 
