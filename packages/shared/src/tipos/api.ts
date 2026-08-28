@@ -415,10 +415,24 @@ export interface FilaPanellOficinaApi {
   dataComanda: string;
   dataExpedicio: string | null;
   dataLliurament: string | null;
+  /** Capa 35. */
+  bultos: number | null;
   linies: number;
   totalKg: string;
   totalEur: string;
-  obsProduccio: string | null;
+  /**
+   * Capa 35 — BREAKING: antes era el texto de `comanda.obsProduccio`
+   * (`string | null`); ahora es un booleano ("¿hay algo que ver?", para el
+   * checkbox del panel) que sale `true` si la cabecera tiene contenido O
+   * alguna línea activa (no esborrada) tiene `obsProduccio` propio — antes
+   * una observación cargada sólo en una línea era invisible acá.
+   */
+  obsProduccio: boolean;
+  /**
+   * Sin cambios (capa 35): sigue siendo el texto de `comanda.obsLliurament`.
+   * `comanda_linia` no tiene una columna `obsLliurament` a nivel de línea —
+   * no hay nada más que revisar acá.
+   */
   obsLliurament: string | null;
   /** Mismo criterio que ComandaResumApi — resumen liviano, no el detalle completo. */
   totalIncidencies: number;

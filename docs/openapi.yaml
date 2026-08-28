@@ -820,6 +820,10 @@ paths:
     get:
       tags: [Panells]
       summary: Panel de oficina (solo lectura, con subtotales sobre todo lo filtrado)
+      description: >-
+        Capa 35: bultos nuevo en la respuesta; obsProduccio pasó de string a
+        boolean (ver FilaPanellOficina.obsProduccio); 4 filtros nuevos —
+        tarifaId, poblacioDesti, dataComandaDes/Fins, dataLliuramentDes/Fins.
       parameters:
         - name: dataExpedicioDes
           in: query
@@ -827,8 +831,28 @@ paths:
         - name: dataExpedicioFins
           in: query
           schema: { type: string, format: date }
+        - name: dataComandaDes
+          in: query
+          description: Capa 35. Rango sobre dataComanda (comanda.creat_en).
+          schema: { type: string, format: date }
+        - name: dataComandaFins
+          in: query
+          description: Capa 35. Rango sobre dataComanda (comanda.creat_en).
+          schema: { type: string, format: date }
+        - name: dataLliuramentDes
+          in: query
+          description: Capa 35. Rango sobre dataLliurament.
+          schema: { type: string, format: date }
+        - name: dataLliuramentFins
+          in: query
+          description: Capa 35. Rango sobre dataLliurament.
+          schema: { type: string, format: date }
         - name: transportistaId
           in: query
+          schema: { type: integer }
+        - name: tarifaId
+          in: query
+          description: Capa 35. Coincidencia exacta, mismo patrón que transportistaId/clientId.
           schema: { type: integer }
         - name: estat
           in: query
@@ -836,6 +860,12 @@ paths:
         - name: clientId
           in: query
           schema: { type: integer }
+        - name: poblacioDesti
+          in: query
+          description: >-
+            Capa 35. Coincidencia EXACTA, case-insensitive (no substring) —
+            regla 3.1 transversal.
+          schema: { type: string }
         - $ref: '#/components/parameters/Pagina'
         - $ref: '#/components/parameters/Mida'
       responses:
@@ -855,7 +885,7 @@ paths:
                       totalEur: { type: string }
                   dades:
                     type: array
-                    items: { $ref: '#/components/schemas/ComandaResum' }
+                    items: { $ref: '#/components/schemas/FilaPanellOficina' }
                   paginacio: { $ref: '#/components/schemas/Paginacio' }
 
   /api/v1/panells/obrador:
@@ -1460,7 +1490,10 @@ components:
 
     ComandaResum:
       type: object
-      description: Forma usada en listados (GET /comandes, panell d'oficina)
+      description: >-
+        Forma usada en GET /comandes. (Corrección capa 35: GET
+        /panells/oficina usa FilaPanellOficina, una forma distinta — no
+        ComandaResum, como decía antes esta descripción.)
       properties:
         id: { type: integer }
         num: { type: string }
@@ -1720,6 +1753,49 @@ components:
           description: >-
             Sólo se usa (y es obligatorio) cuando estat = "amb_incidencia".
             Se ignora en cualquier otro caso.
+
+    FilaPanellOficina:
+      type: object
+      description: >-
+        Capa 35 — forma real de GET /panells/oficina (dades[]). Antes el
+        path referenciaba por error el schema ComandaResum (forma usada en
+        GET /comandes), que no coincide: campos planos en vez de anidados
+        (client como string, no objeto), sin bultos ni obsProduccio/
+        obsLliurament. Se corrige acá.
+      properties:
+        comandaId: { type: integer }
+        num: { type: string }
+        client: { type: string, nullable: true }
+        poblacioDesti: { type: string, nullable: true }
+        tarifa: { type: string, nullable: true }
+        transportista: { type: string, nullable: true }
+        estat: { $ref: '#/components/schemas/EstatComanda' }
+        dataComanda: { type: string, format: date-time }
+        dataExpedicio: { type: string, format: date-time, nullable: true }
+        dataLliurament: { type: string, format: date-time, nullable: true }
+        bultos:
+          type: integer
+          nullable: true
+          description: Capa 35.
+        linies: { type: integer }
+        totalKg: { type: string }
+        totalEur: { type: string }
+        obsProduccio:
+          type: boolean
+          description: >-
+            Capa 35 — BREAKING: antes era el texto de comanda.obsProduccio
+            (string | null); ahora es un booleano para el checkbox del
+            panel, true si la cabecera tiene contenido O alguna línea activa
+            (no esborrada) tiene su propio obsProduccio.
+        obsLliurament:
+          type: string
+          nullable: true
+          description: >-
+            Sin cambios (capa 35) — sigue siendo el texto de
+            comanda.obsLliurament. comanda_linia no tiene una columna
+            obsLliurament propia.
+        totalIncidencies: { type: integer }
+        tipusIncidencia: { type: string, nullable: true }
 
     FilaPanellObrador:
       type: object

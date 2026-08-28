@@ -14,6 +14,7 @@ import {
   parsearPaginacio,
   resolverCategoriaUuid,
   resolverClientUuid,
+  resolverTarifaUuid,
   resolverTransportistaUuid,
 } from './comu.js';
 
@@ -76,6 +77,24 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       condicions.push(`c.data_expedicio <= $${valors.length + 1}`);
       valors.push(query.dataExpedicioFins);
     }
+    // Capa 35 — mismo criterio que dataExpedicioDes/Fins de arriba, sobre
+    // las otras dos fechas de cabecera del pedido.
+    if (typeof query.dataComandaDes === 'string' && query.dataComandaDes !== '') {
+      condicions.push(`c.creat_en >= $${valors.length + 1}`);
+      valors.push(query.dataComandaDes);
+    }
+    if (typeof query.dataComandaFins === 'string' && query.dataComandaFins !== '') {
+      condicions.push(`c.creat_en <= $${valors.length + 1}`);
+      valors.push(query.dataComandaFins);
+    }
+    if (typeof query.dataLliuramentDes === 'string' && query.dataLliuramentDes !== '') {
+      condicions.push(`c.data_lliurament >= $${valors.length + 1}`);
+      valors.push(query.dataLliuramentDes);
+    }
+    if (typeof query.dataLliuramentFins === 'string' && query.dataLliuramentFins !== '') {
+      condicions.push(`c.data_lliurament <= $${valors.length + 1}`);
+      valors.push(query.dataLliuramentFins);
+    }
     if (typeof query.estat === 'string' && query.estat !== '') {
       condicions.push(`c.estat = $${valors.length + 1}`);
       valors.push(query.estat);
@@ -98,6 +117,21 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
     if (clientUuid !== undefined) {
       condicions.push(`c.client_id = $${valors.length + 1}`);
       valors.push(clientUuid);
+    }
+    // Capa 35 — mismo patrón que transportistaId/clientId de arriba.
+    const tarifaUuid = await resolverFiltreEntitat(reply, query.tarifaId, 'tarifaId', (id) =>
+      resolverTarifaUuid(pool, id),
+    );
+    if (tarifaUuid === null) return;
+    if (tarifaUuid !== undefined) {
+      condicions.push(`c.tarifa_id = $${valors.length + 1}`);
+      valors.push(tarifaUuid);
+    }
+    // Coincidencia EXACTA, case-insensitive — regla 3.1 transversal (mismo
+    // criterio que ?producte= en /panells/obrador).
+    if (typeof query.poblacioDesti === 'string' && query.poblacioDesti.trim() !== '') {
+      condicions.push(`LOWER(c.poblacio_desti) = LOWER($${valors.length + 1})`);
+      valors.push(query.poblacioDesti.trim());
     }
     const where = condicions.length > 0 ? `WHERE ${condicions.join(' AND ')}` : '';
 
@@ -143,20 +177,29 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       data_comanda: Date;
       data_expedicio: Date | null;
       data_lliurament: Date | null;
+      bultos: number | null;
       linies: string;
       total_kg: string;
       total_eur: string;
-      obs_produccio: string | null;
+      te_obs_produccio: boolean;
       obs_lliurament: string | null;
       total_incidencies: string;
       tipus_incidencia: string | null;
     }>(
       `SELECT c.id_seq, c.num, cl.nom AS client_nom, c.poblacio_desti, t.nom AS tarifa_nom,
               tr.nom AS transportista_nom, c.estat, c.creat_en AS data_comanda, c.data_expedicio,
-              c.data_lliurament, COALESCE(agg.linies, 0) AS linies,
+              c.data_lliurament, c.bultos, COALESCE(agg.linies, 0) AS linies,
               COALESCE(agg.total_kg, 0)::numeric(14,3) AS total_kg,
               COALESCE(agg.total_eur, 0)::numeric(14,2) AS total_eur,
-              c.obs_produccio, c.obs_lliurament,
+              (
+                (c.obs_produccio IS NOT NULL AND c.obs_produccio <> '')
+                OR EXISTS (
+                  SELECT 1 FROM comanda_linia cl2
+                  WHERE cl2.comanda_id = c.id AND NOT cl2.esborrat
+                    AND cl2.obs_produccio IS NOT NULL AND cl2.obs_produccio <> ''
+                )
+              ) AS te_obs_produccio,
+              c.obs_lliurament,
               COALESCE(inc.total_incidencies, 0) AS total_incidencies, inc.tipus_incidencia
        ${base}
        ORDER BY c.data_expedicio ASC NULLS LAST, c.creat_en ASC
@@ -175,10 +218,11 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       dataComanda: formatearDataApi(f.data_comanda)!,
       dataExpedicio: formatearDataApi(f.data_expedicio),
       dataLliurament: formatearDataApi(f.data_lliurament),
+      bultos: f.bultos,
       linies: Number(f.linies),
       totalKg: f.total_kg,
       totalEur: f.total_eur,
-      obsProduccio: f.obs_produccio,
+      obsProduccio: f.te_obs_produccio,
       obsLliurament: f.obs_lliurament,
       totalIncidencies: Number(f.total_incidencies),
       tipusIncidencia: f.tipus_incidencia,

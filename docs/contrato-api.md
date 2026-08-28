@@ -925,7 +925,15 @@ Sólo lectura, con filtros y subtotales.
 
 **`GET /panells/oficina`**
 
-Filtros: `?dataExpedicioDes=&dataExpedicioFins=&transportistaId=&estat=&clientId=`
+Filtros: `?dataExpedicioDes=&dataExpedicioFins=&dataComandaDes=&dataComandaFins=&dataLliuramentDes=&dataLliuramentFins=&transportistaId=&tarifaId=&estat=&clientId=&poblacioDesti=`
+
+> **Filtros nuevos (capa 35):** `tarifaId` (coincidencia exacta, mismo
+> patrón que `transportistaId`/`clientId` — id inválido no numérico →
+> `400 VALIDACIO`, id que no existe → `dades: []`), `poblacioDesti`
+> (coincidencia exacta case-insensitive — regla 3.1 transversal, no
+> substring), `dataComandaDes`/`dataComandaFins` (rango sobre `dataComanda`,
+> mismo criterio que `dataExpedicioDes`/`Fins`), `dataLliuramentDes`/
+> `dataLliuramentFins` (rango sobre `dataLliurament`).
 
 ```json
 {
@@ -947,10 +955,11 @@ Filtros: `?dataExpedicioDes=&dataExpedicioFins=&transportistaId=&estat=&clientId
       "dataComanda": "2026-08-14T09:12:00Z",
       "dataExpedicio": "2026-08-17T00:00:00Z",
       "dataLliurament": "2026-08-18T00:00:00Z",
+      "bultos": 3,
       "linies": 8,
       "totalKg": "24.500",
       "totalEur": "312.40",
-      "obsProduccio": "Tallar més gruixut",
+      "obsProduccio": true,
       "obsLliurament": "Entregar pels matins",
       "totalIncidencies": 0,
       "tipusIncidencia": null
@@ -959,6 +968,24 @@ Filtros: `?dataExpedicioDes=&dataExpedicioFins=&transportistaId=&estat=&clientId
   "paginacio": { "pagina": 1, "mida": 50, "total": 12, "totalPagines": 1 }
 }
 ```
+
+> **`bultos` (capa 35)** — sin novedad más allá de exponerlo: es
+> `comanda.bultos` tal cual, editable vía `PATCH /comandes/:id`.
+>
+> **`obsProduccio` (capa 35) — BREAKING, cambió de tipo.** Antes era el
+> texto de `comanda.obsProduccio` (`string | null`); ahora es un booleano
+> pensado para el checkbox del panel ("¿hay algo que ver en producción?"),
+> `true` si la cabecera tiene contenido **O** alguna línea activa (no
+> esborrada) tiene su propio `obsProduccio` cargado — antes, una
+> observación cargada sólo en una línea era invisible en este listado,
+> aunque sí se veía en `GET /comandes/:id`. El texto completo de cabecera y
+> de cada línea sigue disponible ahí para quien lo necesite.
+>
+> **`obsLliurament` NO cambió** — sigue siendo el texto de
+> `comanda.obsLliurament` tal cual, sin equivalente de "revisar líneas":
+> `comanda_linia` no tiene una columna `obsLliurament` propia, sólo
+> `obsProduccio`. No hay nada a nivel de línea que este campo pudiera
+> reflejar.
 
 > `totals` corresponde a **todo lo filtrado**, no sólo a la página visible. Es
 > el bloque de subtotales que va arriba de la tabla.

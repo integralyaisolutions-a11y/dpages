@@ -225,4 +225,234 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
 
     await fastify.close();
   });
+
+  // Capa 35 — al final del describe por el mismo motivo que los dos
+  // anteriores: crea pedidos propios y no debe alterar los totales que
+  // asumen los tests de oficina/empaquetat de más arriba.
+  describe('capa 35 — obsProduccio (capçalera o línia), 4 filtres nous i bultos a GET /panells/oficina', () => {
+    it('obsProduccio: true quan NOMÉS una línia (activa) té contingut, encara que la capçalera estigui buida', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 1 }] },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      expect(comandaCreada.obsProduccio).toBeNull(); // capçalera buida
+
+      await entorn.poolTest.query(
+        `UPDATE comanda_linia SET obs_produccio = 'Tallar més fi' WHERE id_seq = $1`,
+        [comandaCreada.linies[0]!.id],
+      );
+
+      const cuerpo = cuerpoJson<PanellOficinaApi>(
+        await fastify.inject({ method: 'GET', url: '/api/v1/panells/oficina' }),
+      );
+      const fila = cuerpo.dades.find((f) => f.comandaId === comandaCreada.id);
+      expect(fila?.obsProduccio).toBe(true);
+
+      await fastify.close();
+    });
+
+    it('obsProduccio: false quan no hi ha cap observació ni a capçalera ni a cap línia activa', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 1 }] },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const cuerpo = cuerpoJson<PanellOficinaApi>(
+        await fastify.inject({ method: 'GET', url: '/api/v1/panells/oficina' }),
+      );
+      const fila = cuerpo.dades.find((f) => f.comandaId === comandaCreada.id);
+      expect(fila?.obsProduccio).toBe(false);
+
+      await fastify.close();
+    });
+
+    it('obsLliurament NO cambia con esta capa: sigue siendo el texto de la cabecera, sin mirar líneas (comanda_linia no tiene esa columna)', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          obsLliurament: 'Entregar pels matins',
+          linies: [{ producteId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const cuerpo = cuerpoJson<PanellOficinaApi>(
+        await fastify.inject({ method: 'GET', url: '/api/v1/panells/oficina' }),
+      );
+      const fila = cuerpo.dades.find((f) => f.comandaId === comandaCreada.id);
+      expect(fila?.obsLliurament).toBe('Entregar pels matins');
+
+      await fastify.close();
+    });
+
+    it('filtre ?tarifaId=: coincidència exacta, sense match → dades: []', async () => {
+      const fastify = construirServidor();
+      const tarifa = await entorn.poolTest.query<{ id: string; id_seq: string }>(
+        `INSERT INTO tarifa (codi, nom) VALUES ('CAP35-TAR', 'Tarifa capa 35') RETURNING id, id_seq`,
+      );
+      const tarifaIdPublic = Number(tarifa.rows[0]!.id_seq);
+      const client = await entorn.poolTest.query<{ id_seq: string }>(
+        `INSERT INTO client (nom, poblacio, tarifa_id) VALUES ('Client capa 35', 'Vic', $1) RETURNING id_seq`,
+        [tarifa.rows[0]!.id],
+      );
+      const clientIdPublic = Number(client.rows[0]!.id_seq);
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          clientId: clientIdPublic,
+          tarifaId: tarifaIdPublic,
+          linies: [{ producteId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const perTarifa = cuerpoJson<PanellOficinaApi>(
+        await fastify.inject({
+          method: 'GET',
+          url: `/api/v1/panells/oficina?tarifaId=${tarifaIdPublic}`,
+        }),
+      );
+      expect(perTarifa.dades.map((f) => f.comandaId)).toContain(comandaCreada.id);
+      expect(perTarifa.dades.every((f) => f.tarifa === 'Tarifa capa 35')).toBe(true);
+
+      const senseMatch = cuerpoJson<PanellOficinaApi>(
+        await fastify.inject({ method: 'GET', url: '/api/v1/panells/oficina?tarifaId=999999' }),
+      );
+      expect(senseMatch.dades).toEqual([]);
+
+      await fastify.close();
+    });
+
+    it('filtre ?poblacioDesti=: coincidència exacta case-insensitive, sense match → dades: []', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 1 }] },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { poblacioDesti: 'Girona Capa 35' },
+      });
+
+      const perPoblacio = cuerpoJson<PanellOficinaApi>(
+        await fastify.inject({
+          method: 'GET',
+          url: '/api/v1/panells/oficina?poblacioDesti=GIRONA%20CAPA%2035',
+        }),
+      );
+      expect(perPoblacio.dades.map((f) => f.comandaId)).toContain(comandaCreada.id);
+
+      const senseMatch = cuerpoJson<PanellOficinaApi>(
+        await fastify.inject({
+          method: 'GET',
+          url: '/api/v1/panells/oficina?poblacioDesti=No%20Existeix',
+        }),
+      );
+      expect(senseMatch.dades).toEqual([]);
+
+      await fastify.close();
+    });
+
+    it('filtres ?dataComandaDes=/?dataComandaFins=: rang sobre dataComanda, fora de rang → dades: []', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 1 }] },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      // Rang ampli que cobreix "ara" — ha de matchejar.
+      const dinsDeRang = cuerpoJson<PanellOficinaApi>(
+        await fastify.inject({
+          method: 'GET',
+          url: '/api/v1/panells/oficina?dataComandaDes=2020-01-01&dataComandaFins=2099-12-31',
+        }),
+      );
+      expect(dinsDeRang.dades.map((f) => f.comandaId)).toContain(comandaCreada.id);
+
+      // Rang al futur — cap comanda (ni aquesta ni cap de les del fixture) es
+      // va crear amb dataComanda al futur.
+      const foraDeRang = cuerpoJson<PanellOficinaApi>(
+        await fastify.inject({
+          method: 'GET',
+          url: '/api/v1/panells/oficina?dataComandaDes=2099-01-01&dataComandaFins=2099-12-31',
+        }),
+      );
+      expect(foraDeRang.dades).toEqual([]);
+
+      await fastify.close();
+    });
+
+    it('filtres ?dataLliuramentDes=/?dataLliuramentFins=: rang sobre dataLliurament, fora de rang → dades: []', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          dataLliurament: '2026-08-20T00:00:00Z',
+          linies: [{ producteId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const dinsDeRang = cuerpoJson<PanellOficinaApi>(
+        await fastify.inject({
+          method: 'GET',
+          url: '/api/v1/panells/oficina?dataLliuramentDes=2026-08-19&dataLliuramentFins=2026-08-21',
+        }),
+      );
+      expect(dinsDeRang.dades.map((f) => f.comandaId)).toContain(comandaCreada.id);
+
+      const foraDeRang = cuerpoJson<PanellOficinaApi>(
+        await fastify.inject({
+          method: 'GET',
+          url: '/api/v1/panells/oficina?dataLliuramentDes=2026-09-01&dataLliuramentFins=2026-09-30',
+        }),
+      );
+      expect(foraDeRang.dades).toEqual([]);
+
+      await fastify.close();
+    });
+
+    it('bultos surt a la resposta amb el valor correcte', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 1 }] },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      expect(comandaCreada.bultos).toBeNull();
+
+      await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { bultos: 5 },
+      });
+
+      const cuerpo = cuerpoJson<PanellOficinaApi>(
+        await fastify.inject({ method: 'GET', url: '/api/v1/panells/oficina' }),
+      );
+      const fila = cuerpo.dades.find((f) => f.comandaId === comandaCreada.id);
+      expect(fila?.bultos).toBe(5);
+
+      await fastify.close();
+    });
+  });
 });
