@@ -529,11 +529,12 @@ async function main(): Promise<void> {
 
   console.log(
     'Aquest script ESBORRARÀ TOT el que hi ha avui a producte ' +
-      `(${totalProductes[0]!.count}), tarifa/tarifa_preu, client (${totalClients[0]!.count}) i ` +
-      `comanda/comanda_linia/incidencia_comanda (${totalComandes[0]!.count}) — també rendiments_porcs i ` +
-      'alias_producte (dependents de producte per FK) — i sembrarà ' +
-      `${PRODUCTES.length} productes, ${TARIFES.length} tarifes, ${CLIENTS.length} clients i ` +
-      `${COMANDES.length} comandes de prova (prefix "SEED"). NO toca categoria_producte, transportista ni origen_comanda.`,
+      `(${totalProductes[0]!.count}), tarifa/tarifa_preu (${totalTarifes[0]!.count} tarifes), ` +
+      `client (${totalClients[0]!.count}) i comanda/comanda_linia/incidencia_comanda ` +
+      `(${totalComandes[0]!.count}) — també rendiments_porcs i alias_producte (dependents de producte ` +
+      `per FK) — i sembrarà ${PRODUCTES.length} productes, ${TARIFES.length} tarifes, ${CLIENTS.length} ` +
+      `clients i ${COMANDES.length} comandes de prova (prefix "SEED"). NO toca categoria_producte, ` +
+      'transportista ni origen_comanda.',
   );
 
   const confirmat = process.argv.includes('--yes') || (await confirmarPerConsola());
