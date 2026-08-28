@@ -7,6 +7,7 @@ import type {
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { pool } from '../../../db/pool.js';
 import {
+  condicioDataFinsInclusiva,
   construirPaginacio,
   enviarValidacio,
   formatearDataApi,
@@ -74,7 +75,7 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       valors.push(query.dataExpedicioDes);
     }
     if (typeof query.dataExpedicioFins === 'string' && query.dataExpedicioFins !== '') {
-      condicions.push(`c.data_expedicio <= $${valors.length + 1}`);
+      condicions.push(condicioDataFinsInclusiva('c.data_expedicio', valors.length + 1));
       valors.push(query.dataExpedicioFins);
     }
     // Capa 35 — mismo criterio que dataExpedicioDes/Fins de arriba, sobre
@@ -84,7 +85,7 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       valors.push(query.dataComandaDes);
     }
     if (typeof query.dataComandaFins === 'string' && query.dataComandaFins !== '') {
-      condicions.push(`c.creat_en <= $${valors.length + 1}`);
+      condicions.push(condicioDataFinsInclusiva('c.creat_en', valors.length + 1));
       valors.push(query.dataComandaFins);
     }
     if (typeof query.dataLliuramentDes === 'string' && query.dataLliuramentDes !== '') {
@@ -92,7 +93,7 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       valors.push(query.dataLliuramentDes);
     }
     if (typeof query.dataLliuramentFins === 'string' && query.dataLliuramentFins !== '') {
-      condicions.push(`c.data_lliurament <= $${valors.length + 1}`);
+      condicions.push(condicioDataFinsInclusiva('c.data_lliurament', valors.length + 1));
       valors.push(query.dataLliuramentFins);
     }
     if (typeof query.estat === 'string' && query.estat !== '') {
@@ -257,7 +258,7 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       valors.push(query.dataProduccioDes);
     }
     if (typeof query.dataProduccioFins === 'string' && query.dataProduccioFins !== '') {
-      condicions.push(`cl.data_produccio <= $${valors.length + 1}`);
+      condicions.push(condicioDataFinsInclusiva('cl.data_produccio', valors.length + 1));
       valors.push(query.dataProduccioFins);
     }
     const categoriaUuid = await resolverFiltreEntitat(
@@ -379,7 +380,7 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       valors.push(query.dataExpedicioDes);
     }
     if (typeof query.dataExpedicioFins === 'string' && query.dataExpedicioFins !== '') {
-      condicions.push(`c.data_expedicio <= $${valors.length + 1}`);
+      condicions.push(condicioDataFinsInclusiva('c.data_expedicio', valors.length + 1));
       valors.push(query.dataExpedicioFins);
     }
     const transportistaUuid = await resolverFiltreEntitat(

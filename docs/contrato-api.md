@@ -108,6 +108,22 @@ mostrarlos, formatealos; para operar con ellos, convertí explícitamente. Si el
 backend enviara `12.5` como número de JavaScript, sumar cien líneas daría un
 total con centavos fantasma.
 
+### Filtros de rango de fecha (`...Des` / `...Fins`)
+
+**Regla transversal a TODOS los endpoints con filtros de este tipo** (capa
+36 — antes había un bug sistémico, corregido en todos a la vez):
+
+- **`...Des`** incluye el día completo desde su comienzo: `?dataDes=2026-08-28`
+  matchea cualquier registro desde `2026-08-28T00:00:00Z` en adelante.
+- **`...Fins`** incluye el día completo hasta su final: `?dataFins=2026-08-28`
+  matchea cualquier registro hasta `2026-08-28T23:59:59.999Z` inclusive — NO
+  se corta a medianoche del inicio del día. Un pedido creado hoy a las 14:14
+  aparece al filtrar `Des=hoy&Fins=hoy`, tal como se espera.
+- Pasar sólo la fecha (`YYYY-MM-DD`), sin hora, es lo esperado y documentado
+  (`format: date`, no `date-time`, en cada parámetro de este tipo). Si en
+  algún momento se pasa un timestamp completo, la hora que traiga `...Fins`
+  se ignora igual (se trata como el día completo de esa fecha).
+
 ### Sobre los identificadores
 
 El campo `id` que devuelve la API es un número entero secuencial por tabla,
@@ -573,6 +589,9 @@ un `codi` repetido responde `409 CONFLICTE`.
 
 Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-08-31&dataProduccioDes=&dataProduccioFins=&dataLliuramentDes=&dataLliuramentFins=&cerca=142`
 
+> `dataFins`/`dataProduccioFins`/`dataLliuramentFins` incluyen el día
+> completo — ver "Filtros de rango de fecha" en la sección 2 (capa 36).
+
 ```json
 {
   "dades": [
@@ -927,6 +946,10 @@ Sólo lectura, con filtros y subtotales.
 
 Filtros: `?dataExpedicioDes=&dataExpedicioFins=&dataComandaDes=&dataComandaFins=&dataLliuramentDes=&dataLliuramentFins=&transportistaId=&tarifaId=&estat=&clientId=&poblacioDesti=`
 
+> Los tres `...Fins` (`dataExpedicioFins`, `dataComandaFins`,
+> `dataLliuramentFins`) incluyen el día completo — ver "Filtros de rango de
+> fecha" en la sección 2 (capa 36).
+
 > **Filtros nuevos (capa 35):** `tarifaId` (coincidencia exacta, mismo
 > patrón que `transportistaId`/`clientId` — id inválido no numérico →
 > `400 VALIDACIO`, id que no existe → `dades: []`), `poblacioDesti`
@@ -1009,6 +1032,9 @@ líneas individuales visibles.
 
 Filtros: `?dataProduccioDes=&dataProduccioFins=&categoriaId=&tipus=&producte=&format=&envasat=`
 
+> `dataProduccioFins` incluye el día completo — ver "Filtros de rango de
+> fecha" en la sección 2 (capa 36).
+
 ```json
 {
   "totals": {
@@ -1076,6 +1102,9 @@ Filtros: `?dataProduccioDes=&dataProduccioFins=&categoriaId=&tipus=&producte=&fo
 **`GET /panells/empaquetat`**
 
 Filtros: `?dataExpedicioDes=&dataExpedicioFins=&transportistaId=&clientId=`
+
+> `dataExpedicioFins` incluye el día completo — ver "Filtros de rango de
+> fecha" en la sección 2 (capa 36).
 
 ```json
 {
@@ -1200,6 +1229,10 @@ ficha de `Rendiments Porcs`.
 
 Filtros: `?nombrePorcs=5&agrupacioRendiment=KG&producte=Llom fresc de porc&dataDes=2026-08-01&dataFins=2026-08-31`
 
+- **`dataFins` en este endpoint YA incluía el día completo antes de la capa
+  36** — compara sólo la parte de fecha en ambos lados (`::date BETWEEN`),
+  sin el bug sistémico que sí tenían los demás filtros `...Fins` del
+  proyecto. No se tocó.
 - **`nombrePorcs` es obligatorio.** Sin él, o con `0`/negativo, responde
   `400 VALIDACIO` — es una calculadora interactiva, un default silencioso
   podría hacer pensar que un número inventado es el resultado real.

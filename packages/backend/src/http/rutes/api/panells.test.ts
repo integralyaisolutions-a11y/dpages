@@ -455,4 +455,129 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
       await fastify.close();
     });
   });
+
+  // Capa 36 — bug sistémico encontrado al verificar la capa 35: "...Fins"
+  // se interpretaba como medianoche del día, cortando afuera cualquier
+  // registro con hora real dentro de ese mismo día. Al final del describe
+  // por el mismo motivo que los bloques anteriores.
+  describe('capa 36 — els filtres "...Fins" inclouen el dia complet', () => {
+    it('GET /panells/oficina?dataExpedicioDes=&dataExpedicioFins= del MISMO día (con hora real) matchea', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 1 }] },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { dataExpedicio: '2026-08-28T14:14:00Z' },
+      });
+
+      const cuerpo = cuerpoJson<PanellOficinaApi>(
+        await fastify.inject({
+          method: 'GET',
+          url: '/api/v1/panells/oficina?dataExpedicioDes=2026-08-28&dataExpedicioFins=2026-08-28',
+        }),
+      );
+      expect(cuerpo.dades.some((f) => f.comandaId === comandaCreada.id)).toBe(true);
+
+      await fastify.close();
+    });
+
+    it('GET /panells/oficina?dataComandaDes=avui&dataComandaFins=avui: un pedido creado HOY (con hora real) matchea', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 1 }] },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const avui = new Date().toISOString().slice(0, 10);
+      const cuerpo = cuerpoJson<PanellOficinaApi>(
+        await fastify.inject({
+          method: 'GET',
+          url: `/api/v1/panells/oficina?dataComandaDes=${avui}&dataComandaFins=${avui}`,
+        }),
+      );
+      expect(cuerpo.dades.some((f) => f.comandaId === comandaCreada.id)).toBe(true);
+
+      await fastify.close();
+    });
+
+    it('GET /panells/oficina?dataLliuramentDes=&dataLliuramentFins= del MISMO día (con hora real) matchea', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          dataLliurament: '2026-08-28T14:14:00Z',
+          linies: [{ producteId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const cuerpo = cuerpoJson<PanellOficinaApi>(
+        await fastify.inject({
+          method: 'GET',
+          url: '/api/v1/panells/oficina?dataLliuramentDes=2026-08-28&dataLliuramentFins=2026-08-28',
+        }),
+      );
+      expect(cuerpo.dades.some((f) => f.comandaId === comandaCreada.id)).toBe(true);
+
+      await fastify.close();
+    });
+
+    it('GET /panells/obrador?dataProduccioDes=&dataProduccioFins= del MISMO día que la línea (con hora real) matchea', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 1 }] },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      await entorn.poolTest.query(
+        `UPDATE comanda_linia SET data_produccio = '2026-08-28T14:14:00Z' WHERE id_seq = $1`,
+        [comandaCreada.linies[0]!.id],
+      );
+
+      const cuerpo = cuerpoJson<PanellObradorApi>(
+        await fastify.inject({
+          method: 'GET',
+          url: '/api/v1/panells/obrador?dataProduccioDes=2026-08-28&dataProduccioFins=2026-08-28',
+        }),
+      );
+      expect(cuerpo.dades.some((f) => f.comandaId === comandaCreada.id)).toBe(true);
+
+      await fastify.close();
+    });
+
+    it('GET /panells/empaquetat?dataExpedicioDes=&dataExpedicioFins= del MISMO día (con hora real) matchea', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 1 }] },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { dataExpedicio: '2026-08-28T14:14:00Z' },
+      });
+
+      const cuerpo = cuerpoJson<PanellEmpaquetatApi>(
+        await fastify.inject({
+          method: 'GET',
+          url: '/api/v1/panells/empaquetat?dataExpedicioDes=2026-08-28&dataExpedicioFins=2026-08-28',
+        }),
+      );
+      expect(cuerpo.dades.some((f) => f.comandaId === comandaCreada.id)).toBe(true);
+
+      await fastify.close();
+    });
+  });
 });

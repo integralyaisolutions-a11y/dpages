@@ -569,7 +569,10 @@ paths:
           schema: { type: string, format: date }
         - name: dataFins
           in: query
-          description: Filtra por dataComanda (comanda.creat_en) — sin cambios.
+          description: >-
+            Filtra por dataComanda (comanda.creat_en) — sin cambios de
+            criterio de comparación. Capa 36: incluye el día completo (hasta
+            las 23:59:59.999 de esa fecha), no sólo su medianoche inicial.
           schema: { type: string, format: date }
         - name: dataProduccioDes
           in: query
@@ -581,7 +584,9 @@ paths:
           schema: { type: string, format: date }
         - name: dataProduccioFins
           in: query
-          description: Ver dataProduccioDes.
+          description: >-
+            Ver dataProduccioDes. Capa 36: incluye el día completo, igual
+            que el resto de los "...Fins" del proyecto.
           schema: { type: string, format: date }
         - name: dataLliuramentDes
           in: query
@@ -589,7 +594,9 @@ paths:
           schema: { type: string, format: date }
         - name: dataLliuramentFins
           in: query
-          description: Ver dataLliuramentDes.
+          description: >-
+            Ver dataLliuramentDes. Capa 36: incluye el día completo, igual
+            que el resto de los "...Fins" del proyecto.
           schema: { type: string, format: date }
         - name: cerca
           in: query
@@ -824,12 +831,14 @@ paths:
         Capa 35: bultos nuevo en la respuesta; obsProduccio pasó de string a
         boolean (ver FilaPanellOficina.obsProduccio); 4 filtros nuevos —
         tarifaId, poblacioDesti, dataComandaDes/Fins, dataLliuramentDes/Fins.
+        Capa 36: los tres "...Fins" incluyen el día completo.
       parameters:
         - name: dataExpedicioDes
           in: query
           schema: { type: string, format: date }
         - name: dataExpedicioFins
           in: query
+          description: Capa 36. Incluye el día completo (hasta las 23:59:59.999 de esa fecha).
           schema: { type: string, format: date }
         - name: dataComandaDes
           in: query
@@ -837,7 +846,9 @@ paths:
           schema: { type: string, format: date }
         - name: dataComandaFins
           in: query
-          description: Capa 35. Rango sobre dataComanda (comanda.creat_en).
+          description: >-
+            Capa 35. Rango sobre dataComanda (comanda.creat_en). Capa 36:
+            incluye el día completo.
           schema: { type: string, format: date }
         - name: dataLliuramentDes
           in: query
@@ -845,7 +856,9 @@ paths:
           schema: { type: string, format: date }
         - name: dataLliuramentFins
           in: query
-          description: Capa 35. Rango sobre dataLliurament.
+          description: >-
+            Capa 35. Rango sobre dataLliurament. Capa 36: incluye el día
+            completo.
           schema: { type: string, format: date }
         - name: transportistaId
           in: query
@@ -901,6 +914,7 @@ paths:
           schema: { type: string, format: date }
         - name: dataProduccioFins
           in: query
+          description: Capa 36. Incluye el día completo (hasta las 23:59:59.999 de esa fecha).
           schema: { type: string, format: date }
         - name: categoriaId
           in: query
@@ -975,7 +989,10 @@ paths:
           schema: { type: string, format: date }
         - name: dataFins
           in: query
-          description: 'Default: hoy + 7 días.'
+          description: >-
+            Default: hoy + 7 días. Ya incluía el día completo antes de la
+            capa 36 (compara sólo la fecha en ambos lados) — no tenía el bug
+            sistémico que sí tenían los demás "...Fins" del proyecto.
           schema: { type: string, format: date }
         - $ref: '#/components/parameters/Pagina'
         - $ref: '#/components/parameters/Mida'
@@ -997,6 +1014,7 @@ paths:
           schema: { type: string, format: date }
         - name: dataExpedicioFins
           in: query
+          description: Capa 36. Incluye el día completo (hasta las 23:59:59.999 de esa fecha).
           schema: { type: string, format: date }
         - name: transportistaId
           in: query

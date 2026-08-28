@@ -36,6 +36,28 @@ export function formatearDataApi(data: Date | string | null | undefined): string
   return fecha.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
+/**
+ * Capa 36 — fragmento SQL para el extremo superior de un filtro `...Fins`
+ * de fecha, que INCLUYE el día completo. Bug sistémico encontrado en la
+ * capa 35: `columna <= $n` con `$n = "2026-08-28"` se interpreta como
+ * `2026-08-28T00:00:00Z` (medianoche del INICIO de ese día), no su final —
+ * corta afuera cualquier registro con hora real dentro del mismo día.
+ *
+ * El fix trata el límite como EXCLUSIVO contra el día siguiente en vez de
+ * `<=` contra el valor tal cual — `$n::date` descarta cualquier hora que
+ * venga en `$n` (si alguna vez llega un timestamp completo en vez de sólo
+ * fecha, el comportamiento es el mismo: día completo, no una hora exacta —
+ * es la semántica correcta para un filtro que se documenta como "fecha",
+ * `format: date` en el contrato, nunca `date-time`).
+ *
+ * Los `...Des` NO tienen este problema y NO se tocan: `columna >= $n` con
+ * `$n` a medianoche del día de inicio ya incluye el día completo desde su
+ * comienzo, que es el comportamiento correcto.
+ */
+export function condicioDataFinsInclusiva(columna: string, index: number): string {
+  return `${columna} < ($${index}::date + interval '1 day')`;
+}
+
 export function enviarValidacio(
   reply: FastifyReply,
   missatge: string,

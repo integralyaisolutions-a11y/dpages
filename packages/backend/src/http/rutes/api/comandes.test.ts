@@ -1513,4 +1513,88 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       await fastify.close();
     });
   });
+
+  describe('capa 36 — els filtres "...Fins" inclouen el dia complet (bug sistèmic trobat a la capa 35)', () => {
+    it('GET /comandes?dataDes=avui&dataFins=avui: un pedido creado HOY (con hora real, no medianoche) aparece', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      // dataComanda = comanda.creat_en = now() en el momento del INSERT —
+      // no se puede fijar por API, por eso "avui" en vez de una fecha fija.
+      // Antes del fix, esto fallaba salvo que el test corriera exactamente
+      // a medianoche UTC (bug reproducido: dataFins=avui se interpretaba
+      // como avui a las 00:00:00, cortando afuera cualquier hora real).
+      const avui = new Date().toISOString().slice(0, 10);
+      const res = await fastify.inject({
+        method: 'GET',
+        url: `/api/v1/comandes?dataDes=${avui}&dataFins=${avui}`,
+      });
+
+      const cuerpo = cuerpoJson<RespostaPaginada<ComandaResumApi>>(res);
+      expect(cuerpo.dades.some((c) => c.id === comandaCreada.id)).toBe(true);
+
+      await fastify.close();
+    });
+
+    it('GET /comandes?dataProduccioDes=&dataProduccioFins= del MISMO día que la línea (con hora real) matchea', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      await entorn.poolTest.query(
+        `UPDATE comanda_linia SET data_produccio = '2026-08-28T14:14:00Z' WHERE id_seq = $1`,
+        [comandaCreada.linies[0]!.id],
+      );
+
+      // Des y Fins son el MISMO día que la línea — antes del fix, Fins se
+      // interpretaba como medianoche de ese día y dejaba afuera las 14:14.
+      const res = await fastify.inject({
+        method: 'GET',
+        url: '/api/v1/comandes?dataProduccioDes=2026-08-28&dataProduccioFins=2026-08-28',
+      });
+
+      const cuerpo = cuerpoJson<RespostaPaginada<ComandaResumApi>>(res);
+      expect(cuerpo.dades.some((c) => c.id === comandaCreada.id)).toBe(true);
+
+      await fastify.close();
+    });
+
+    it('GET /comandes?dataLliuramentDes=&dataLliuramentFins= del MISMO día que dataLliurament (con hora real) matchea', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          dataLliurament: '2026-08-28T14:14:00Z',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const res = await fastify.inject({
+        method: 'GET',
+        url: '/api/v1/comandes?dataLliuramentDes=2026-08-28&dataLliuramentFins=2026-08-28',
+      });
+
+      const cuerpo = cuerpoJson<RespostaPaginada<ComandaResumApi>>(res);
+      expect(cuerpo.dades.some((c) => c.id === comandaCreada.id)).toBe(true);
+
+      await fastify.close();
+    });
+  });
 });

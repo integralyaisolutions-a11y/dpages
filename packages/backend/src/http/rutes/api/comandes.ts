@@ -8,6 +8,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 import { pool } from '../../../db/pool.js';
 import {
+  condicioDataFinsInclusiva,
   construirPaginacio,
   enviarConflicte,
   enviarNoTrobat,
@@ -440,7 +441,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       valors.push(query.dataDes);
     }
     if (typeof query.dataFins === 'string' && query.dataFins !== '') {
-      condicions.push(`c.creat_en <= $${valors.length + 1}`);
+      condicions.push(condicioDataFinsInclusiva('c.creat_en', valors.length + 1));
       valors.push(query.dataFins);
     }
     // Capa 21 — filtra "el pedido tiene AL MENOS UNA línea cuya
@@ -456,7 +457,9 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       valors.push(query.dataProduccioDes);
     }
     if (typeof query.dataProduccioFins === 'string' && query.dataProduccioFins !== '') {
-      condicionsLiniaProduccio.push(`cl2.data_produccio <= $${valors.length + 1}`);
+      condicionsLiniaProduccio.push(
+        condicioDataFinsInclusiva('cl2.data_produccio', valors.length + 1),
+      );
       valors.push(query.dataProduccioFins);
     }
     if (condicionsLiniaProduccio.length > 0) {
@@ -470,7 +473,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       valors.push(query.dataLliuramentDes);
     }
     if (typeof query.dataLliuramentFins === 'string' && query.dataLliuramentFins !== '') {
-      condicions.push(`c.data_lliurament <= $${valors.length + 1}`);
+      condicions.push(condicioDataFinsInclusiva('c.data_lliurament', valors.length + 1));
       valors.push(query.dataLliuramentFins);
     }
     if (typeof query.cerca === 'string' && query.cerca.trim() !== '') {
