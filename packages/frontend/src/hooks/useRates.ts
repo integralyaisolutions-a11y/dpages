@@ -13,7 +13,11 @@ type UseRatesResult = {
   isLoading: boolean;
   error: ApiError | null;
   refetch: () => void;
-  savePrices: (producteId: number, changes: Record<string, string>) => Promise<CellSaveResult[]>;
+  savePrices: (
+    producteId: number,
+    changes: Record<string, string>,
+    deletions: string[],
+  ) => Promise<CellSaveResult[]>;
   createTariff: (codi: string, nom: string) => Promise<void>;
 };
 
@@ -60,26 +64,43 @@ export function useRates(): UseRatesResult {
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 
-  // Una PATCH por celda cambiada (el contrato no soporta guardar toda la
-  // fila de una vez) — Promise.all en vez de fallar rápido: el backend no
+  // Una PATCH por celda cambiada y un DELETE por celda vaciada (capa 28: el
+  // backend ya soporta borrar una fila de tarifa_preu para volver a "sin
+  // precio en esta tarifa") — el contrato no soporta guardar toda la fila
+  // de una vez. Promise.all en vez de fallar rápido: el backend no
   // garantiza atomicidad entre celdas, así que cada una se resuelve
   // independiente y se informa cuál falló, no todo-o-nada.
   const savePrices = useCallback(
-    async (producteId: number, changes: Record<string, string>): Promise<CellSaveResult[]> => {
-      const results = await Promise.all(
-        Object.entries(changes).map(async ([tarifaId, preu]): Promise<CellSaveResult> => {
-          try {
-            await api.patch(`/tarifes/${tarifaId}/preus/${producteId}`, { preu });
-            return { tarifaId, success: true };
-          } catch (caught) {
-            return {
-              tarifaId,
-              success: false,
-              error: caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
-            };
-          }
-        }),
-      );
+    async (
+      producteId: number,
+      changes: Record<string, string>,
+      deletions: string[],
+    ): Promise<CellSaveResult[]> => {
+      const patches = Object.entries(changes).map(async ([tarifaId, preu]): Promise<CellSaveResult> => {
+        try {
+          await api.patch(`/tarifes/${tarifaId}/preus/${producteId}`, { preu });
+          return { tarifaId, success: true };
+        } catch (caught) {
+          return {
+            tarifaId,
+            success: false,
+            error: caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
+          };
+        }
+      });
+      const deletes = deletions.map(async (tarifaId): Promise<CellSaveResult> => {
+        try {
+          await api.delete(`/tarifes/${tarifaId}/preus/${producteId}`);
+          return { tarifaId, success: true };
+        } catch (caught) {
+          return {
+            tarifaId,
+            success: false,
+            error: caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
+          };
+        }
+      });
+      const results = await Promise.all([...patches, ...deletes]);
       refetch();
       return results;
     },

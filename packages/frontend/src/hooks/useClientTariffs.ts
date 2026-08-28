@@ -4,9 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type ClientApi, type RespostaPaginada } from "@/lib/api";
 
 export type ClientFormValues = {
-  // string sólo en alta (codi temporal generado en el modal); null en
-  // edición cuando el cliente no tenía codi — ver ClientFormModal.tsx.
-  codi: string | null;
   nom: string;
   poblacio: string;
   tarifaId: number | null;
@@ -65,12 +62,13 @@ export function useClientTariffs(): UseClientTariffsResult {
 
   const createClient = useCallback(
     async (values: ClientFormValues) => {
-      // POST /clients no acepta tarifaId: null (sólo PATCH tiene esa rama) —
-      // confirmado con curl real: mandarlo explícito da un 400 falso ("la
-      // tarifa no existeix"). "Sense tarifa" en alta = directamente omitir
-      // la clave, no mandarla en null.
+      // codi no se manda: el backend lo autogenera siempre (capa 29), lo
+      // ignoraría igual si viajara. POST /clients tampoco acepta
+      // tarifaId: null (sólo PATCH tiene esa rama) — confirmado con curl
+      // real: mandarlo explícito da un 400 falso ("la tarifa no existeix").
+      // "Sense tarifa" en alta = directamente omitir la clave, no mandarla
+      // en null.
       const cos: Record<string, unknown> = {
-        codi: values.codi,
         nom: values.nom,
         poblacio: values.poblacio,
         nif: values.nif,
@@ -86,9 +84,10 @@ export function useClientTariffs(): UseClientTariffsResult {
 
   const editClient = useCallback(
     async (id: number, values: ClientFormValues) => {
-      // transportistaDefecteId nunca se manda: esta pantalla no lo toca.
+      // codi no se manda: es de sólo lectura para siempre, el backend lo
+      // ignoraría igual (ver PATCH /clients/:id). transportistaDefecteId
+      // tampoco se manda: esta pantalla no lo toca.
       await api.patch<ClientApi>(`/clients/${id}`, {
-        codi: values.codi,
         nom: values.nom,
         poblacio: values.poblacio,
         nif: values.nif,
