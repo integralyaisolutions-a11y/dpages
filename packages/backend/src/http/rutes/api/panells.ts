@@ -388,6 +388,16 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       condicions.push(condicioDataFinsInclusiva('c.data_expedicio', valors.length + 1));
       valors.push(query.dataExpedicioFins);
     }
+    // Capa 37 — mismo criterio que dataExpedicioDes/Fins de arriba, sobre
+    // la fecha de entrega del pedido.
+    if (typeof query.dataLliuramentDes === 'string' && query.dataLliuramentDes !== '') {
+      condicions.push(`c.data_lliurament >= $${valors.length + 1}`);
+      valors.push(query.dataLliuramentDes);
+    }
+    if (typeof query.dataLliuramentFins === 'string' && query.dataLliuramentFins !== '') {
+      condicions.push(condicioDataFinsInclusiva('c.data_lliurament', valors.length + 1));
+      valors.push(query.dataLliuramentFins);
+    }
     const transportistaUuid = await resolverFiltreEntitat(
       reply,
       query.transportistaId,
@@ -406,6 +416,13 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
     if (clientUuid !== undefined) {
       condicions.push(`c.client_id = $${valors.length + 1}`);
       valors.push(clientUuid);
+    }
+    // Capa 37 — coincidencia EXACTA, case-insensitive — regla 3.1
+    // transversal (mismo criterio que ?producte= en /panells/obrador,
+    // /panells/produccio y /rendiments-porcs), no substring.
+    if (typeof query.producte === 'string' && query.producte.trim() !== '') {
+      condicions.push(`LOWER(p.descripcio) = LOWER($${valors.length + 1})`);
+      valors.push(query.producte.trim());
     }
     const where = `WHERE ${condicions.join(' AND ')}`;
 

@@ -632,4 +632,87 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
       await fastify.close();
     });
   });
+
+  // Capa 37 — 2 filtros faltantes en GET /panells/empaquetat, reportados por
+  // Michel. Al final del describe por el mismo motivo que los bloques
+  // anteriores: crea pedidos propios y no debe alterar los totales que
+  // asumen los tests de oficina/empaquetat de más arriba.
+  describe('capa 37 — filtres dataLliuramentDes/Fins i producte a GET /panells/empaquetat', () => {
+    it('filtres ?dataLliuramentDes=/?dataLliuramentFins=: rang complet del dia (capa 36), fora de rang → dades: []', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          dataLliurament: '2026-08-28T14:14:00Z',
+          linies: [{ producteId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const dinsDeRang = cuerpoJson<PanellEmpaquetatApi>(
+        await fastify.inject({
+          method: 'GET',
+          url: '/api/v1/panells/empaquetat?dataLliuramentDes=2026-08-28&dataLliuramentFins=2026-08-28',
+        }),
+      );
+      expect(dinsDeRang.dades.some((f) => f.comandaId === comandaCreada.id)).toBe(true);
+
+      const foraDeRang = cuerpoJson<PanellEmpaquetatApi>(
+        await fastify.inject({
+          method: 'GET',
+          url: '/api/v1/panells/empaquetat?dataLliuramentDes=2026-09-01&dataLliuramentFins=2026-09-30',
+        }),
+      );
+      expect(foraDeRang.dades).toEqual([]);
+
+      await fastify.close();
+    });
+
+    it('filtre ?producte=: coincidència exacta case-insensitive, sense match → dades: []', async () => {
+      const fastify = construirServidor();
+      const producteFiltrat = await entorn.poolTest.query<{ id_seq: string }>(
+        `INSERT INTO producte (codi, descripcio, pes_kg, preu_venda, tipus)
+         VALUES ('CAP37-BOT', 'Botifarra de capa 37', '0.500', '6.20', 'simple')
+         RETURNING id_seq`,
+      );
+      const producteFiltratId = Number(producteFiltrat.rows[0]!.id_seq);
+      await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFiltratId, unitatsDemanades: 1 }],
+        },
+      });
+
+      const perProducteMayus = cuerpoJson<PanellEmpaquetatApi>(
+        await fastify.inject({
+          method: 'GET',
+          url: '/api/v1/panells/empaquetat?producte=BOTIFARRA%20DE%20CAPA%2037',
+        }),
+      );
+      expect(perProducteMayus.dades.length).toBeGreaterThanOrEqual(1);
+      expect(perProducteMayus.dades.every((f) => f.producte === 'Botifarra de capa 37')).toBe(true);
+
+      const perProducteParcial = cuerpoJson<PanellEmpaquetatApi>(
+        await fastify.inject({
+          method: 'GET',
+          url: '/api/v1/panells/empaquetat?producte=Botifarra',
+        }),
+      );
+      expect(perProducteParcial.dades).toEqual([]); // substring no matchea
+
+      const senseMatch = cuerpoJson<PanellEmpaquetatApi>(
+        await fastify.inject({
+          method: 'GET',
+          url: '/api/v1/panells/empaquetat?producte=No%20Existeix',
+        }),
+      );
+      expect(senseMatch.dades).toEqual([]);
+
+      await fastify.close();
+    });
+  });
 });

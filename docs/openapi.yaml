@@ -1032,6 +1032,8 @@ paths:
     get:
       tags: [Panells]
       summary: Panel de empaquetado (única pantalla operativa con edición, vía /lliurament)
+      description: >-
+        Capa 37: 2 filtros nuevos — dataLliuramentDes/Fins y producte.
       parameters:
         - name: dataExpedicioDes
           in: query
@@ -1040,12 +1042,30 @@ paths:
           in: query
           description: Capa 36. Incluye el día completo (hasta las 23:59:59.999 de esa fecha).
           schema: { type: string, format: date }
+        - name: dataLliuramentDes
+          in: query
+          description: Capa 37. Rango sobre dataLliurament.
+          schema: { type: string, format: date }
+        - name: dataLliuramentFins
+          in: query
+          description: >-
+            Capa 37. Rango sobre dataLliurament. Capa 36: incluye el día
+            completo.
+          schema: { type: string, format: date }
         - name: transportistaId
           in: query
           schema: { type: integer }
         - name: clientId
           in: query
           schema: { type: integer }
+        - name: producte
+          in: query
+          description: >-
+            Capa 37. Filtra por producte.descripcio — coincidencia EXACTA,
+            case-insensitive (no substring), regla 3.1 transversal — mismo
+            criterio que GET /panells/obrador, GET /panells/produccio y
+            GET /rendiments-porcs.
+          schema: { type: string }
         - $ref: '#/components/parameters/Pagina'
         - $ref: '#/components/parameters/Mida'
       responses:

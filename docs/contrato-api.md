@@ -1127,10 +1127,17 @@ Filtros: `?dataProduccioDes=&dataProduccioFins=&categoriaId=&tipus=&producte=&fo
 
 **`GET /panells/empaquetat`**
 
-Filtros: `?dataExpedicioDes=&dataExpedicioFins=&transportistaId=&clientId=`
+Filtros: `?dataExpedicioDes=&dataExpedicioFins=&dataLliuramentDes=&dataLliuramentFins=&transportistaId=&clientId=&producte=`
 
-> `dataExpedicioFins` incluye el día completo — ver "Filtros de rango de
-> fecha" en la sección 2 (capa 36).
+> `dataExpedicioFins`/`dataLliuramentFins` incluyen el día completo — ver
+> "Filtros de rango de fecha" en la sección 2 (capa 36).
+>
+> **Filtros nuevos (capa 37):** `dataLliuramentDes`/`dataLliuramentFins`
+> (rango sobre `dataLliurament`, mismo criterio que
+> `dataExpedicioDes`/`Fins`) y `producte` (coincidencia EXACTA
+> case-insensitive contra `producte.descripcio` — regla 3.1 transversal,
+> mismo criterio que `?producte=` en `/panells/obrador`,
+> `/panells/produccio` y `/rendiments-porcs` — no substring).
 
 ```json
 {
