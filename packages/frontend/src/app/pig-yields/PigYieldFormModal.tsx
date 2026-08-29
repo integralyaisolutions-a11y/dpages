@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { DecimalInput } from "@/components/ui/DecimalInput";
 import { Modal } from "@/components/ui/Modal";
 import { SelectFilter } from "@/components/ui/SelectFilter";
-import { TextField } from "@/components/ui/TextField";
 import { useCatalog } from "@/hooks/useCatalog";
 import { useCategories } from "@/hooks/useCategories";
 import { api, ApiError, type RendimentPorcApi, type RendimentPorcEntradaApi, type RespostaPaginada } from "@/lib/api";
@@ -228,22 +228,18 @@ export function PigYieldFormModal({
         </div>
         <div className="flex flex-col gap-4 sm:flex-row">
           <div className="flex-1">
-            <TextField
+            <DecimalInput
               label="Unitats per porc"
-              type="number"
-              step="0.01"
               value={unitsPerPig}
-              onChange={(event) => setUnitsPerPig(event.target.value)}
+              onChange={setUnitsPerPig}
               error={fieldErrors.unitatsPerPorc}
             />
           </div>
           <div className="flex-1">
-            <TextField
+            <DecimalInput
               label="Kg per unitat"
-              type="number"
-              step="0.001"
               value={kgPerUnit}
-              onChange={(event) => setKgPerUnit(event.target.value)}
+              onChange={setKgPerUnit}
               error={fieldErrors.kgPerUnitat}
             />
           </div>

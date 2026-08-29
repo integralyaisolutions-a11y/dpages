@@ -3,11 +3,11 @@
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { DataCard, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
-import { useMockOrdersDetail } from "@/hooks/useMockOrdersDetail";
-import type { ComandaLiniaApi } from "@/lib/api";
+import { api, ApiError, type ComandaDetallApi, type ComandaLiniaApi } from "@/lib/api";
 import { formatData } from "@/lib/dates";
 import { formatDecimal } from "@/lib/decimals";
 
@@ -70,10 +70,42 @@ function OrderLineCard({ line }: { line: ComandaLiniaApi }) {
 }
 
 export default function OfficeOrderDetailPage() {
-  const params = useParams<{ number: string }>();
-  const { data: orders, isLoading, error } = useMockOrdersDetail();
+  const params = useParams<{ id: string }>();
 
-  const order = orders.find((item) => item.num === params.number);
+  const [order, setOrder] = useState<ComandaDetallApi | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<ApiError | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+
+  // Mateix criteri que orders/[id]/page.tsx: es demana per id directe (GET
+  // /comandes/:id) — Panell Oficina és sólo lectura, no fa falta cap
+  // mutation acá, però la pantalla comparteix el mateix endpoint ja
+  // connectat.
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    setLoadError(null);
+
+    api
+      .get<ComandaDetallApi>(`/comandes/${params.id}`)
+      .then((resposta) => {
+        if (!cancelled) setOrder(resposta);
+      })
+      .catch((caught) => {
+        if (!cancelled) {
+          setLoadError(
+            caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [params.id, reloadToken]);
 
   return (
     <div>
@@ -85,13 +117,21 @@ export default function OfficeOrderDetailPage() {
           <ArrowLeft className="h-4 w-4" />
           Tornar
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900 lg:text-3xl">Comanda {params.number}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 lg:text-3xl">Comanda {order?.num ?? params.id}</h1>
       </div>
 
       {isLoading && <p className="text-sm text-gray-500">Carregant...</p>}
-      {error && <p className="text-sm text-red-600">No s&apos;ha pogut carregar la comanda.</p>}
-      {!isLoading && !error && !order && (
-        <p className="text-sm text-gray-500">No s&apos;ha trobat la comanda {params.number}.</p>
+      {loadError && (
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm text-red-600">No s&apos;ha pogut carregar la comanda: {loadError.message}</p>
+          <button
+            type="button"
+            onClick={() => setReloadToken((token) => token + 1)}
+            className="shrink-0 rounded-full border border-red-300 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+          >
+            Reintentar
+          </button>
+        </div>
       )}
 
       {order && (
@@ -112,14 +152,14 @@ export default function OfficeOrderDetailPage() {
               <Field label="Població de destí" value={order.poblacioDesti || "—"} />
               <Field label="Tarifa" value={order.tarifa?.nom ?? "—"} />
               <Field label="Transportista" value={order.transportista?.nom ?? "—"} />
-              <Field label="Data comanda" value={formatData(order.dataComanda, false)} />
+              <Field label="Data comanda" value={formatData(order.dataComanda, true)} />
               <Field
                 label="Data lliurament"
-                value={order.dataLliurament ? formatData(order.dataLliurament, true) : "—"}
+                value={order.dataLliurament ? formatData(order.dataLliurament, false) : "—"}
               />
               <Field
                 label="Data expedició"
-                value={order.dataExpedicio ? formatData(order.dataExpedicio, true) : "—"}
+                value={order.dataExpedicio ? formatData(order.dataExpedicio, false) : "—"}
               />
               <Field label="Núm. bultos" value={order.bultos ?? "—"} />
             </div>

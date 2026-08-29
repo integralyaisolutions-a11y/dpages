@@ -67,7 +67,6 @@ function PigYieldRow({
         <EditableCell
           value={draft.unitsPerPig}
           formatValue={formatUnits}
-          step="0.01"
           onChange={(value) => setField("unitsPerPig", value ?? 0)}
         />
       </td>
@@ -75,7 +74,6 @@ function PigYieldRow({
         <EditableCell
           value={draft.kgPerUnit}
           formatValue={formatKg}
-          step="0.001"
           onChange={(value) => setField("kgPerUnit", value ?? 0)}
         />
       </td>
@@ -145,7 +143,6 @@ function PigYieldCard({
           <EditableCell
             value={draft.unitsPerPig}
             formatValue={formatUnits}
-            step="0.01"
             onChange={(value) => setField("unitsPerPig", value ?? 0)}
           />
         </div>
@@ -154,7 +151,6 @@ function PigYieldCard({
           <EditableCell
             value={draft.kgPerUnit}
             formatValue={formatKg}
-            step="0.001"
             onChange={(value) => setField("kgPerUnit", value ?? 0)}
           />
         </div>

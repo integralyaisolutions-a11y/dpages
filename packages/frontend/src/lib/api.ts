@@ -38,6 +38,15 @@ export type {
   RendimentPorcEntradaApi,
   UsuariApi,
   RespostaPaginada,
+  PanellOficinaApi,
+  FilaPanellOficinaApi,
+  TotalsPanellOficinaApi,
+  PanellObradorApi,
+  FilaPanellObradorApi,
+  TotalsPanellObradorApi,
+  PanellEmpaquetatApi,
+  FilaPanellEmpaquetatApi,
+  TotalsPanellEmpaquetatApi,
 } from "@dpages/shared";
 
 // UserApi/UserRole son EXCLUSIVOS del mock de /users (administració
