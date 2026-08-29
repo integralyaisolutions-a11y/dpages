@@ -47,6 +47,8 @@ export type {
   PanellEmpaquetatApi,
   FilaPanellEmpaquetatApi,
   TotalsPanellEmpaquetatApi,
+  PanellProduccioApi,
+  PanellProduccioFilaApi,
 } from "@dpages/shared";
 
 // UserApi/UserRole son EXCLUSIVOS del mock de /users (administració

@@ -6,10 +6,10 @@ import { DataCard, DataCardActions, DataCardField, DataCardGrid } from "@/compon
 import { DateInput } from "@/components/ui/DateInput";
 import { DecimalInput } from "@/components/ui/DecimalInput";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { StatCard } from "@/components/ui/StatCard";
 import { useCarriers } from "@/hooks/useCarriers";
+import { useCatalog } from "@/hooks/useCatalog";
 import { useClientTariffs } from "@/hooks/useClientTariffs";
 import { useEditableRow } from "@/hooks/useEditableRow";
 import { type LliuramentSaveResult, usePanellEmpaquetat } from "@/hooks/usePanellEmpaquetat";
@@ -38,7 +38,7 @@ function PackagingRow({
   const [isSaving, setIsSaving] = useState(false);
 
   const initialValues: Draft = {
-    unitatsLliurades: String(line.unitatsLliurades),
+    unitatsLliurades: line.unitatsLliurades,
     kgLliurats: line.kgLliurats,
   };
 
@@ -46,7 +46,7 @@ function PackagingRow({
     // El PATCH exigeix els dos camps sempre junts (contrato §5) — encara
     // que la fila només hagi tocat un dels dos, es manda el valor actual
     // del que no es va tocar més el nou de l'altre.
-    const unitatsLliurades = Number(values.unitatsLliurades.replace(",", "."));
+    const unitatsLliurades = Number(values.unitatsLliurades);
     const kgLliurats = parseDecimalInput(values.kgLliurats, 3);
 
     setIsSaving(true);
@@ -74,13 +74,11 @@ function PackagingRow({
         <span className="font-semibold text-gray-900">{line.producte}</span>
       </td>
       <td className="px-3 py-3 break-words text-gray-900">{line.client ?? "—"}</td>
-      <td className="px-3 py-3 text-right text-gray-900">{line.unitatsDemanades}</td>
+      <td className="px-3 py-3 text-right text-gray-900">{formatDecimal(line.unitatsDemanades, 2)}</td>
       <td className="px-3 py-3">
-        <input
-          type="number"
-          step="1"
+        <DecimalInput
           value={draft.unitatsLliurades}
-          onChange={(event) => setField("unitatsLliurades", event.target.value)}
+          onChange={(value) => setField("unitatsLliurades", value)}
           className="w-full rounded-md border border-gray-300 px-2 py-1 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
         />
         {fieldErrors.unitatsLliurades && <p className="mt-1 text-xs text-red-600">{fieldErrors.unitatsLliurades}</p>}
@@ -123,12 +121,12 @@ function PackagingCard({
   const [isSaving, setIsSaving] = useState(false);
 
   const initialValues: Draft = {
-    unitatsLliurades: String(line.unitatsLliurades),
+    unitatsLliurades: line.unitatsLliurades,
     kgLliurats: line.kgLliurats,
   };
 
   const { draft, setField, save, isDirty } = useEditableRow(initialValues, async (values) => {
-    const unitatsLliurades = Number(values.unitatsLliurades.replace(",", "."));
+    const unitatsLliurades = Number(values.unitatsLliurades);
     const kgLliurats = parseDecimalInput(values.kgLliurats, 3);
 
     setIsSaving(true);
@@ -157,7 +155,7 @@ function PackagingCard({
             {line.dataLliurament ? formatData(line.dataLliurament, false) : "—"}
           </DataCardField>
           <DataCardField label="Transportista">{line.transportista ?? "—"}</DataCardField>
-          <DataCardField label="Unitats demanades">{line.unitatsDemanades}</DataCardField>
+          <DataCardField label="Unitats demanades">{formatDecimal(line.unitatsDemanades, 2)}</DataCardField>
           <DataCardField label="Kilos demanats">{formatDecimal(line.kgDemanats, 3)}</DataCardField>
         </DataCardGrid>
       </div>
@@ -165,11 +163,9 @@ function PackagingCard({
       <div className="mt-3 grid grid-cols-2 gap-3">
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-xs text-gray-500">Unitats lliurades</span>
-          <input
-            type="number"
-            step="1"
+          <DecimalInput
             value={draft.unitatsLliurades}
-            onChange={(event) => setField("unitatsLliurades", event.target.value)}
+            onChange={(value) => setField("unitatsLliurades", value)}
             className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
           />
           {fieldErrors.unitatsLliurades && <p className="text-xs text-red-600">{fieldErrors.unitatsLliurades}</p>}
@@ -205,18 +201,19 @@ function PackagingCard({
 export default function PackagingPage() {
   const { data: clients } = useClientTariffs();
   const { data: carriers } = useCarriers();
+  const { data: catalog } = useCatalog();
 
   const [shippingDateFilter, setShippingDateFilter] = useState("");
   const [carrierFilter, setCarrierFilter] = useState(ALL);
   const [clientFilter, setClientFilter] = useState(ALL);
-
-  // "Data de lliurament" i "Producte" — visibles al mockup però SENSE
-  // suport al backend (GET /panells/empaquetat no els accepta com a
-  // filtre, confirmat contra panells.ts). Queden com a estat local pur,
-  // sense cap lògica de filtratge ni missatge inventat, mateix criteri ja
-  // aplicat a Oficina.
+  // Capa 37 — dataLliuramentDes/Fins (rang) i producte (exacte,
+  // case-insensitive) ja tenen suport real al backend. Mateix patró que
+  // "Data d'expedició" (un sol camp, enviat com Des=Fins=mateix valor) i
+  // que el select de producte d'Obrador/Producció (exacte, no substring —
+  // per això és un SelectFilter i no el SearchInput de lupa del mockup
+  // original).
   const [deliveryDateFilter, setDeliveryDateFilter] = useState("");
-  const [productSearch, setProductSearch] = useState("");
+  const [productFilter, setProductFilter] = useState(ALL);
 
   const carrierId = useMemo(
     () => (carrierFilter !== ALL ? carriers.find((item) => item.nom === carrierFilter)?.id : undefined),
@@ -226,14 +223,22 @@ export default function PackagingPage() {
     () => (clientFilter !== ALL ? clients.find((item) => clientLabel(item) === clientFilter)?.id : undefined),
     [clientFilter, clients],
   );
+  const productOptions = useMemo(
+    () => [ALL, ...Array.from(new Set(catalog.map((product) => product.descripcio))).sort()],
+    [catalog],
+  );
 
   const filters = useMemo(
     () => ({
       ...(shippingDateFilter ? { dataExpedicioDes: shippingDateFilter, dataExpedicioFins: shippingDateFilter } : {}),
       ...(carrierId !== undefined ? { transportistaId: carrierId } : {}),
       ...(clientId !== undefined ? { clientId } : {}),
+      ...(deliveryDateFilter
+        ? { dataLliuramentDes: deliveryDateFilter, dataLliuramentFins: deliveryDateFilter }
+        : {}),
+      ...(productFilter !== ALL ? { producte: productFilter } : {}),
     }),
-    [shippingDateFilter, carrierId, clientId],
+    [shippingDateFilter, carrierId, clientId, deliveryDateFilter, productFilter],
   );
 
   const { data, totals, isLoading, error, refetch, saveLliurament } = usePanellEmpaquetat(filters);
@@ -243,7 +248,7 @@ export default function PackagingPage() {
     setCarrierFilter(ALL);
     setClientFilter(ALL);
     setDeliveryDateFilter("");
-    setProductSearch("");
+    setProductFilter(ALL);
   }
 
   async function handleSave(comandaId: number, liniaId: number, unitatsLliurades: number, kgLliurats: string) {
@@ -257,10 +262,7 @@ export default function PackagingPage() {
         subtitle="Línies de comanda per a la planificació d'empaquetat."
         right={
           <div className="flex gap-3">
-            <StatCard
-              label="TOTAL UNITATS VISIBLES"
-              value={totals?.unitatsDemanades ?? 0}
-            />
+            <StatCard label="TOTAL UNITATS VISIBLES" value={formatDecimal(totals?.unitatsDemanades ?? null, 2)} />
             <StatCard
               label="TOTAL LÍNIES"
               value={totals?.linies ?? 0}
@@ -279,7 +281,7 @@ export default function PackagingPage() {
           value={carrierFilter}
           onChange={setCarrierFilter}
         />
-        <SearchInput label="Producte" value={productSearch} onChange={setProductSearch} />
+        <SelectFilter label="Producte" options={productOptions} value={productFilter} onChange={setProductFilter} />
         <SelectFilter
           label="Client"
           options={[ALL, ...clients.map((item) => clientLabel(item))]}

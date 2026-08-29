@@ -45,8 +45,8 @@ function OrderLineCard({ line }: { line: ComandaLiniaApi }) {
 
       <div className="mt-3">
         <DataCardGrid>
-          <DataCardField label="Unitats demanades">{line.unitatsDemanades}</DataCardField>
-          <DataCardField label="Unitats lliurades">{line.unitatsLliurades}</DataCardField>
+          <DataCardField label="Unitats demanades">{formatDecimal(line.unitatsDemanades, 2)}</DataCardField>
+          <DataCardField label="Unitats lliurades">{formatDecimal(line.unitatsLliurades, 2)}</DataCardField>
           <DataCardField label="Pes demanat (kg)">{formatKg(line.kgDemanats)}</DataCardField>
           <DataCardField label="Pes lliurat (kg)">{formatKg(line.kgLliurats)}</DataCardField>
           <DataCardField label="Preu unitari">{formatPrice(line.preuUnitari)}</DataCardField>
@@ -205,8 +205,8 @@ export default function OfficeOrderDetailPage() {
                         {line.producte ? `${line.producte.codi ?? line.producte.id} · ${line.producte.descripcio}` : "—"}
                       </td>
                       <td className="px-3 py-2 break-words text-gray-500">{line.format ?? "—"}</td>
-                      <td className="px-3 py-2 text-right text-gray-900">{line.unitatsDemanades}</td>
-                      <td className="px-3 py-2 text-right text-gray-900">{line.unitatsLliurades}</td>
+                      <td className="px-3 py-2 text-right text-gray-900">{formatDecimal(line.unitatsDemanades, 2)}</td>
+                      <td className="px-3 py-2 text-right text-gray-900">{formatDecimal(line.unitatsLliurades, 2)}</td>
                       <td className="px-3 py-2 text-right text-gray-900">{formatKg(line.kgDemanats)}</td>
                       <td className="px-3 py-2 text-right text-gray-900">{formatKg(line.kgLliurats)}</td>
                       <td className="px-3 py-2 text-right text-gray-900">{formatPrice(line.preuUnitari)}</td>

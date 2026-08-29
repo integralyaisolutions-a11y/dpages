@@ -18,6 +18,7 @@ import type {
   TarifaResumApi,
   TransportistaApi,
 } from "@/lib/api";
+import { formatDecimal } from "@/lib/decimals";
 import { calculateOrderedWeightKg } from "@/lib/orderCalculations";
 
 const NO_CLIENT = "Selecciona client...";
@@ -69,10 +70,10 @@ function createEmptyLine(ordinal: number): LineDraft {
     categoria: null,
     format: null,
     envasat: null,
-    unitatsDemanades: 0,
+    unitatsDemanades: "0",
     kgDemanats: "0.000",
     kgEditable: true,
-    unitatsLliurades: 0,
+    unitatsLliurades: "0",
     kgLliurats: "0.000",
     confirmatA: null,
     // El backend calcula preuUnitari/totalLinia al crear la línia
@@ -98,7 +99,9 @@ function createEmptyLine(ordinal: number): LineDraft {
 function toLiniaCreacio(line: LineDraft): LiniaCreacioApi {
   return {
     producteId: line.producte!.id,
-    unitatsDemanades: line.unitatsDemanades,
+    // Capa 38 — LineDraft.unitatsDemanades és string (NUMERIC(10,2) al
+    // GET), però el body de POST/PATCH segueix esperant un JS number.
+    unitatsDemanades: Number(line.unitatsDemanades),
     kgDemanats: line.kgEditable ? line.kgDemanats : undefined,
     dataProduccio: line.dataProduccio,
   };
@@ -107,7 +110,7 @@ function toLiniaCreacio(line: LineDraft): LiniaCreacioApi {
 /** Línia existent → shape de PATCH .../linies/:liniaId (capa 30) — mai inclou producteId ni preuUnitari. */
 function toLiniaEdicio(line: LineDraft): LiniaEdicioApi {
   return {
-    unitatsDemanades: line.unitatsDemanades,
+    unitatsDemanades: Number(line.unitatsDemanades),
     kgDemanats: line.kgEditable ? line.kgDemanats : undefined,
     dataProduccio: line.dataProduccio,
     obsProduccio: line.obsProduccio || null,
@@ -181,7 +184,7 @@ function applyProduct(line: LineDraft, product: ProducteApi | undefined): LineDr
   if (!product) {
     return { ...line, producte: null, categoria: null, format: null, envasat: null, kgEditable: true };
   }
-  const orderedWeight = calculateOrderedWeightKg(line.unitatsDemanades, product);
+  const orderedWeight = calculateOrderedWeightKg(Number(line.unitatsDemanades), product);
   return {
     ...line,
     producte: { id: product.id, codi: product.codi, descripcio: product.descripcio },
@@ -274,15 +277,13 @@ function LineFormCard({
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-xs text-gray-500">Unitats demanades</span>
-          <input
-            type="number"
+          <DecimalInput
             disabled={disabled}
             value={line.unitatsDemanades}
-            onChange={(event) => {
-              const unitatsDemanades = Number(event.target.value);
-              const recalculated = calculateOrderedWeightKg(unitatsDemanades, product);
+            onChange={(value) => {
+              const recalculated = calculateOrderedWeightKg(Number(value), product);
               onUpdate({
-                unitatsDemanades,
+                unitatsDemanades: value,
                 kgDemanats:
                   !line.kgEditable && recalculated.isCalculated ? recalculated.value.toFixed(3) : line.kgDemanats,
               });
@@ -296,7 +297,7 @@ function LineFormCard({
         <div className="flex flex-col gap-1 text-sm">
           <span className="text-xs text-gray-500">Unitats lliurades</span>
           <span className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-right text-gray-500">
-            {line.unitatsLliurades}
+            {formatDecimal(line.unitatsLliurades, 2)}
           </span>
         </div>
         <label className="flex flex-col gap-1 text-sm">
@@ -495,7 +496,7 @@ export const OrderForm = forwardRef<
 
       setError(null);
 
-      const validLines = lines.filter((line) => line.producte !== null && line.unitatsDemanades > 0);
+      const validLines = lines.filter((line) => line.producte !== null && Number(line.unitatsDemanades) > 0);
 
       // Capa 30 — en edición, las línias nuevas/editadas se guardan por su
       // propio endpoint (POST/PATCH .../linies), nunca embebidas en el
@@ -776,15 +777,13 @@ export const OrderForm = forwardRef<
                       {lineDateError && <p className="mt-1 text-xs text-red-600">{lineDateError}</p>}
                     </td>
                     <td className="px-1.5 py-2">
-                      <input
-                        type="number"
+                      <DecimalInput
                         disabled={isFrozen}
                         value={line.unitatsDemanades}
-                        onChange={(event) => {
-                          const unitatsDemanades = Number(event.target.value);
-                          const recalculated = calculateOrderedWeightKg(unitatsDemanades, product);
+                        onChange={(value) => {
+                          const recalculated = calculateOrderedWeightKg(Number(value), product);
                           updateLine(line.id, {
-                            unitatsDemanades,
+                            unitatsDemanades: value,
                             kgDemanats:
                               !line.kgEditable && recalculated.isCalculated
                                 ? recalculated.value.toFixed(3)
@@ -795,7 +794,7 @@ export const OrderForm = forwardRef<
                       />
                     </td>
                     {/* Sólo lectura: ver nota de Unitats/Pes lliurades en LineFormCard. */}
-                    <td className="px-1.5 py-2 text-right text-gray-500">{line.unitatsLliurades}</td>
+                    <td className="px-1.5 py-2 text-right text-gray-500">{formatDecimal(line.unitatsLliurades, 2)}</td>
                     <td className="px-1.5 py-2">
                       {!line.kgEditable ? (
                         <input

@@ -1,45 +1,71 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import type { CategoriaApi, ComandaDetallApi, ProducteApi, RendimentPorcApi } from "@/lib/api";
-import { buildProductionRow, findMatchingProduct, type ProductionMode, type ProductionRow } from "@/lib/productionCalculations";
-import { getMockCatalog } from "@/mocks/catalog";
-import { getMockCategories } from "@/mocks/categories";
-import { getMockOrders } from "@/mocks/orders";
-import { getMockPigYields } from "@/mocks/pigYields";
+import { useEffect, useState } from "react";
+import { api, ApiError, type PanellProduccioApi, type PanellProduccioFilaApi } from "@/lib/api";
 
-type UseProductionPanellResult = {
-  rows: ProductionRow[];
-  isLoading: boolean;
-  error: Error | null;
+/**
+ * Els filtres reals de GET /panells/produccio (confirmat contra
+ * panells.ts) — OJO: els paràmetres de data acá són `dataDes`/`dataFins`,
+ * no `dataProduccioDes`/`dataProduccioFins` com a la resta de panells.
+ * `nombrePorcs` és obligatori pel backend (400 sense ell) — el hook no fa
+ * el fetch si no és un número > 0, ver `isReady` més avall.
+ */
+export type ProductionPanelFilters = {
+  nombrePorcs: number | null;
+  agrupacioRendiment?: string;
+  producte?: string;
+  dataDes?: string;
+  dataFins?: string;
 };
 
-export function useProductionPanell(
-  pigsToProduce: number,
-  dateFrom: string,
-  dateTo: string,
-): UseProductionPanellResult {
-  const [pigYields, setPigYields] = useState<RendimentPorcApi[]>([]);
-  const [categories, setCategories] = useState<CategoriaApi[]>([]);
-  const [products, setProducts] = useState<ProducteApi[]>([]);
-  const [orders, setOrders] = useState<ComandaDetallApi[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+type UseProductionPanellResult = {
+  data: PanellProduccioFilaApi[];
+  totals: PanellProduccioApi["totals"] | null;
+  isLoading: boolean;
+  error: ApiError | null;
+  refetch: () => void;
+  /** false mentre nombrePorcs no sigui un valor vàlid > 0 — encara no s'ha fet cap fetch. */
+  isReady: boolean;
+};
+
+const MIDA_LLISTAT = 200;
+
+export function useProductionPanell(filters: ProductionPanelFilters): UseProductionPanellResult {
+  const [data, setData] = useState<PanellProduccioFilaApi[]>([]);
+  const [totals, setTotals] = useState<PanellProduccioApi["totals"] | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<ApiError | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+
+  const isReady = filters.nombrePorcs !== null && filters.nombrePorcs > 0;
+  const filtersKey = JSON.stringify(filters);
 
   useEffect(() => {
-    let cancelled = false;
+    if (!isReady) {
+      setData([]);
+      setTotals(null);
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
 
-    Promise.all([getMockPigYields(), getMockCategories(), getMockCatalog(), getMockOrders()])
-      .then(([fetchedPigYields, fetchedCategories, fetchedProducts, fetchedOrders]) => {
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+
+    const { nombrePorcs, ...rest } = filters;
+    api
+      .get<PanellProduccioApi>("/panells/produccio", { mida: MIDA_LLISTAT, nombrePorcs: nombrePorcs!, ...rest })
+      .then((resposta) => {
         if (!cancelled) {
-          setPigYields(fetchedPigYields);
-          setCategories(fetchedCategories);
-          setProducts(fetchedProducts);
-          setOrders(fetchedOrders);
+          setData(resposta.dades);
+          setTotals(resposta.totals);
         }
       })
       .catch((caught) => {
-        if (!cancelled) setError(caught instanceof Error ? caught : new Error(String(caught)));
+        if (!cancelled) {
+          setError(caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null));
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -48,25 +74,10 @@ export function useProductionPanell(
     return () => {
       cancelled = true;
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadToken, filtersKey, isReady]);
 
-  const rows = useMemo(
-    () =>
-      pigYields.map((pigYield) => {
-        const mode: ProductionMode =
-          pigYield.agrupacioRendiment === "MAGRE" ||
-          pigYield.agrupacioRendiment === "KG" ||
-          pigYield.agrupacioRendiment === "PAQ"
-            ? pigYield.agrupacioRendiment
-            : null;
-        const matchedProduct =
-          mode === "KG" || mode === "PAQ"
-            ? findMatchingProduct(pigYield.agrupacioProduccio ?? "", products)
-            : undefined;
-        return buildProductionRow(pigYield, mode, pigsToProduce, matchedProduct, orders, categories, dateFrom, dateTo);
-      }),
-    [pigYields, categories, products, orders, pigsToProduce, dateFrom, dateTo],
-  );
+  const refetch = () => setReloadToken((token) => token + 1);
 
-  return { rows, isLoading, error };
+  return { data, totals, isLoading, error, refetch, isReady };
 }

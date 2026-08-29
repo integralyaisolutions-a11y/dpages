@@ -34,7 +34,7 @@ function WorkshopCard({ line }: { line: FilaPanellObradorApi }) {
           <DataCardField label="Data producció">
             {line.dataProduccio ? formatData(line.dataProduccio, false) : "—"}
           </DataCardField>
-          <DataCardField label="Unitats">{line.unitats}</DataCardField>
+          <DataCardField label="Unitats">{formatDecimal(line.unitats, 2)}</DataCardField>
           <DataCardField label="Pes (kg)">{formatDecimal(line.kg, 3)}</DataCardField>
         </DataCardGrid>
       </div>
@@ -92,7 +92,7 @@ export default function WorkshopPage() {
             <StatCard
               label="TOTAL KG VISIBLES"
               value={formatDecimal(totals?.totalKg ?? null, 3)}
-              secondary={`${totals?.totalUnitats ?? 0} unitats`}
+              secondary={`${formatDecimal(totals?.totalUnitats ?? null, 2)} unitats`}
             />
             <StatCard label="TOTAL LÍNIES" value={totals?.linies ?? 0} />
           </div>
@@ -159,7 +159,7 @@ export default function WorkshopPage() {
                     <td className="px-3 py-3 break-words text-gray-900">
                       {line.dataProduccio ? formatData(line.dataProduccio, false) : "—"}
                     </td>
-                    <td className="px-3 py-3 text-right text-gray-900">{line.unitats}</td>
+                    <td className="px-3 py-3 text-right text-gray-900">{formatDecimal(line.unitats, 2)}</td>
                     <td className="px-3 py-3 text-right text-gray-900">{formatDecimal(line.kg, 3)}</td>
                     <td className="px-3 py-3 break-words text-gray-900">{line.obsProduccio ?? ""}</td>
                   </tr>

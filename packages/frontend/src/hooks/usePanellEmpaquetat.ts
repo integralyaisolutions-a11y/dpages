@@ -11,15 +11,18 @@ import {
 } from "@/lib/api";
 
 /**
- * Els 3 filtres reals de GET /panells/empaquetat (confirmat contra
- * panells.ts) — "Data de lliurament" i "Producte" existeixen al mockup
- * però no al backend, no es passen mai acá.
+ * Els 5 filtres reals de GET /panells/empaquetat (confirmat contra
+ * panells.ts) — dataLliuramentDes/Fins i producte són capa 37, abans no
+ * tenien suport al backend.
  */
 export type PackagingPanelFilters = {
   dataExpedicioDes?: string;
   dataExpedicioFins?: string;
   transportistaId?: number;
   clientId?: number;
+  dataLliuramentDes?: string;
+  dataLliuramentFins?: string;
+  producte?: string;
 };
 
 /**
