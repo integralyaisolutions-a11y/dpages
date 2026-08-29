@@ -37,6 +37,9 @@ export type {
   RendimentPorcApi,
   RendimentPorcEntradaApi,
   UsuariApi,
+  UsuariCreacioApi,
+  UsuariCreatRespostaApi,
+  RolApi,
   RespostaPaginada,
   PanellOficinaApi,
   FilaPanellOficinaApi,
@@ -50,29 +53,6 @@ export type {
   PanellProduccioApi,
   PanellProduccioFilaApi,
 } from "@dpages/shared";
-
-// UserApi/UserRole son EXCLUSIVOS del mock de /users (administració
-// d'usuaris) — esa pantalla completa quedó fuera del alcance de la tarea 5
-// de esta sesión a propósito (CRUD contra un modelo de 4 roles fijos que no
-// existe en el backend real, que sólo tiene "Administrador"/"General" +
-// `modulsPermesos`; ver AUDITORIA_FRONTEND.md §3 y §8, hallazgo crítico).
-// La sesión autenticada real (hooks/useAuth.tsx) usa `UsuariApi` de
-// @dpages/shared, resuelto vía `GET /jo` — no este tipo. `password` en
-// texto plano sigue acá sólo porque el login mock de /users todavía no se
-// migró; nunca debe existir en `UsuariApi` ni viajar en un request real.
-export type UserRole = "office" | "workshop" | "packaging" | "production";
-
-export type UserApi = {
-  id: string;
-  name: string;
-  email: string;
-  // Mock en texto plano, solo para simular el login localmente; nunca se
-  // expone en listados. TODO: eliminar este campo cuando la autenticación
-  // pase a Firebase Auth real.
-  password: string;
-  role: UserRole;
-  status: "active" | "inactive";
-};
 
 // ── Cliente HTTP ────────────────────────────────────────────────────────
 

@@ -1,12 +1,10 @@
-import type { UserRole } from "@/lib/api";
-
 // ── Ruteo real, por mòdul (hooks/useAuth.tsx) ────────────────────────────
 //
-// El backend real no tiene los 4 roles fijos de abajo (ROLE_ROUTES) — tiene
-// dos roles ("Administrador"/"General") con un array `modulsPermesos` por
-// usuario (contrato §4.12, ADR-021). Esta sección reemplaza a la de abajo
-// para la sesión autenticada real; ROLE_ROUTES/ROLE_LABELS quedan sólo para
-// el mock de `/users` (fuera de alcance de esta sesión, ver lib/api.ts).
+// El backend real tiene dos roles sembrados ("Administrador"/"General") con
+// un array `modulsPermesos` por usuario (contrato §4.12, ADR-021) — la
+// pantalla /users (hooks/useUsers.ts, hooks/useRols.ts) gestiona roles
+// reales contra este mismo modelo, no hay ningún concepto de "rol fijo"
+// separado.
 //
 // Nota de negocio sin resolver (AUDITORIA_FRONTEND.md §1 y §9): el backend
 // documentó explícitamente que NINGÚN endpoint debería restringir acceso
@@ -45,38 +43,37 @@ export function isModuleRouteAllowed(modulsPermesos: string[], pathname: string)
   );
 }
 
-// ── Mock legado de `/users` (fuera de alcance, ver lib/api.ts) ──────────
+// ── Els 12 mòduls reals (migració 0014_usuaris_i_rols.up.sql, confirmat) ──
+//
+// "rols" no té ruta pròpia (viu dins de /users, mateixa pantalla que
+// "usuaris") — per això no és a MODUL_ROUTES, però sí és un mòdul real que
+// es pot assignar a un rol.
+export const MODULS_VALIDS = [
+  "categories",
+  "catalog",
+  "tarifes",
+  "tarifes-clients",
+  "comandes",
+  "rendiments-porcs",
+  "panell-oficina",
+  "panell-obrador",
+  "panell-empaquetat",
+  "panell-produccio",
+  "usuaris",
+  "rols",
+] as const;
 
-export const ROLE_ROUTES: Record<UserRole, string[]> = {
-  office: ["/rates", "/client-tariffs", "/orders", "/office"],
-  workshop: ["/workshop"],
-  packaging: ["/packaging"],
-  production: [
-    "/categories",
-    "/catalog",
-    "/rates",
-    "/client-tariffs",
-    "/orders",
-    "/pig-yields",
-    "/office",
-    "/workshop",
-    "/packaging",
-    "/production",
-    "/users",
-  ],
+export const MODUL_LABELS: Record<string, string> = {
+  categories: "Categories",
+  catalog: "Catàleg",
+  tarifes: "Tarifes",
+  "tarifes-clients": "Tarifes de clients",
+  comandes: "Comandes",
+  "rendiments-porcs": "Rendiments de porcs",
+  "panell-oficina": "Panell d'Oficina",
+  "panell-obrador": "Panell d'Obrador",
+  "panell-empaquetat": "Panell d'Empaquetat",
+  "panell-produccio": "Panell de Producció",
+  usuaris: "Usuaris",
+  rols: "Rols",
 };
-
-export const ROLE_LABELS: Record<UserRole, string> = {
-  office: "Oficina",
-  workshop: "Obrador",
-  packaging: "Empaquetat",
-  production: "Producció",
-};
-
-export function firstAllowedRoute(role: UserRole): string {
-  return ROLE_ROUTES[role][0];
-}
-
-export function isRouteAllowed(role: UserRole, pathname: string): boolean {
-  return ROLE_ROUTES[role].some((route) => pathname === route || pathname.startsWith(`${route}/`));
-}

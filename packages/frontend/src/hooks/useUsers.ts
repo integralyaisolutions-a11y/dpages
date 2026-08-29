@@ -1,41 +1,56 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { UserApi } from "@/lib/api";
-import { createMockUser, deleteMockUser, getMockUsers, updateMockUser } from "@/mocks/users";
+import {
+  api,
+  ApiError,
+  type RespostaPaginada,
+  type UsuariApi,
+  type UsuariCreatRespostaApi,
+} from "@/lib/api";
 
-export type UserFormValues = {
-  name: string;
-  email: string;
-  role: UserApi["role"];
-  status: UserApi["status"];
-  // Buit en mode edit vol dir "no canviar la contrasenya actual".
-  password: string;
+export type UserFilters = {
+  actiu?: boolean;
 };
+
+export type CreateUserInput = { nom: string; email: string; rolId: number };
+export type EditUserInput = Partial<{ nom: string; rolId: number; actiu: boolean }>;
 
 type UseUsersResult = {
-  data: UserApi[];
+  data: UsuariApi[];
   isLoading: boolean;
-  error: Error | null;
-  createUser: (values: UserFormValues) => void;
-  editUser: (id: string, values: UserFormValues) => void;
-  deleteUser: (id: string) => void;
+  error: ApiError | null;
+  refetch: () => void;
+  createUser: (input: CreateUserInput) => Promise<UsuariCreatRespostaApi>;
+  editUser: (id: number, input: EditUserInput) => Promise<UsuariApi>;
 };
 
-export function useUsers(): UseUsersResult {
-  const [data, setData] = useState<UserApi[]>([]);
+// GET /usuaris pagina (contrato §4.12) — el volum real (equip de ~10
+// persones) cap sobradament sota el màxim de pàgina (200), mateix criteri
+// que Categories/Tarifes/Transportistes.
+const MIDA_LLISTAT = 200;
+
+export function useUsers(filters: UserFilters = {}): UseUsersResult {
+  const [data, setData] = useState<UsuariApi[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+  const filtersKey = JSON.stringify(filters);
 
   useEffect(() => {
     let cancelled = false;
+    setIsLoading(true);
+    setError(null);
 
-    getMockUsers()
-      .then((users) => {
-        if (!cancelled) setData(users);
+    api
+      .get<RespostaPaginada<UsuariApi>>("/usuaris", { mida: MIDA_LLISTAT, ...filters })
+      .then((resposta) => {
+        if (!cancelled) setData(resposta.dades);
       })
       .catch((caught) => {
-        if (!cancelled) setError(caught instanceof Error ? caught : new Error(String(caught)));
+        if (!cancelled) {
+          setError(caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null));
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -44,32 +59,31 @@ export function useUsers(): UseUsersResult {
     return () => {
       cancelled = true;
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadToken, filtersKey]);
 
-  const createUser = useCallback((values: UserFormValues) => {
-    createMockUser({ id: crypto.randomUUID(), ...values }).then(setData);
-  }, []);
+  const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 
-  const editUser = useCallback(
-    (id: string, values: UserFormValues) => {
-      const target = data.find((item) => item.id === id);
-      if (!target) return;
-      const password = values.password.trim() === "" ? target.password : values.password;
-      updateMockUser(id, {
-        id,
-        name: values.name,
-        email: values.email,
-        role: values.role,
-        status: values.status,
-        password,
-      }).then(setData);
+  // Els 400 (camp/email) i 409 (email duplicat) los mapea directament el
+  // formulario que llama a createUser/editUser, capturando ApiError — mismo
+  // criteri que ProductForm.tsx/PigYieldFormModal.tsx, sin envoltori acá.
+  const createUser = useCallback(
+    async (input: CreateUserInput): Promise<UsuariCreatRespostaApi> => {
+      const resposta = await api.post<UsuariCreatRespostaApi>("/usuaris", input);
+      refetch();
+      return resposta;
     },
-    [data],
+    [refetch],
   );
 
-  const deleteUser = useCallback((id: string) => {
-    deleteMockUser(id).then(setData);
-  }, []);
+  const editUser = useCallback(
+    async (id: number, input: EditUserInput): Promise<UsuariApi> => {
+      const resposta = await api.patch<UsuariApi>(`/usuaris/${id}`, input);
+      refetch();
+      return resposta;
+    },
+    [refetch],
+  );
 
-  return { data, isLoading, error, createUser, editUser, deleteUser };
+  return { data, isLoading, error, refetch, createUser, editUser };
 }
