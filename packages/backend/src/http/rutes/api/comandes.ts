@@ -13,6 +13,7 @@ import {
   enviarConflicte,
   enviarNoTrobat,
   enviarValidacio,
+  esUnitatsValides,
   formatearDataApi,
   parsearIdPublic,
   parsearPaginacio,
@@ -146,10 +147,12 @@ interface FilaComandaLinia {
   categoria_nom: string | null;
   format: string | null;
   envasat: string | null;
-  unitats_demanades: number;
+  // Capa 38 — NUMERIC(10,2) desde la migración 0016 (antes INTEGER): `pg`
+  // siempre devuelve columnas NUMERIC como string, nunca number.
+  unitats_demanades: string;
   kg_demanats: string;
   pes_editable: boolean;
-  unitats_lliurades: number;
+  unitats_lliurades: string;
   kg_lliurats: string;
   confirmat_a: Date | null;
   preu_unitari: string;
@@ -614,9 +617,14 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       const linia = cos.linies![i]!;
       const camp = `linies[${i}]`;
 
-      if (!Number.isInteger(linia.unitatsDemanades) || linia.unitatsDemanades <= 0) {
+      // Capa 38 — unitats_demanades pasó de INTEGER a NUMERIC(10,2): admite
+      // decimales (entregas/pedidos parciales de pieza), hasta 2 decimales.
+      if (!esUnitatsValides(linia.unitatsDemanades)) {
         return enviarValidacio(reply, 'Les unitats demanades no poden ser zero', [
-          { camp: `${camp}.unitatsDemanades`, missatge: 'ha de ser més gran que zero' },
+          {
+            camp: `${camp}.unitatsDemanades`,
+            missatge: 'ha de ser més gran que zero, com a màxim 2 decimals',
+          },
         ]);
       }
 
@@ -979,9 +987,13 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
         { camp: 'producteId', missatge: 'és obligatori' },
       ]);
     }
-    if (!Number.isInteger(cos.unitatsDemanades) || cos.unitatsDemanades! <= 0) {
+    // Capa 38 — ver nota equivalente en POST /comandes.
+    if (!esUnitatsValides(cos.unitatsDemanades)) {
       return enviarValidacio(reply, 'Les unitats demanades no poden ser zero', [
-        { camp: 'unitatsDemanades', missatge: 'ha de ser més gran que zero' },
+        {
+          camp: 'unitatsDemanades',
+          missatge: 'ha de ser més gran que zero, com a màxim 2 decimals',
+        },
       ]);
     }
 
@@ -1000,7 +1012,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
     let pesCalculatKg: string;
     let pesEditable: boolean;
     if (pesFitxaKg !== null) {
-      pesCalculatKg = (cos.unitatsDemanades! * Number(pesFitxaKg)).toFixed(3);
+      pesCalculatKg = (cos.unitatsDemanades * Number(pesFitxaKg)).toFixed(3);
       pesEditable = false;
     } else {
       const kgDemanats = cos.kgDemanats !== undefined ? Number(cos.kgDemanats) : NaN;
@@ -1141,12 +1153,13 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       obsProduccio: string | null;
     }>;
 
-    if (
-      cos.unitatsDemanades !== undefined &&
-      (!Number.isInteger(cos.unitatsDemanades) || cos.unitatsDemanades <= 0)
-    ) {
+    // Capa 38 — ver nota equivalente en POST /comandes.
+    if (cos.unitatsDemanades !== undefined && !esUnitatsValides(cos.unitatsDemanades)) {
       return enviarValidacio(reply, 'Les unitats demanades no poden ser zero', [
-        { camp: 'unitatsDemanades', missatge: 'ha de ser més gran que zero' },
+        {
+          camp: 'unitatsDemanades',
+          missatge: 'ha de ser més gran que zero, com a màxim 2 decimals',
+        },
       ]);
     }
     if (cos.kgDemanats !== undefined) {

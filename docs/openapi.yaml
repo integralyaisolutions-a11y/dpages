@@ -729,7 +729,9 @@ paths:
         recalcula solo desde unitatsDemanades). Capa 34: si dataProduccio
         cambia, se valida contra las 6 reglas de coherencia temporal
         (ver ComandaEntradaParcial.dataProduccio) usando las fechas de
-        cabecera ya guardadas del pedido. 409 si la comanda está congelada.
+        cabecera ya guardadas del pedido. Capa 38: unitatsDemanades admite
+        hasta 2 decimales (NUMERIC(10,2), entregas/pedidos parciales de
+        pieza). 409 si la comanda está congelada.
       parameters:
         - name: comandaId
           in: path
@@ -745,7 +747,14 @@ paths:
             schema:
               type: object
               properties:
-                unitatsDemanades: { type: integer, minimum: 1 }
+                unitatsDemanades:
+                  type: number
+                  exclusiveMinimum: 0
+                  multipleOf: 0.01
+                  description: >-
+                    Capa 38. JS number normal en la entrada, hasta 2
+                    decimales (NUMERIC(10,2)) — más de 2 decimales rechaza
+                    con 400 VALIDACIO.
                 kgDemanats: { type: string }
                 dataProduccio: { type: string, format: date-time, nullable: true }
                 obsProduccio: { type: string, nullable: true }
@@ -781,7 +790,9 @@ paths:
       summary: >
         Registrar unidades y kilos entregados de una línea (panel de
         empaquetado). Ambos campos son obligatorios y no pueden ser cero —
-        ver docs/contrato-api.md sección 5 para el motivo de negocio. Si el
+        ver docs/contrato-api.md sección 5 para el motivo de negocio. Capa
+        38: unitatsLliurades admite hasta 2 decimales en la entrada
+        (NUMERIC(10,2), entrega parcial de pieza) y sale como string. Si el
         pedido está congelado, devuelve 409.
       parameters:
         - name: comandaId
@@ -800,7 +811,11 @@ paths:
               type: object
               required: [unitatsLliurades, kgLliurats]
               properties:
-                unitatsLliurades: { type: integer, minimum: 1 }
+                unitatsLliurades:
+                  type: number
+                  exclusiveMinimum: 0
+                  multipleOf: 0.01
+                  description: Capa 38. JS number normal, hasta 2 decimales (NUMERIC(10,2)).
                 kgLliurats: { type: string, example: '9.750' }
       responses:
         '200':
@@ -812,7 +827,12 @@ paths:
                 properties:
                   liniaId: { type: integer }
                   comandaId: { type: integer }
-                  unitatsLliurades: { type: integer }
+                  unitatsLliurades:
+                    type: string
+                    description: >-
+                      Capa 38. BREAKING: string, no number (NUMERIC(10,2)) —
+                      el body de entrada sigue siendo number, sólo cambió la
+                      salida.
                   kgLliurats: { type: string }
                   confirmatA: { type: string, format: date-time }
                   confirmatPer:
@@ -951,7 +971,11 @@ paths:
                     type: object
                     properties:
                       linies: { type: integer }
-                      totalUnitats: { type: integer }
+                      totalUnitats:
+                        type: string
+                        description: >-
+                          Capa 38. BREAKING: string, no number (SUM de
+                          NUMERIC(10,2)).
                       totalKg: { type: string }
                   dades:
                     type: array
@@ -1036,8 +1060,16 @@ paths:
                     type: object
                     properties:
                       linies: { type: integer }
-                      unitatsDemanades: { type: integer }
-                      unitatsLliurades: { type: integer }
+                      unitatsDemanades:
+                        type: string
+                        description: >-
+                          Capa 38. BREAKING: string, no number (SUM de
+                          NUMERIC(10,2)).
+                      unitatsLliurades:
+                        type: string
+                        description: >-
+                          Capa 38. BREAKING: mismo cambio que
+                          unitatsDemanades.
                       kgDemanats: { type: string }
                       kgLliurats: { type: string }
                       liniesConfirmades: { type: integer }
@@ -1591,7 +1623,13 @@ components:
           type: string
           nullable: true
           description: Capa 20 — igual que FilaPanellObrador.envasat.
-        unitatsDemanades: { type: integer }
+        unitatsDemanades:
+          type: string
+          description: >-
+            Capa 38. BREAKING: string, no number (comanda_linia.
+            unitats_demanades es NUMERIC(10,2) desde esta capa — entregas/
+            pedidos parciales de pieza). El body de entrada de los 4 puntos
+            que escriben este campo sigue aceptando un JS number normal.
         kgDemanats: { type: string }
         kgEditable:
           type: boolean
@@ -1605,7 +1643,10 @@ components:
           type: string
           nullable: true
           description: Observación de producción propia de la línea
-        unitatsLliurades: { type: integer }
+        unitatsLliurades:
+          type: string
+          description: >-
+            Capa 38. BREAKING: mismo cambio que unitatsDemanades.
         kgLliurats: { type: string }
         confirmatA: { type: string, format: date-time, nullable: true }
         preuUnitari:
@@ -1716,7 +1757,14 @@ components:
       required: [producteId, unitatsDemanades]
       properties:
         producteId: { type: integer }
-        unitatsDemanades: { type: integer, minimum: 1 }
+        unitatsDemanades:
+          type: number
+          exclusiveMinimum: 0
+          multipleOf: 0.01
+          description: >-
+            Capa 38. JS number normal en la entrada, hasta 2 decimales
+            (NUMERIC(10,2), entregas/pedidos parciales de pieza) — más de 2
+            decimales rechaza con 400 VALIDACIO.
         kgDemanats:
           type: string
           nullable: true
@@ -1838,7 +1886,11 @@ components:
           format: date-time
           nullable: true
           description: Fecha de producción propia de la línea.
-        unitats: { type: integer }
+        unitats:
+          type: string
+          description: >-
+            Capa 38. BREAKING: string, no number (comanda_linia.
+            unitats_demanades es NUMERIC(10,2) desde esta capa).
         kg: { type: string }
         obsProduccio: { type: string, nullable: true }
 

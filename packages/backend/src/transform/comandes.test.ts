@@ -103,7 +103,7 @@ describe('transformarComanda (Postgres real, esquema aislado)', () => {
     );
     expect(linia.rows[0]).toEqual({
       producte_id: producteLlomId,
-      unitats_demanades: 1,
+      unitats_demanades: '1.00', // capa 38 — NUMERIC(10,2), string
       pes_fitxa_kg: '1.250',
       pes_calculat_kg: '1.250',
       pes_editable: false,
@@ -219,23 +219,23 @@ describe('transformarComanda (Postgres real, esquema aislado)', () => {
     expect(comandaDespues.rows[0]?.obs_produccio).toBe('Tallar més gruixut');
 
     const liniaDespues = await poolTest.query<{
-      unitats_lliurades: number;
+      unitats_lliurades: string;
       kg_lliurats: string;
       confirmat_a: Date | null;
       confirmat_per: string | null;
-      unitats_demanades: number;
+      unitats_demanades: string;
     }>(
       `SELECT unitats_lliurades, kg_lliurats, confirmat_a, confirmat_per, unitats_demanades
        FROM comanda_linia WHERE id = $1`,
       [linia.rows[0]?.id],
     );
     // Propiedad del sistema: intactos.
-    expect(liniaDespues.rows[0]?.unitats_lliurades).toBe(1);
+    expect(liniaDespues.rows[0]?.unitats_lliurades).toBe('1.00'); // capa 38 — NUMERIC(10,2), string
     expect(liniaDespues.rows[0]?.kg_lliurats).toBe('1.250');
     expect(liniaDespues.rows[0]?.confirmat_a?.toISOString()).toBe('2026-01-08T09:00:00.000Z');
     expect(liniaDespues.rows[0]?.confirmat_per).toBe('firebase-uid-empaquetat');
     // Propiedad de WooCommerce: si hubiera cambiado, esto sí se actualiza (no cambió en este caso).
-    expect(liniaDespues.rows[0]?.unitats_demanades).toBe(1);
+    expect(liniaDespues.rows[0]?.unitats_demanades).toBe('1.00');
   });
 
   it('regla de congelación: no toca cabecera ni líneas, registra incidencia', async () => {

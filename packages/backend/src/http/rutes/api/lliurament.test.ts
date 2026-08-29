@@ -61,7 +61,7 @@ describe('API negoci — PATCH .../lliurament (Postgres real, esquema aislado)',
     expect(cuerpo).toMatchObject({
       liniaId,
       comandaId,
-      unitatsLliurades: 8,
+      unitatsLliurades: '8.00', // capa 38 — NUMERIC(10,2), string
       kgLliurats: '9.750',
     });
     expect(cuerpo.confirmatA).toMatch(/Z$/);
@@ -117,6 +117,48 @@ describe('API negoci — PATCH .../lliurament (Postgres real, esquema aislado)',
 
     expect(res.statusCode).toBe(409);
     expect(res.json()).toMatchObject({ error: { codi: 'CONFLICTE' } });
+
+    await fastify.close();
+  });
+
+  it('capa 38 — entrega parcial de pieza: unitatsLliurades = 2.5 aplica correcto y se devuelve como string', async () => {
+    const fastify = construirServidor();
+    await crearComandaAmbLinia(fastify);
+
+    const res = await fastify.inject({
+      method: 'PATCH',
+      url: `/api/v1/comandes/${comandaId}/linies/${liniaId}/lliurament`,
+      payload: { unitatsLliurades: 2.5, kgLliurats: '3.125' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const cuerpo = cuerpoJson<LliuramentRespostaApi>(res);
+    expect(typeof cuerpo.unitatsLliurades).toBe('string');
+    expect(cuerpo.unitatsLliurades).toBe('2.50');
+
+    const fila = await entorn.poolTest.query<{ unitats_lliurades: string }>(
+      `SELECT unitats_lliurades FROM comanda_linia WHERE id_seq = $1`,
+      [liniaId],
+    );
+    expect(fila.rows[0]?.unitats_lliurades).toBe('2.50');
+
+    await fastify.close();
+  });
+
+  it('capa 38 — unitatsLliurades amb més de 2 decimals rebutja amb 400 VALIDACIO', async () => {
+    const fastify = construirServidor();
+    await crearComandaAmbLinia(fastify);
+
+    const res = await fastify.inject({
+      method: 'PATCH',
+      url: `/api/v1/comandes/${comandaId}/linies/${liniaId}/lliurament`,
+      payload: { unitatsLliurades: 2.567, kgLliurats: '3.125' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(cuerpoJson<CosErrorApi>(res).error.detalls).toContainEqual(
+      expect.objectContaining({ camp: 'unitatsLliurades' }),
+    );
 
     await fastify.close();
   });

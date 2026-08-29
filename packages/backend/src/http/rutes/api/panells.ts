@@ -306,7 +306,11 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
     `;
 
     const totals = await pool.query<{ linies: string; total_unitats: string; total_kg: string }>(
-      `SELECT count(*) AS linies, COALESCE(SUM(cl.unitats_demanades), 0) AS total_unitats,
+      // Capa 38 — unitats_demanades ahora es NUMERIC(10,2) (antes INTEGER):
+      // el total agregado gana el mismo cast explícito que totalKg (mismo
+      // criterio, mismo riesgo de precisión que evitar sumar en JS).
+      `SELECT count(*) AS linies,
+              COALESCE(SUM(cl.unitats_demanades), 0)::numeric(10,2) AS total_unitats,
               COALESCE(SUM(cl.pes_calculat_kg), 0)::numeric(14,3) AS total_kg
        ${base}`,
       valors,
@@ -323,7 +327,7 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       envasat: string | null;
       client_nom: string | null;
       data_produccio: Date | null;
-      unitats: number;
+      unitats: string;
       kg: string;
       obs_produccio: string | null;
     }>(
@@ -359,7 +363,8 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
     return {
       totals: {
         linies: Number(totals.rows[0]?.linies ?? 0),
-        totalUnitats: Number(totals.rows[0]?.total_unitats ?? 0),
+        // Capa 38 — string desde ahora (ver nota en el SELECT de arriba).
+        totalUnitats: totals.rows[0]?.total_unitats ?? '0.00',
         totalKg: totals.rows[0]?.total_kg ?? '0.000',
       },
       dades,
@@ -421,9 +426,12 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       kg_lliurats: string;
       linies_confirmades: string;
     }>(
+      // Capa 38 — unitats_demanades/unitats_lliurades ahora son NUMERIC(10,2)
+      // (antes INTEGER): mismos casts explícitos que ya tenían kg_demanades/
+      // kg_lliurats, por el mismo motivo (evitar sumar en JS con floats).
       `SELECT count(*) AS linies,
-              COALESCE(SUM(cl.unitats_demanades), 0) AS unitats_demanades,
-              COALESCE(SUM(cl.unitats_lliurades), 0) AS unitats_lliurades,
+              COALESCE(SUM(cl.unitats_demanades), 0)::numeric(10,2) AS unitats_demanades,
+              COALESCE(SUM(cl.unitats_lliurades), 0)::numeric(10,2) AS unitats_lliurades,
               COALESCE(SUM(cl.pes_calculat_kg), 0)::numeric(14,3) AS kg_demanats,
               COALESCE(SUM(cl.kg_lliurats), 0)::numeric(14,3) AS kg_lliurats,
               count(*) FILTER (WHERE cl.confirmat_a IS NOT NULL) AS linies_confirmades
@@ -441,9 +449,9 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       client_nom: string | null;
       codi: string | null;
       descripcio: string | null;
-      unitats_demanades: number;
+      unitats_demanades: string;
       kg_demanats: string;
-      unitats_lliurades: number;
+      unitats_lliurades: string;
       kg_lliurats: string;
       confirmat_a: Date | null;
       confirmat_per: string | null;
@@ -485,8 +493,9 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
     return {
       totals: {
         linies: totalLinies,
-        unitatsDemanades: Number(totals.rows[0]?.unitats_demanades ?? 0),
-        unitatsLliurades: Number(totals.rows[0]?.unitats_lliurades ?? 0),
+        // Capa 38 — string desde ahora (ver nota en el SELECT de arriba).
+        unitatsDemanades: totals.rows[0]?.unitats_demanades ?? '0.00',
+        unitatsLliurades: totals.rows[0]?.unitats_lliurades ?? '0.00',
         kgDemanats: totals.rows[0]?.kg_demanats ?? '0.000',
         kgLliurats: totals.rows[0]?.kg_lliurats ?? '0.000',
         liniesConfirmades,

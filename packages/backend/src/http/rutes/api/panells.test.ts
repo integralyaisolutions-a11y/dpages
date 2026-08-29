@@ -142,13 +142,13 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
     expect(filaNova).toBeDefined();
     expect(filaNova?.liniaId).toBe(liniaCreada.id);
     expect(filaNova?.client).toBe('Restaurant Example');
-    expect(filaNova?.unitats).toBe(3);
+    expect(filaNova?.unitats).toBe('3.00'); // capa 38 — NUMERIC(10,2), string
     expect(filaNova?.kg).toBe('3.750'); // 3 × 1.250
 
     // Las 3 líneas del beforeAll siguen ahí, sin agrupar y sin cliente —
     // antes de esta reescritura habrían colapsado en una sola fila sumada.
     const filesDelBeforeAll = cuerpo.dades.filter(
-      (f) => f.comandaId !== comandaCreada.id && f.unitats === 2 && f.client === null,
+      (f) => f.comandaId !== comandaCreada.id && f.unitats === '2.00' && f.client === null,
     );
     expect(filesDelBeforeAll.length).toBeGreaterThanOrEqual(3);
 
@@ -576,6 +576,58 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
         }),
       );
       expect(cuerpo.dades.some((f) => f.comandaId === comandaCreada.id)).toBe(true);
+
+      await fastify.close();
+    });
+  });
+
+  // Capa 38 — unitatsDemanades/unitatsLliurades pasaron de INTEGER a
+  // NUMERIC(10,2) (migración 0016). Al final del describe por el mismo
+  // motivo que los bloques anteriores.
+  describe('capa 38 — unitatsDemanades/unitatsLliurades com a string (NUMERIC(10,2))', () => {
+    it('GET /panells/obrador: el tipus de sortida d’unitats és string, amb decimals reals', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 2.5 }] },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const cuerpo = cuerpoJson<PanellObradorApi>(
+        await fastify.inject({ method: 'GET', url: '/api/v1/panells/obrador?mida=200' }),
+      );
+      const fila = cuerpo.dades.find((f) => f.comandaId === comandaCreada.id);
+      expect(typeof fila?.unitats).toBe('string');
+      expect(fila?.unitats).toBe('2.50');
+
+      await fastify.close();
+    });
+
+    it('GET /panells/empaquetat: unitatsDemanades/unitatsLliurades (línia i totals) surten com a string', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 2.5 }] },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}/linies/${comandaCreada.linies[0]!.id}/lliurament`,
+        payload: { unitatsLliurades: 2.5, kgLliurats: '3.125' },
+      });
+
+      const cuerpo = cuerpoJson<PanellEmpaquetatApi>(
+        await fastify.inject({ method: 'GET', url: '/api/v1/panells/empaquetat' }),
+      );
+      const fila = cuerpo.dades.find((f) => f.comandaId === comandaCreada.id);
+      expect(typeof fila?.unitatsDemanades).toBe('string');
+      expect(typeof fila?.unitatsLliurades).toBe('string');
+      expect(fila?.unitatsDemanades).toBe('2.50');
+      expect(fila?.unitatsLliurades).toBe('2.50');
+      expect(typeof cuerpo.totals.unitatsDemanades).toBe('string');
+      expect(typeof cuerpo.totals.unitatsLliurades).toBe('string');
 
       await fastify.close();
     });

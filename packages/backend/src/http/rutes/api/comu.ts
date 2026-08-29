@@ -58,6 +58,29 @@ export function condicioDataFinsInclusiva(columna: string, index: number): strin
   return `${columna} < ($${index}::date + interval '1 day')`;
 }
 
+/**
+ * Capa 38 — `comanda_linia.unitats_demanades`/`unitats_lliurades` pasaron
+ * de INTEGER a NUMERIC(10,2) (entregas/pedidos parciales de pieza: 2.5
+ * unidades cuando no se produjo la pieza completa, migración 0016). Válido:
+ * mayor que cero, como máximo 2 decimales — reemplaza el `Number.isInteger`
+ * que usaban los 4 puntos de entrada de estos dos campos
+ * (`POST /comandes`, `POST .../linies`, `PATCH .../linies/:liniaId`,
+ * `PATCH .../lliurament`), NO había Zod schemas ahí (sólo en
+ * `config/env.ts`) — la validación siempre fue manual en estos endpoints.
+ *
+ * La comparación de punto flotante es segura para este caso: los valores
+ * que fallarían por imprecisión son justamente los que tienen MÁS de 2
+ * decimales reales, que es exactamente lo que se quiere rechazar.
+ */
+export function esUnitatsValides(valor: unknown): valor is number {
+  return (
+    typeof valor === 'number' &&
+    Number.isFinite(valor) &&
+    valor > 0 &&
+    Math.round(valor * 100) / 100 === valor
+  );
+}
+
 export function enviarValidacio(
   reply: FastifyReply,
   missatge: string,

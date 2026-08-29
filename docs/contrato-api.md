@@ -95,13 +95,15 @@ WooCommerce.
 
 ### Formatos de dato
 
-| Tipo            | Formato                 | Ejemplo                  | Motivo                                                                           |
-| --------------- | ----------------------- | ------------------------ | -------------------------------------------------------------------------------- |
-| Fecha y hora    | ISO-8601 UTC con `Z`    | `"2026-08-15T09:30:00Z"` | La conversión a hora local de Cataluña se hace en el frontend, en un único punto |
-| Pesos (kg)      | **String**, 3 decimales | `"1.250"`                | Confirmado por el cliente: siempre kg con 3 decimales                            |
-| Importes (€)    | **String**, 2 decimales | `"12.50"`                | Los decimales en coma flotante de JavaScript pierden precisión al sumar          |
-| Unidades        | Número entero           | `3`                      |                                                                                  |
-| Identificadores | Número entero           | `142`                    |                                                                                  |
+| Tipo                          | Formato                      | Ejemplo                  | Motivo                                                                           |
+| ----------------------------- | ---------------------------- | ------------------------ | -------------------------------------------------------------------------------- |
+| Fecha y hora                  | ISO-8601 UTC con `Z`         | `"2026-08-15T09:30:00Z"` | La conversión a hora local de Cataluña se hace en el frontend, en un único punto |
+| Pesos (kg)                    | **String**, 3 decimales      | `"1.250"`                | Confirmado por el cliente: siempre kg con 3 decimales                            |
+| Importes (€)                  | **String**, 2 decimales      | `"12.50"`                | Los decimales en coma flotante de JavaScript pierden precisión al sumar          |
+| Unidades de línea (entrada)   | Número JS, hasta 2 decimales | `2.5`                    | `unitatsDemanades`/`unitatsLliurades` — admite fracción de pieza (capa 38)       |
+| Unidades de línea (salida)    | **String**, 2 decimales      | `"2.50"`                 | Columna `NUMERIC(10,2)` desde la capa 38 — mismo motivo que kg/importes          |
+| Otras unidades (ej. `bultos`) | Número entero                | `3`                      | Sin cambios — la capa 38 sólo tocó `unitatsDemanades`/`unitatsLliurades`         |
+| Identificadores               | Número entero                | `142`                    |                                                                                  |
 
 **Importante sobre los decimales:** llegan como texto, no como número. Para
 mostrarlos, formatealos; para operar con ellos, convertí explícitamente. Si el
@@ -694,10 +696,10 @@ Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-
       "categoria": "Fresc",
       "format": "SENCER",
       "envasat": "NORMAL (pes)",
-      "unitatsDemanades": 10,
+      "unitatsDemanades": "10.00",
       "kgDemanats": "12.500",
       "kgEditable": false,
-      "unitatsLliurades": 0,
+      "unitatsLliurades": "0.00",
       "kgLliurats": "0.000",
       "confirmatA": null,
       "preuUnitari": "9.86",
@@ -713,10 +715,10 @@ Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-
       "categoria": "Fresc",
       "format": null,
       "envasat": "NORMAL",
-      "unitatsDemanades": 4,
+      "unitatsDemanades": "4.00",
       "kgDemanats": "0.000",
       "kgEditable": true,
-      "unitatsLliurades": 0,
+      "unitatsLliurades": "0.00",
       "kgLliurats": "0.000",
       "confirmatA": null,
       "preuUnitari": "7.60",
@@ -770,6 +772,23 @@ Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-
 > artículo, `format`/`envasat` vienen tal cual de la ficha del producto.
 > `null` cuando la línea no tiene artículo resuelto, o cuando el artículo
 > no tiene esos campos cargados.
+>
+> **`linies[].unitatsDemanades`/`unitatsLliurades` — BREAKING (capa 38):
+> pasaron de número a string.** El motivo es de negocio: Michel reportó que
+> `unitatsLliurades` (INTEGER) bloqueaba entregas parciales de pieza (ej.
+> 2.5 unidades cuando no se produjo la pieza completa); Gerardo amplió el
+> alcance a `unitatsDemanades` también, mismo criterio para los dos campos.
+> La columna pasó de INTEGER a `NUMERIC(10,2)` (2 decimales — alcanza para
+> cuartos/mitades, no hace falta la precisión de los kilos) y, como con
+> cualquier columna NUMERIC, la salida es texto (`"2.50"`, no `2.5`) —
+> mismo patrón que `kgDemanats`/`preuUnitari`, que ya eran string por esto
+> mismo. **El body de entrada sigue aceptando un JS number normal**
+> (`{ "unitatsDemanades": 2.5 }`) en los 4 puntos donde se escribe:
+> `POST /comandes`, `POST /comandes/:comandaId/linies`,
+> `PATCH /comandes/:comandaId/linies/:liniaId` y
+> `PATCH .../lliurament` (sección 5) — sólo la salida cambió de tipo. Válido:
+> mayor que cero, como máximo 2 decimales; más de 2 decimales rechaza con
+> `400 VALIDACIO`.
 
 **`POST /comandes`** — alta manual. Es el camino de los pedidos por teléfono,
 correo y WhatsApp, que son la mayoría del volumen real.
@@ -1039,7 +1058,7 @@ Filtros: `?dataProduccioDes=&dataProduccioFins=&categoriaId=&tipus=&producte=&fo
 {
   "totals": {
     "linies": 34,
-    "totalUnitats": 187,
+    "totalUnitats": "187.00",
     "totalKg": "142.300"
   },
   "dades": [
@@ -1052,7 +1071,7 @@ Filtros: `?dataProduccioDes=&dataProduccioFins=&categoriaId=&tipus=&producte=&fo
       "envasat": "NORMAL (pes)",
       "client": "Restaurant Example",
       "dataProduccio": "2026-08-16T06:00:00Z",
-      "unitats": 10,
+      "unitats": "10.00",
       "kg": "12.500",
       "obsProduccio": "Tallar fi"
     },
@@ -1065,7 +1084,7 @@ Filtros: `?dataProduccioDes=&dataProduccioFins=&categoriaId=&tipus=&producte=&fo
       "envasat": "NORMAL",
       "client": "Restaurant Example",
       "dataProduccio": null,
-      "unitats": 4,
+      "unitats": "4.00",
       "kg": "0.000",
       "obsProduccio": null
     }
@@ -1078,6 +1097,13 @@ Filtros: `?dataProduccioDes=&dataProduccioFins=&categoriaId=&tipus=&producte=&fo
 > identifican de qué pedido viene, por si obrador necesita volver al
 > detalle. `dataProduccio` es la de la LÍNEA (ver sección 4.5), no la de la
 > cabecera del pedido.
+>
+> **`unitats`/`totals.totalUnitats` — BREAKING (capa 38): string, no
+> number** — mismo motivo y mismo criterio que
+> `ComandaLiniaApi.unitatsDemanades` (sección 4.5): la columna es
+> `NUMERIC(10,2)` desde esta capa. `totalUnitats` (SUM agregado) recibió el
+> mismo cast explícito que ya tenía `totalKg`, por el mismo motivo — evitar
+> sumar en JS con floats.
 
 > **Filtros nuevos (capa 20), pedidos por el demo de Lovable:**
 >
@@ -1110,8 +1136,8 @@ Filtros: `?dataExpedicioDes=&dataExpedicioFins=&transportistaId=&clientId=`
 {
   "totals": {
     "linies": 50,
-    "unitatsDemanades": 312,
-    "unitatsLliurades": 118,
+    "unitatsDemanades": "312.00",
+    "unitatsLliurades": "118.00",
     "kgDemanats": "284.750",
     "kgLliurats": "96.400",
     "liniesConfirmades": 18,
@@ -1128,9 +1154,9 @@ Filtros: `?dataExpedicioDes=&dataExpedicioFins=&transportistaId=&clientId=`
       "client": "Restaurant Example",
       "codi": "LLF01",
       "producte": "Llom fresc de porc",
-      "unitatsDemanades": 10,
+      "unitatsDemanades": "10.00",
       "kgDemanats": "12.500",
-      "unitatsLliurades": 0,
+      "unitatsLliurades": "0.00",
       "kgLliurats": "0.000",
       "confirmatA": null,
       "confirmatPer": null
@@ -1139,6 +1165,12 @@ Filtros: `?dataExpedicioDes=&dataExpedicioFins=&transportistaId=&clientId=`
   "paginacio": { "pagina": 1, "mida": 50, "total": 50, "totalPagines": 1 }
 }
 ```
+
+> **`unitatsDemanades`/`unitatsLliurades` (línia y `totals`) — BREAKING
+> (capa 38): string, no number** — mismo motivo y mismo criterio que
+> `ComandaLiniaApi.unitatsDemanades` (sección 4.5). Los dos `totals` (SUM
+> agregados) recibieron el mismo cast explícito que ya tenían `kgDemanats`/
+> `kgLliurats`, por el mismo motivo.
 
 ---
 
@@ -1607,17 +1639,25 @@ Respuesta `200`:
 {
   "liniaId": 981,
   "comandaId": 142,
-  "unitatsLliurades": 8,
+  "unitatsLliurades": "8.00",
   "kgLliurats": "9.750",
   "confirmatA": "2026-08-15T11:42:00Z",
   "confirmatPer": { "id": 7, "nom": "Operari empaquetat" }
 }
 ```
 
+> **`unitatsLliurades` — BREAKING (capa 38): en la respuesta es string, no
+> number** (mismo motivo que en `ComandaLiniaApi.unitatsDemanades`, sección
+> 4.5 — la columna es `NUMERIC(10,2)` desde esta capa). **En el body de
+> entrada sigue siendo un JS number normal**, admite decimales (ej.
+> `{ "unitatsLliurades": 2.5 }` para una entrega parcial de pieza) — sólo
+> la salida cambió de tipo.
+
 ### Reglas de negocio, confirmadas por el cliente
 
 **Ambos campos son obligatorios y no pueden quedar en cero.** El backend
-rechaza con `400 VALIDACIO`.
+rechaza con `400 VALIDACIO`. `unitatsLliurades` admite hasta 2 decimales
+(capa 38) — con más de 2, también `400 VALIDACIO`.
 
 **Ambos llegan siempre en cero por defecto**, aunque coincidan con lo pedido.
 El operario debe teclearlos de todos modos. Es doble confirmación deliberada:

@@ -265,10 +265,20 @@ export interface ComandaLiniaApi {
   categoria: string | null;
   format: string | null;
   envasat: string | null;
-  unitatsDemanades: number;
+  /**
+   * Capa 38 — BREAKING: pasó de `number` a `string`. La columna
+   * (`comanda_linia.unitats_demanades`) cambió de INTEGER a NUMERIC(10,2)
+   * (permite entregas/pedidos parciales de pieza, ej. 2.5 unidades) — `pg`
+   * siempre devuelve NUMERIC como string, igual que ya pasa con
+   * `kgDemanats`/`preuUnitari`. El body de entrada sigue aceptando un JS
+   * number normal (`LiniaCreacioApi`/`LiniaEdicioApi`); sólo cambió la
+   * salida.
+   */
+  unitatsDemanades: string;
   kgDemanats: string;
   kgEditable: boolean;
-  unitatsLliurades: number;
+  /** Capa 38 — mismo cambio que unitatsDemanades, misma razón (NUMERIC(10,2)). */
+  unitatsLliurades: string;
   kgLliurats: string;
   confirmatA: string | null;
   /**
@@ -377,6 +387,7 @@ export interface LiniaEdicioApi {
 // ── 5 · Empaquetado ──────────────────────────────────────────────────────
 
 export interface LliuramentBodyApi {
+  /** Entrada: sigue siendo un JS number normal, admite hasta 2 decimales (capa 38). */
   unitatsLliurades: number;
   kgLliurats: string;
 }
@@ -384,7 +395,8 @@ export interface LliuramentBodyApi {
 export interface LliuramentRespostaApi {
   liniaId: number;
   comandaId: number;
-  unitatsLliurades: number;
+  /** Capa 38 — BREAKING: pasó de `number` a `string`, ver ComandaLiniaApi.unitatsDemanades. */
+  unitatsLliurades: string;
   kgLliurats: string;
   confirmatA: string;
   /**
@@ -449,7 +461,8 @@ export interface PanellOficinaApi {
 
 export interface TotalsPanellObradorApi {
   linies: number;
-  totalUnitats: number;
+  /** Capa 38 — BREAKING: pasó de `number` a `string`, mismo motivo/criterio que `totalKg` (SUM de NUMERIC(10,2), ver ComandaLiniaApi.unitatsDemanades). */
+  totalUnitats: string;
   totalKg: string;
 }
 
@@ -469,7 +482,8 @@ export interface FilaPanellObradorApi {
   envasat: string | null;
   client: string | null;
   dataProduccio: string | null;
-  unitats: number;
+  /** Capa 38 — BREAKING: pasó de `number` a `string` (`comanda_linia.unitats_demanades`, ver ComandaLiniaApi.unitatsDemanades). */
+  unitats: string;
   kg: string;
   obsProduccio: string | null;
 }
@@ -484,8 +498,10 @@ export interface PanellObradorApi {
 
 export interface TotalsPanellEmpaquetatApi {
   linies: number;
-  unitatsDemanades: number;
-  unitatsLliurades: number;
+  /** Capa 38 — BREAKING: pasó de `number` a `string`, mismo motivo/criterio que `kgDemanats` (SUM de NUMERIC(10,2), ver ComandaLiniaApi.unitatsDemanades). */
+  unitatsDemanades: string;
+  /** Capa 38 — BREAKING: mismo cambio que unitatsDemanades. */
+  unitatsLliurades: string;
   kgDemanats: string;
   kgLliurats: string;
   liniesConfirmades: number;
@@ -502,9 +518,11 @@ export interface FilaPanellEmpaquetatApi {
   client: string | null;
   codi: string | null;
   producte: string;
-  unitatsDemanades: number;
+  /** Capa 38 — BREAKING: pasó de `number` a `string` (ver ComandaLiniaApi.unitatsDemanades). */
+  unitatsDemanades: string;
   kgDemanats: string;
-  unitatsLliurades: number;
+  /** Capa 38 — BREAKING: mismo cambio que unitatsDemanades. */
+  unitatsLliurades: string;
   kgLliurats: string;
   confirmatA: string | null;
   confirmatPer: string | null;

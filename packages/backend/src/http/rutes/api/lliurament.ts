@@ -5,6 +5,7 @@ import {
   enviarConflicte,
   enviarNoTrobat,
   enviarValidacio,
+  esUnitatsValides,
   formatearDataApi,
   parsearIdPublic,
 } from './comu.js';
@@ -28,12 +29,13 @@ export function registrarRutaLliurament(fastify: FastifyInstance): void {
     const cos = req.body as Partial<{ unitatsLliurades: number; kgLliurats: string }>;
     const detalls: { camp: string; missatge: string }[] = [];
 
-    if (
-      cos.unitatsLliurades === undefined ||
-      !Number.isInteger(cos.unitatsLliurades) ||
-      cos.unitatsLliurades <= 0
-    ) {
-      detalls.push({ camp: 'unitatsLliurades', missatge: 'ha de ser més gran que zero' });
+    // Capa 38 — unitats_lliurades pasó de INTEGER a NUMERIC(10,2): admite
+    // decimales (entregas parciales de pieza), hasta 2 decimales.
+    if (cos.unitatsLliurades === undefined || !esUnitatsValides(cos.unitatsLliurades)) {
+      detalls.push({
+        camp: 'unitatsLliurades',
+        missatge: 'ha de ser més gran que zero, com a màxim 2 decimals',
+      });
     }
     const kgLliurats = cos.kgLliurats !== undefined ? Number(cos.kgLliurats) : NaN;
     if (cos.kgLliurats === undefined || !Number.isFinite(kgLliurats) || kgLliurats <= 0) {
@@ -76,7 +78,13 @@ export function registrarRutaLliurament(fastify: FastifyInstance): void {
     const resposta: LliuramentRespostaApi = {
       liniaId: Number(resultat.rows[0].id_seq),
       comandaId: comandaIdPublic,
-      unitatsLliurades: cos.unitatsLliurades!,
+      // Capa 38 — BREAKING: unitatsLliurades pasa a string (NUMERIC(10,2)).
+      // A diferencia del resto de campos de esta capa, este no vuelve a
+      // leerse de la base en este mismo endpoint (se graba y se devuelve el
+      // valor recibido tal cual) — se formatea acá a mano con 2 decimales
+      // para que la respuesta sea igual de consistente que si viniera de un
+      // SELECT posterior (mismo criterio que kgLliurats, que ya era string).
+      unitatsLliurades: cos.unitatsLliurades!.toFixed(2),
       kgLliurats: cos.kgLliurats!,
       confirmatA: formatearDataApi(resultat.rows[0].confirmat_a)!,
       confirmatPer: { id: usuariResolt.id, nom: usuariResolt.nom },

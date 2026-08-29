@@ -672,7 +672,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       expect(cuerpo.linies).toHaveLength(2);
       const liniaNova = cuerpo.linies.find((l) => l.producte?.id === producteFitxaId);
       expect(liniaNova?.preuUnitari).toBe('4.50'); // resuelto vía tarifa — misma cascada que POST /comandes
-      expect(liniaNova?.unitatsDemanades).toBe(3);
+      expect(liniaNova?.unitatsDemanades).toBe('3.00'); // capa 38 — NUMERIC(10,2), string
       expect(liniaNova?.totalLinia).toBe('13.50'); // 3 × 4.50
       expect(liniaNova?.kgDemanats).toBe('3.750'); // fitxa: 3 × 1.250
 
@@ -776,7 +776,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       expect(res.statusCode).toBe(200);
       const cuerpo = cuerpoJson<ComandaDetallApi>(res);
       const liniaEditada = cuerpo.linies.find((l) => l.id === liniaCreada.id);
-      expect(liniaEditada?.unitatsDemanades).toBe(5);
+      expect(liniaEditada?.unitatsDemanades).toBe('5.00'); // capa 38 — NUMERIC(10,2), string
       expect(liniaEditada?.preuUnitari).toBe('9.86'); // sin cambios — nunca se re-resuelve
       expect(liniaEditada?.totalLinia).toBe('49.30'); // 5 × 9.86
       expect(liniaEditada?.kgDemanats).toBe('6.250'); // fitxa: 5 × 1.250
@@ -1593,6 +1593,101 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
 
       const cuerpo = cuerpoJson<RespostaPaginada<ComandaResumApi>>(res);
       expect(cuerpo.dades.some((c) => c.id === comandaCreada.id)).toBe(true);
+
+      await fastify.close();
+    });
+  });
+
+  describe('capa 38 — unitatsDemanades/unitatsLliurades admeten decimals (NUMERIC(10,2), migració 0016)', () => {
+    it('POST /comandes: alta de línia amb unitatsDemanades = 2.5 es guarda i es retorna com a string amb 2 decimals', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 2.5 }],
+        },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const cuerpo = cuerpoJson<ComandaDetallApi>(res);
+      const linia = cuerpo.linies[0]!;
+      // BREAKING (capa 38): string, no number — mismo patrón que
+      // kgDemanats/preuUnitari, que ya eran string.
+      expect(typeof linia.unitatsDemanades).toBe('string');
+      expect(linia.unitatsDemanades).toBe('2.50');
+      expect(linia.kgDemanats).toBe('3.125'); // fitxa: 2.5 × 1.250
+
+      await fastify.close();
+    });
+
+    it('POST /comandes: unitatsDemanades amb més de 2 decimals rebutja amb 400 VALIDACIO', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 2.567 }],
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+      await fastify.close();
+    });
+
+    it('PATCH /comandes/:comandaId/linies/:liniaId: editar unitatsDemanades a 2.5 recalcula totalLinia i el pes correctament', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      const liniaCreada = comandaCreada.linies[0]!;
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}/linies/${liniaCreada.id}`,
+        payload: { unitatsDemanades: 2.5 },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const cuerpo = cuerpoJson<ComandaDetallApi>(res);
+      const liniaEditada = cuerpo.linies.find((l) => l.id === liniaCreada.id);
+      expect(liniaEditada?.unitatsDemanades).toBe('2.50');
+      expect(liniaEditada?.kgDemanats).toBe('3.125'); // fitxa: 2.5 × 1.250
+      expect(liniaEditada?.totalLinia).toBe('24.65'); // 2.5 × 9.86
+
+      await fastify.close();
+    });
+
+    it('GET /comandes/:id: el tipus de sortida d’unitatsDemanades/unitatsLliurades és string', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          origen: 'manual',
+          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const detall = cuerpoJson<ComandaDetallApi>(
+        await fastify.inject({ method: 'GET', url: `/api/v1/comandes/${comandaCreada.id}` }),
+      );
+      const linia = detall.linies[0]!;
+      expect(typeof linia.unitatsDemanades).toBe('string');
+      expect(typeof linia.unitatsLliurades).toBe('string');
+      expect(linia.unitatsDemanades).toBe('1.00');
+      expect(linia.unitatsLliurades).toBe('0.00');
 
       await fastify.close();
     });
