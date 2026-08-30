@@ -154,6 +154,19 @@ que oficina la resuelva manualmente, en vez de aplicarse.
 `congelat_a IS NULL` antes de aplicar un upsert de cabecera o de líneas, y
 que exista un mecanismo de incidencias visible para oficina.
 
+**Nota (30/08/2026) — fase pre-productiva**: el ambiente actual de Cloud
+Run/Cloud SQL se considera **pre-productivo**, no el corte formal a
+producción: todavía faltan desarrollos por desplegar y falta la fase de QA
+con Francesc. El corte formal a "producción real" queda para una fecha
+posterior, todavía sin definir. Mientras dure esta fase pre-productiva, la
+regla histórica de nunca correr scripts destructivos (incluido
+`reset-carga-inicial.ts`) contra una base con datos reales cargados queda
+**en pausa, no derogada**: es válido usarlos contra este ambiente si hace
+falta para pruebas. Cualquier reset en esta fase debe coordinarse avisando
+antes a Michel/Francesc, por si están en medio de una sesión de prueba. La
+restricción vuelve a aplicar completa en cuanto se declare el corte formal
+a producción.
+
 ---
 
 ## ADR-008 — Catálogo con tabla de alias por idioma

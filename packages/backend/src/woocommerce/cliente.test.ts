@@ -206,6 +206,68 @@ describe('obtenerPedido', () => {
   });
 });
 
+describe('capa 41 — credenciales por query string, nunca por header Authorization', () => {
+  it('manda consumer_key/consumer_secret en el query string, y NO manda header Authorization', async () => {
+    fetchMock.mockResolvedValueOnce(respuestaPagina([producteCa], 1));
+
+    await listarProductos();
+
+    const url = urlDeLaLlamada();
+    // env de test (vitest.config.ts): WC_CONSUMER_KEY='ck_test', WC_CONSUMER_SECRET='cs_test'.
+    expect(url.searchParams.get('consumer_key')).toBe('ck_test');
+    expect(url.searchParams.get('consumer_secret')).toBe('cs_test');
+
+    const opciones = fetchMock.mock.calls[0]?.[1];
+    const headers = new Headers(opciones?.headers);
+    expect(headers.has('authorization')).toBe(false);
+  });
+
+  it('si falla el fetch y el error trae la URL completa, el mensaje final NO contiene las credenciales en texto plano', async () => {
+    // Node/undici arma sus propios mensajes de error — no controlamos el
+    // texto exacto, así que simulamos el peor caso: un error de fetch
+    // cuyo mensaje incluye la URL completa (con credenciales), tal como
+    // podría pasar con ciertos fallos de red/TLS. Un fallo de red (a
+    // diferencia de un 429 con retry-after) espera con backoff real
+    // (500ms, 1s, 2s, 4s, 8s) — de ahí el timeout largo de este test,
+    // no hay retry-after que lo acorte.
+    const urlConCredenciales =
+      'https://dpages.cat/wp-json/wc/v3/products?consumer_key=ck_test&consumer_secret=cs_test&per_page=100';
+    fetchMock.mockRejectedValue(new TypeError(`fetch failed: ${urlConCredenciales}`));
+
+    let error: unknown;
+    try {
+      await listarProductos();
+    } catch (err) {
+      error = err;
+    }
+
+    expect(error).toBeInstanceOf(ErrorWooCommerce);
+    const errorWoo = error as ErrorWooCommerce;
+    expect(errorWoo.message).not.toContain('ck_test');
+    expect(errorWoo.message).not.toContain('cs_test');
+    expect(errorWoo.message).not.toContain('consumer_key');
+    expect(errorWoo.message).toContain('products'); // el resto del diagnóstico se conserva
+  }, 20_000);
+
+  it('los logs de reintento nunca incluyen la URL — sólo recurso/intento/status', async () => {
+    const espia = vi.spyOn(logger, 'warn');
+    fetchMock
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(respuestaPagina([producteCa], 1));
+
+    await listarProductos();
+
+    for (const llamada of espia.mock.calls) {
+      const texto = JSON.stringify(llamada);
+      expect(texto).not.toContain('ck_test');
+      expect(texto).not.toContain('cs_test');
+      expect(texto).not.toContain('consumer_key');
+    }
+
+    espia.mockRestore();
+  });
+});
+
 describe('respuestas no-JSON (WAF/Cloudflare)', () => {
   it('lanza un error claro en vez de propagar el error de parseo', async () => {
     fetchMock.mockResolvedValueOnce(

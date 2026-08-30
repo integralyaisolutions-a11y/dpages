@@ -46,15 +46,54 @@ export class ErrorWooCommerce extends Error {
   }
 }
 
-function authHeader(): string {
-  const token = Buffer.from(`${env.WC_CONSUMER_KEY}:${env.WC_CONSUMER_SECRET}`).toString('base64');
-  return `Basic ${token}`;
+/**
+ * Capa 41 — dpages.cat descarta el header `Authorization` antes de que
+ * llegue a WordPress (confirmado con curl directo: el header da 401, el
+ * mismo par de credenciales por query string da 200). WooCommerce/WordPress
+ * soportan las dos formas oficialmente (REST API Handbook), así que esto
+ * no es un workaround frágil — es simplemente el mecanismo que el
+ * servidor real de este cliente sí deja pasar. Van en la MISMA posición
+ * que `PARAMS_OBLIGATORIOS` (spread al final de `construirUrl`) para que
+ * ningún parámetro del llamador los pueda pisar.
+ */
+function credencialsWoo(): Record<string, string> {
+  return {
+    consumer_key: env.WC_CONSUMER_KEY,
+    consumer_secret: env.WC_CONSUMER_SECRET,
+  };
+}
+
+/**
+ * Red de seguridad — no la única barrera, pero sí obligatoria: desde que
+ * las credenciales viajan en el query string (capa 41), cualquier texto
+ * que las contenga y termine en un log, o en una columna de auditoría
+ * (`esdeveniment_webhook.error` en webhook.ts,
+ * `cursor_sincronitzacio.ultim_error` en sync/ingesta.ts — ambos guardan
+ * tal cual el `.message` de lo que este módulo termina lanzando), las
+ * expondría en texto plano. El único punto real de riesgo en todo el
+ * módulo es más abajo (el mensaje de un `fetch` fallido, que Node/undici
+ * arma con contenido que no controlamos) — se redacta el query string
+ * COMPLETO ahí, no sólo `consumer_key`/`consumer_secret`: más simple y más
+ * seguro que aislar por nombre de parámetro (un error de regex ahí sería
+ * exactamente el tipo de bug que termina filtrando credenciales). El resto
+ * del mensaje (qué recurso, cuántos reintentos) se conserva — no hace
+ * falta perder todo el diagnóstico para no filtrar el secreto. Sanitizar
+ * en ESTE único punto (no en cada `catch` de webhook.ts/ingesta.ts) alcanza
+ * porque este módulo es el único lugar de todo el backend que llama
+ * `fetch` — cualquier error relacionado con WooCommerce pasa por acá.
+ */
+function redactarUrlEnTexto(texto: string): string {
+  return texto.replace(/\?\S*/g, '?[redactat]');
 }
 
 function construirUrl(recurso: string, params: Record<string, string>): URL {
   const base = env.WC_BASE_URL.replace(/\/+$/, '') + '/wp-json/wc/v3/';
   const url = new URL(recurso, base);
-  for (const [clave, valor] of Object.entries({ ...params, ...PARAMS_OBLIGATORIOS })) {
+  for (const [clave, valor] of Object.entries({
+    ...params,
+    ...PARAMS_OBLIGATORIOS,
+    ...credencialsWoo(),
+  })) {
     url.searchParams.set(clave, valor);
   }
   return url;
@@ -88,17 +127,19 @@ async function peticionGet(recurso: string, params: Record<string, string>): Pro
     let res: Response;
     try {
       res = await fetch(url, {
-        headers: { Authorization: authHeader(), Accept: 'application/json' },
+        headers: { Accept: 'application/json' },
         signal: AbortSignal.timeout(TIMEOUT_PETICION_MS),
       });
     } catch (err) {
       if (intento > REINTENTOS_MAXIMOS) {
+        // redactarUrlEnTexto: err.message puede traer la URL completa —
+        // con credenciales en el query string desde esta capa — armada por
+        // Node/undici, no por este módulo. Ver la nota en la función.
+        const mensaje = err instanceof Error ? err.message : String(err);
         throw new ErrorWooCommerce(
           recurso,
           null,
-          `Sin respuesta de WooCommerce en "${recurso}" tras ${REINTENTOS_MAXIMOS} reintentos: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
+          `Sin respuesta de WooCommerce en "${recurso}" tras ${REINTENTOS_MAXIMOS} reintentos: ${redactarUrlEnTexto(mensaje)}`,
         );
       }
       logger.warn({ recurso, intento }, 'Fallo de red hacia WooCommerce, reintentando');

@@ -19,6 +19,16 @@ esquema y de la integración — ver los ADRs correspondientes en
 - Sin bloqueos de firewall detectados durante la evaluación.
 - Los importes llegan **sin IVA** y con decimales largos (ejemplo:
   `7,27272725 €` = `8,00 €` con IVA al 10%).
+- **Capa 41 — el servidor de dpages.cat descarta el header `Authorization`
+  antes de que llegue a WordPress**, confirmado con curl directo: el mismo
+  par de credenciales (`consumer_key`/`consumer_secret`) da `401` por
+  header y `200` por query string. WooCommerce/WordPress soportan las dos
+  formas oficialmente — esto no es un problema de WooCommerce ni de las
+  credenciales, es algo puntual de cómo está configurado (probablemente un
+  proxy/WAF delante) el servidor real de esta tienda. El cliente
+  (`woocommerce/cliente.ts`) manda las credenciales por query string por
+  este motivo — ver el comentario en `credencialsWoo()` para el detalle y
+  la redacción obligatoria en logs/errores que esto exige.
 
 ## Catálogo (253 registros, ~111 artículos reales)
 
