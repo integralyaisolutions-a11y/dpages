@@ -6,13 +6,15 @@
 // reales contra este mismo modelo, no hay ningún concepto de "rol fijo"
 // separado.
 //
-// Nota de negocio sin resolver (AUDITORIA_FRONTEND.md §1 y §9): el backend
-// documentó explícitamente que NINGÚN endpoint debería restringir acceso
-// por rol/mòdul — `modulsPermesos` es sólo para decidir qué mostrar en el
-// menú. Esta función sigue restringiendo la navegación (mismo comportamiento
-// que ya tenía el frontend), sólo que ahora contra el dato real en vez de
-// uno inventado — decidir si esa restricción debería sacarse del todo es
-// una decisión de producto pendiente, no tomada acá.
+// Actualizado tras capa 39 (fix señalado por Gerardo): el backend YA NO es
+// una capa sin restricción por módulo — POST /usuaris siempre tuvo guard, y
+// desde la capa 39 también lo tienen PATCH /usuaris/:id y POST/PATCH/DELETE
+// /rols (los 5 validan `crearGuardaModul('usuaris')`, ver comu.ts/rols.ts/
+// usuaris.ts). El resto de los endpoints de negocio sigue sin restringir por
+// rol/mòdul — `modulsPermesos` ahí sólo decide qué mostrar en el menú — pero
+// ya no es cierto que NINGÚN endpoint lo haga. Esta función replica en el
+// frontend la misma restricción de navegación que antes (mismo
+// comportamiento), ahora contra el dato real.
 export const MODUL_ROUTES: Record<string, string[]> = {
   categories: ["/categories"],
   catalog: ["/catalog"],
@@ -25,6 +27,7 @@ export const MODUL_ROUTES: Record<string, string[]> = {
   "panell-empaquetat": ["/packaging"],
   "panell-produccio": ["/production"],
   usuaris: ["/users"],
+  transportistes: ["/transportistes"],
 };
 
 const FALLBACK_ROUTE = "/profile";
@@ -61,6 +64,7 @@ export const MODULS_VALIDS = [
   "panell-produccio",
   "usuaris",
   "rols",
+  "transportistes",
 ] as const;
 
 export const MODUL_LABELS: Record<string, string> = {
@@ -76,4 +80,5 @@ export const MODUL_LABELS: Record<string, string> = {
   "panell-produccio": "Panell de Producció",
   usuaris: "Usuaris",
   rols: "Rols",
+  transportistes: "Transportistes",
 };

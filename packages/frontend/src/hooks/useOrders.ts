@@ -9,6 +9,7 @@ import {
   type ComandaResumApi,
   type LiniaCreacioApi,
   type LiniaEdicioApi,
+  type Paginacio,
   type RespostaPaginada,
 } from "@/lib/api";
 
@@ -90,6 +91,9 @@ export function extractComandaErrorMessage(caught: unknown, fallback: string): s
 
 type UseOrdersResult = {
   data: ComandaResumApi[];
+  paginacio: Paginacio | null;
+  pagina: number;
+  setPagina: (pagina: number) => void;
   isLoading: boolean;
   error: ApiError | null;
   refetch: () => void;
@@ -104,18 +108,27 @@ type UseOrdersResult = {
   editLine: (comandaId: number, liniaId: number, patch: LiniaEdicioApi) => Promise<ComandaDetallApi>;
 };
 
-// Igual que las demás pantallas, pero acá SÍ se filtra server-side (los 6
-// filtros de la pantalla tienen soporte real en GET /comandes) en vez de
-// traer todo y filtrar client-side — el volumen de comandas crece cada
-// semana, a diferencia de catálogos/categorías/tarifas que son fijos.
-const MIDA_LLISTAT = 200;
+// Paginació real (20/pàgina) — a diferència de catálogos/categorías/
+// tarifas, el volumen de comandas crece cada semana, así que ya se
+// filtraba server-side (los filtros de la pantalla tienen soporte real en
+// GET /comandes); ahora también pagina de verdad en vez de traer 200.
+const MIDA_PAGINA = 20;
 
 export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
   const [data, setData] = useState<ComandaResumApi[]>([]);
+  const [paginacio, setPaginacio] = useState<Paginacio | null>(null);
+  const [pagina, setPagina] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const filtersKey = JSON.stringify(filters);
+
+  // Un canvi de filtre torna a la pàgina 1 — evita quedar-se en una pàgina
+  // que ja no existeix pel nou resultat filtrat.
+  useEffect(() => {
+    setPagina(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -123,9 +136,12 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
     setError(null);
 
     api
-      .get<RespostaPaginada<ComandaResumApi>>("/comandes", { mida: MIDA_LLISTAT, ...filters })
+      .get<RespostaPaginada<ComandaResumApi>>("/comandes", { mida: MIDA_PAGINA, pagina, ...filters })
       .then((resposta) => {
-        if (!cancelled) setData(resposta.dades);
+        if (!cancelled) {
+          setData(resposta.dades);
+          setPaginacio(resposta.paginacio);
+        }
       })
       .catch((caught) => {
         if (!cancelled) {
@@ -144,7 +160,7 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
     // filtersKey serialitza `filters` (objecte pla de primitives) — evita
     // refer la petició en cada render per canvi d'identitat de l'objecte.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reloadToken, filtersKey]);
+  }, [reloadToken, pagina, filtersKey]);
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 
@@ -272,5 +288,19 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
     [refetch],
   );
 
-  return { data, isLoading, error, refetch, createOrder, editOrder, deleteLine, markIncidence, addLine, editLine };
+  return {
+    data,
+    paginacio,
+    pagina,
+    setPagina,
+    isLoading,
+    error,
+    refetch,
+    createOrder,
+    editOrder,
+    deleteLine,
+    markIncidence,
+    addLine,
+    editLine,
+  };
 }

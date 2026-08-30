@@ -7,6 +7,7 @@ import { DataCard, DataCardActions, DataCardField, DataCardGrid } from "@/compon
 import { FilterBar } from "@/components/ui/FilterBar";
 import { IconButton } from "@/components/ui/IconButton";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { useClientTariffs, type ClientFormValues } from "@/hooks/useClientTariffs";
@@ -45,20 +46,28 @@ function ClientTariffCard({ client, onEdit }: { client: ClientApi; onEdit: () =>
 }
 
 export default function ClientTariffsPage() {
-  const { data, isLoading, error, refetch, createClient, editClient } = useClientTariffs();
-  const { tariffColumns } = useRates();
   const [search, setSearch] = useState("");
   const [tariffFilter, setTariffFilter] = useState(ALL_FEM);
   const [formState, setFormState] = useState<{ mode: "create" | "edit"; client?: ClientApi } | null>(null);
 
+  // Cerca migrada a server-side (paginació real 2026-08-30): GET /clients ja
+  // accepta `cerca` (ILIKE sobre nom/codi, confirmat contra clients.ts) —
+  // abans es filtrava client-side sobre els 200 ja carregats.
+  const clientFilters = useMemo(() => (search.trim() ? { cerca: search.trim() } : {}), [search]);
+  const { data, paginacio, setPagina, isLoading, error, refetch, createClient, editClient } = useClientTariffs(
+    clientFilters,
+    { mida: 20 },
+  );
+  // useRates() només per `tariffColumns` (llista completa, no paginada —
+  // ver comentari a useRates.ts), no es toca `data` d'acá.
+  const { tariffColumns } = useRates();
+
   const tariffFilterOptions = useMemo(() => [ALL_FEM, ...tariffColumns.map((tariff) => tariff.nom)], [tariffColumns]);
 
+  // `search` ja no es filtra acá: viatja com a `cerca` server-side.
+  // `tariffFilter` es manté client-side sobre la pàgina actual, fora de
+  // l'abast d'aquesta tasca (encara que /clients ja accepta `tarifaId`).
   const filtered = data.filter((client) => {
-    if (search) {
-      const term = search.toLowerCase();
-      if (!(client.codi ?? "").toLowerCase().includes(term) && !(client.nom ?? "").toLowerCase().includes(term))
-        return false;
-    }
     if (tariffFilter !== ALL_FEM) {
       if ((client.tarifa?.nom ?? null) !== tariffFilter) return false;
     }
@@ -155,6 +164,8 @@ export default function ClientTariffsPage() {
               </tbody>
             </table>
           </div>
+
+          {paginacio && <Pagination paginacio={paginacio} onPageChange={setPagina} />}
         </>
       )}
 

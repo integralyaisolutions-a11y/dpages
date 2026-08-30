@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   api,
   ApiError,
+  type Paginacio,
   type RespostaPaginada,
   type UsuariApi,
   type UsuariCreatRespostaApi,
@@ -18,6 +19,9 @@ export type EditUserInput = Partial<{ nom: string; rolId: number; actiu: boolean
 
 type UseUsersResult = {
   data: UsuariApi[];
+  paginacio: Paginacio | null;
+  pagina: number;
+  setPagina: (pagina: number) => void;
   isLoading: boolean;
   error: ApiError | null;
   refetch: () => void;
@@ -25,17 +29,25 @@ type UseUsersResult = {
   editUser: (id: number, input: EditUserInput) => Promise<UsuariApi>;
 };
 
-// GET /usuaris pagina (contrato §4.12) — el volum real (equip de ~10
-// persones) cap sobradament sota el màxim de pàgina (200), mateix criteri
-// que Categories/Tarifes/Transportistes.
-const MIDA_LLISTAT = 200;
+// Paginació real (20/pàgina). GET /usuaris no accepta cerca per nom/email
+// (només `actiu`, confirmat contra usuaris.ts) — el buscador de la pantalla
+// segueix filtrant client-side sobre la pàgina actual, ver comentari a
+// app/users/page.tsx.
+const MIDA_PAGINA = 20;
 
 export function useUsers(filters: UserFilters = {}): UseUsersResult {
   const [data, setData] = useState<UsuariApi[]>([]);
+  const [paginacio, setPaginacio] = useState<Paginacio | null>(null);
+  const [pagina, setPagina] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const filtersKey = JSON.stringify(filters);
+
+  useEffect(() => {
+    setPagina(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,9 +55,12 @@ export function useUsers(filters: UserFilters = {}): UseUsersResult {
     setError(null);
 
     api
-      .get<RespostaPaginada<UsuariApi>>("/usuaris", { mida: MIDA_LLISTAT, ...filters })
+      .get<RespostaPaginada<UsuariApi>>("/usuaris", { mida: MIDA_PAGINA, pagina, ...filters })
       .then((resposta) => {
-        if (!cancelled) setData(resposta.dades);
+        if (!cancelled) {
+          setData(resposta.dades);
+          setPaginacio(resposta.paginacio);
+        }
       })
       .catch((caught) => {
         if (!cancelled) {
@@ -60,7 +75,7 @@ export function useUsers(filters: UserFilters = {}): UseUsersResult {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reloadToken, filtersKey]);
+  }, [reloadToken, pagina, filtersKey]);
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 
@@ -85,5 +100,5 @@ export function useUsers(filters: UserFilters = {}): UseUsersResult {
     [refetch],
   );
 
-  return { data, isLoading, error, refetch, createUser, editUser };
+  return { data, paginacio, pagina, setPagina, isLoading, error, refetch, createUser, editUser };
 }

@@ -9,6 +9,7 @@ import { DateInput } from "@/components/ui/DateInput";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { IconButton } from "@/components/ui/IconButton";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { useClientTariffs } from "@/hooks/useClientTariffs";
@@ -126,9 +127,16 @@ export default function OrdersPage() {
     [statusCode, orderDateFilter, productionDateFilter, deliveryDateFilter, orderNumberSearch],
   );
 
-  const { data, isLoading, error, refetch, markIncidence } = useOrders(filters);
+  const { data, paginacio, setPagina, isLoading, error, refetch, markIncidence } = useOrders(filters);
+  // useClientTariffs() SENSE paràmetres: taula de consulta completa per
+  // resoldre el codi de client (manté `mida: 200` per defecte, no es toca).
   const { data: clients } = useClientTariffs();
 
+  // El buscador de client segueix sent client-side sobre la pàgina actual
+  // (20 comandes) des que hi ha paginació real — GET /comandes no accepta
+  // cerca de text lliure per nom de client (confirmat contra comandes.ts,
+  // només `clientId` numèric exacte). Pendent de decidir si val la pena
+  // afegir suport real al backend.
   const filtered = data.filter((order) => {
     if (!clientSearch) return true;
     // ComandaResumApi.client sólo trae {id, nom, poblacio} (contrato §4.5) —
@@ -280,6 +288,8 @@ export default function OrdersPage() {
               </tbody>
             </table>
           </div>
+
+          {paginacio && <Pagination paginacio={paginacio} onPageChange={setPagina} />}
         </>
       )}
 

@@ -1,15 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, type FilaMatriuTarifesApi, type TarifaResumApi } from "@/lib/api";
+import { api, ApiError, type FilaMatriuTarifesApi, type Paginacio, type TarifaResumApi } from "@/lib/api";
 
 export type CellSaveResult =
   | { tarifaId: string; success: true }
   | { tarifaId: string; success: false; error: ApiError };
 
+export type RatesFilters = { cerca?: string };
+
 type UseRatesResult = {
   data: FilaMatriuTarifesApi[];
   tariffColumns: TarifaResumApi[];
+  paginacio: Paginacio | null;
+  pagina: number;
+  setPagina: (pagina: number) => void;
   isLoading: boolean;
   error: ApiError | null;
   refetch: () => void;
@@ -21,17 +26,30 @@ type UseRatesResult = {
   createTariff: (codi: string, nom: string) => Promise<void>;
 };
 
-// Igual que Categories/Catàleg: el màxim de pàgina del contracte és 200
-// (comu.ts, MIDA_PAGINA_MAXIMA) i el catàleg real té ~111 articles, així
-// que un sol GET els trau tots i es manté el filtrat client-side.
-const MIDA_LLISTAT = 200;
+// Paginació real de files (20/pàgina) — `tariffColumns` NO forma part
+// d'aquesta paginació: `/tarifes/matriu` sempre el retorna sencer (és la
+// llista de columnes de la matriu, no una fila més), per això els altres 4
+// llocs que criden aquest hook només per `tariffColumns`
+// (client-tariffs/office/orders new/[id]) segueixen veient-les totes sense
+// cap canvi encara que aquí es paginin les files.
+const MIDA_PAGINA = 20;
 
-export function useRates(): UseRatesResult {
+export function useRates(filters: RatesFilters = {}): UseRatesResult {
   const [data, setData] = useState<FilaMatriuTarifesApi[]>([]);
   const [tariffColumns, setTariffColumns] = useState<TarifaResumApi[]>([]);
+  const [paginacio, setPaginacio] = useState<Paginacio | null>(null);
+  const [pagina, setPagina] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const filtersKey = JSON.stringify(filters);
+
+  // Un canvi de filtre (cerca) torna a la pàgina 1 — evita quedar-se en una
+  // pàgina que ja no existeix pel nou resultat filtrat.
+  useEffect(() => {
+    setPagina(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,11 +57,15 @@ export function useRates(): UseRatesResult {
     setError(null);
 
     api
-      .get<{ tarifes: TarifaResumApi[]; dades: FilaMatriuTarifesApi[] }>("/tarifes/matriu", { mida: MIDA_LLISTAT })
+      .get<{ tarifes: TarifaResumApi[]; dades: FilaMatriuTarifesApi[]; paginacio: Paginacio }>(
+        "/tarifes/matriu",
+        { mida: MIDA_PAGINA, pagina, ...filters },
+      )
       .then((resposta) => {
         if (!cancelled) {
           setData(resposta.dades);
           setTariffColumns(resposta.tarifes);
+          setPaginacio(resposta.paginacio);
         }
       })
       .catch((caught) => {
@@ -60,7 +82,8 @@ export function useRates(): UseRatesResult {
     return () => {
       cancelled = true;
     };
-  }, [reloadToken]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadToken, pagina, filtersKey]);
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 
@@ -117,5 +140,5 @@ export function useRates(): UseRatesResult {
     [refetch],
   );
 
-  return { data, tariffColumns, isLoading, error, refetch, savePrices, createTariff };
+  return { data, tariffColumns, paginacio, pagina, setPagina, isLoading, error, refetch, savePrices, createTariff };
 }

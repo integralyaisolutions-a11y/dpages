@@ -5,10 +5,11 @@ import { ClearFiltersButton, FilterBar } from "@/components/ui/FilterBar";
 import { DataCard, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
 import { DateInput } from "@/components/ui/DateInput";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { StatCard } from "@/components/ui/StatCard";
 import { useCatalog } from "@/hooks/useCatalog";
-import { usePanellObrador } from "@/hooks/usePanellObrador";
+import { type ToggleTreballResult, usePanellObrador } from "@/hooks/usePanellObrador";
 import type { FilaPanellObradorApi } from "@/lib/api";
 import { formatData } from "@/lib/dates";
 import { formatDecimal } from "@/lib/decimals";
@@ -21,30 +22,148 @@ const ALL = "Tots";
 const FORMAT_OPTIONS = ["SENCER", "TALLAT", "LLESCAT"];
 const ENVASAT_OPTIONS = ["NORMAL", "NORMAL (pes)", "NORMAL (web)", "ESPECIAL"];
 
-function WorkshopCard({ line }: { line: FilaPanellObradorApi }) {
+function leftBorderClass(treballat: boolean) {
+  return treballat ? "border-l-4 border-l-green-500" : "border-l-4 border-l-gray-200";
+}
+
+/**
+ * Capa 40 — a diferència del checkbox de sòl lectura d'Empaquetat
+ * (`WorkedCheckbox`, packaging/page.tsx), aquest SÍ dispara la crida real:
+ * el propi click és l'acció, sense formulari ni botó "Guardar" separat.
+ * Estat optimista local: es marca/desmarca a l'instant i es desactiva
+ * mentre la crida està en curs; si falla, torna a l'últim valor confirmat
+ * pel servidor (`treballatA`, mai tocat mentre la crida falla) i mostra
+ * l'error just sota el checkbox d'aquesta fila, no de tota la pantalla.
+ */
+function useTreballToggle(
+  comandaId: number,
+  liniaId: number,
+  treballatA: string | null,
+  onToggle: (comandaId: number, liniaId: number, marcat: boolean) => Promise<ToggleTreballResult>,
+) {
+  const [pending, setPending] = useState<boolean | null>(null);
+  const [isToggling, setIsToggling] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const checked = pending ?? treballatA !== null;
+
+  async function handleChange() {
+    const next = !checked;
+    setPending(next);
+    setIsToggling(true);
+    setError(null);
+    const result = await onToggle(comandaId, liniaId, next);
+    setIsToggling(false);
+    setPending(null);
+    if (!result.success) setError(result.error);
+  }
+
+  return { checked, isToggling, error, handleChange };
+}
+
+function TreballCheckbox({
+  checked,
+  disabled,
+  onChange,
+}: {
+  checked: boolean;
+  disabled: boolean;
+  onChange: () => void;
+}) {
   return (
-    <DataCard>
-      <p className="font-semibold text-gray-900">{line.producte.descripcio}</p>
-      <p className="text-sm text-gray-500">{line.client ?? "—"}</p>
+    <input
+      type="checkbox"
+      checked={checked}
+      disabled={disabled}
+      onChange={onChange}
+      aria-label={checked ? "Marcar com a pendent" : "Marcar com a treballada"}
+      className="h-4 w-4 rounded border-gray-300 text-ink disabled:cursor-not-allowed disabled:opacity-60"
+    />
+  );
+}
 
-      <div className="mt-3">
-        <DataCardGrid>
-          <DataCardField label="Envasat">{line.envasat ?? "—"}</DataCardField>
-          <DataCardField label="Format">{line.format ?? "—"}</DataCardField>
-          <DataCardField label="Data producció">
-            {line.dataProduccio ? formatData(line.dataProduccio, false) : "—"}
-          </DataCardField>
-          <DataCardField label="Unitats">{formatDecimal(line.unitats, 2)}</DataCardField>
-          <DataCardField label="Pes (kg)">{formatDecimal(line.kg, 3)}</DataCardField>
-        </DataCardGrid>
-      </div>
+function WorkshopCard({
+  line,
+  onToggle,
+}: {
+  line: FilaPanellObradorApi;
+  onToggle: (comandaId: number, liniaId: number, marcat: boolean) => Promise<ToggleTreballResult>;
+}) {
+  const { checked, isToggling, error, handleChange } = useTreballToggle(
+    line.comandaId,
+    line.liniaId,
+    line.treballatA,
+    onToggle,
+  );
 
-      {line.obsProduccio && (
-        <div className="mt-3 border-t border-gray-100 pt-3">
-          <DataCardField label="Obs. producció">{line.obsProduccio}</DataCardField>
+  return (
+    <div className="relative overflow-hidden rounded-xl">
+      <div className={`absolute inset-y-0 left-0 w-1 ${checked ? "bg-green-500" : "bg-gray-200"}`} />
+      <DataCard>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="font-semibold text-gray-900">{line.producte.descripcio}</p>
+            <p className="text-sm text-gray-500">{line.client ?? "—"}</p>
+          </div>
+          <TreballCheckbox checked={checked} disabled={isToggling} onChange={handleChange} />
         </div>
-      )}
-    </DataCard>
+
+        <div className="mt-3">
+          <DataCardGrid>
+            <DataCardField label="Envasat">{line.envasat ?? "—"}</DataCardField>
+            <DataCardField label="Format">{line.format ?? "—"}</DataCardField>
+            <DataCardField label="Data producció">
+              {line.dataProduccio ? formatData(line.dataProduccio, false) : "—"}
+            </DataCardField>
+            <DataCardField label="Unitats">{formatDecimal(line.unitats, 2)}</DataCardField>
+            <DataCardField label="Pes (kg)">{formatDecimal(line.kg, 3)}</DataCardField>
+          </DataCardGrid>
+        </div>
+
+        {line.obsProduccio && (
+          <div className="mt-3 border-t border-gray-100 pt-3">
+            <DataCardField label="Obs. producció">{line.obsProduccio}</DataCardField>
+          </div>
+        )}
+        {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+      </DataCard>
+    </div>
+  );
+}
+
+function WorkshopRow({
+  line,
+  onToggle,
+}: {
+  line: FilaPanellObradorApi;
+  onToggle: (comandaId: number, liniaId: number, marcat: boolean) => Promise<ToggleTreballResult>;
+}) {
+  const { checked, isToggling, error, handleChange } = useTreballToggle(
+    line.comandaId,
+    line.liniaId,
+    line.treballatA,
+    onToggle,
+  );
+
+  return (
+    <tr className="border-b border-gray-100 last:border-0">
+      <td className={`${leftBorderClass(checked)} px-3 py-3 text-center`}>
+        <TreballCheckbox checked={checked} disabled={isToggling} onChange={handleChange} />
+        {error && <p className="mt-1 max-w-[100px] text-xs text-red-600">{error}</p>}
+      </td>
+      <td className="px-3 py-3 break-words">
+        <span className="font-semibold text-gray-900">{line.producte.descripcio}</span>
+      </td>
+      <td className="px-3 py-3 break-words text-gray-900">{line.envasat ?? "—"}</td>
+      <td className="px-3 py-3 break-words text-gray-900">{line.format ?? "—"}</td>
+      <td className="px-3 py-3 break-words text-gray-900">{line.client ?? "—"}</td>
+      <td className="px-3 py-3 break-words text-gray-900">
+        {line.dataProduccio ? formatData(line.dataProduccio, false) : "—"}
+      </td>
+      <td className="px-3 py-3 text-right text-gray-900">{formatDecimal(line.unitats, 2)}</td>
+      <td className="px-3 py-3 text-right text-gray-900">{formatDecimal(line.kg, 3)}</td>
+      <td className="px-3 py-3 break-words text-gray-900">{line.obsProduccio ?? ""}</td>
+    </tr>
   );
 }
 
@@ -73,7 +192,20 @@ export default function WorkshopPage() {
     [productFilter, envasatFilter, formatFilter, productionDateFilter],
   );
 
-  const { data, totals, isLoading, error, refetch } = usePanellObrador(filters);
+  const { data, totals, paginacio, setPagina, isLoading, error, refetch, toggleTreball } = usePanellObrador(filters);
+
+  // TEMPORAL (paginació real, 2026-08-30): amb 20 files/pàgina, aquest sort
+  // només reordena DINS de la pàgina actual — si totes les pendents cauen a
+  // una altra pàgina, aquesta puede mostrar només treballades. És una
+  // limitació coneguda, no resolta acà: fa falta que el backend exposi un
+  // paràmetre d'ordenació real (ex. `ordenar=pendents_primer`) perquè la
+  // pàgina 1 mostri sempre les pendents primer sense importar el total —
+  // demanat a Gerardo, pendent de resposta. Array.prototype.sort és estable
+  // (ES2019).
+  const sortedData = useMemo(
+    () => [...data].sort((a, b) => Number(a.treballatA !== null) - Number(b.treballatA !== null)),
+    [data],
+  );
 
   function clearFilters() {
     setProductFilter(ALL);
@@ -124,8 +256,8 @@ export default function WorkshopPage() {
       {!isLoading && !error && (
         <>
           <div className="flex flex-col gap-3 xl:hidden">
-            {data.map((line) => (
-              <WorkshopCard key={line.liniaId} line={line} />
+            {sortedData.map((line) => (
+              <WorkshopCard key={line.liniaId} line={line} onToggle={toggleTreball} />
             ))}
           </div>
 
@@ -133,11 +265,14 @@ export default function WorkshopPage() {
             <table className="w-full table-fixed text-sm">
               <thead className="border-b border-gray-200">
                 <tr>
-                  <th className="w-[16%] px-3 py-2 text-left font-medium text-gray-500 break-words">Producte</th>
-                  <th className="w-[11%] px-3 py-2 text-left font-medium text-gray-500 break-words">Envasat</th>
-                  <th className="w-[9%] px-3 py-2 text-left font-medium text-gray-500 break-words">Format</th>
-                  <th className="w-[15%] px-3 py-2 text-left font-medium text-gray-500 break-words">Client</th>
-                  <th className="w-[11%] px-3 py-2 text-left font-medium text-gray-500 break-words">
+                  <th className="w-[5%] px-3 py-2 text-center font-medium text-gray-500 break-words">
+                    <span className="sr-only">Treballada</span>
+                  </th>
+                  <th className="w-[15%] px-3 py-2 text-left font-medium text-gray-500 break-words">Producte</th>
+                  <th className="w-[10%] px-3 py-2 text-left font-medium text-gray-500 break-words">Envasat</th>
+                  <th className="w-[8%] px-3 py-2 text-left font-medium text-gray-500 break-words">Format</th>
+                  <th className="w-[14%] px-3 py-2 text-left font-medium text-gray-500 break-words">Client</th>
+                  <th className="w-[10%] px-3 py-2 text-left font-medium text-gray-500 break-words">
                     Data producció
                   </th>
                   <th className="w-[8%] px-3 py-2 text-right font-medium text-gray-500 break-words">Unitats</th>
@@ -148,25 +283,14 @@ export default function WorkshopPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.map((line) => (
-                  <tr key={line.liniaId} className="border-b border-gray-100 last:border-0">
-                    <td className="px-3 py-3 break-words">
-                      <span className="font-semibold text-gray-900">{line.producte.descripcio}</span>
-                    </td>
-                    <td className="px-3 py-3 break-words text-gray-900">{line.envasat ?? "—"}</td>
-                    <td className="px-3 py-3 break-words text-gray-900">{line.format ?? "—"}</td>
-                    <td className="px-3 py-3 break-words text-gray-900">{line.client ?? "—"}</td>
-                    <td className="px-3 py-3 break-words text-gray-900">
-                      {line.dataProduccio ? formatData(line.dataProduccio, false) : "—"}
-                    </td>
-                    <td className="px-3 py-3 text-right text-gray-900">{formatDecimal(line.unitats, 2)}</td>
-                    <td className="px-3 py-3 text-right text-gray-900">{formatDecimal(line.kg, 3)}</td>
-                    <td className="px-3 py-3 break-words text-gray-900">{line.obsProduccio ?? ""}</td>
-                  </tr>
+                {sortedData.map((line) => (
+                  <WorkshopRow key={line.liniaId} line={line} onToggle={toggleTreball} />
                 ))}
               </tbody>
             </table>
           </div>
+
+          {paginacio && <Pagination paginacio={paginacio} onPageChange={setPagina} />}
         </>
       )}
     </div>

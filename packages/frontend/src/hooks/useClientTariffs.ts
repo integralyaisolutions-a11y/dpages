@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, type ClientApi, type RespostaPaginada } from "@/lib/api";
+import { api, ApiError, type ClientApi, type Paginacio, type RespostaPaginada } from "@/lib/api";
 
 export type ClientFormValues = {
   nom: string;
@@ -12,8 +12,23 @@ export type ClientFormValues = {
   telefon: string | null;
 };
 
+export type ClientTariffsFilters = { cerca?: string };
+
+/**
+ * `mida` per defecte es manté a 200 (no 20): `useClientTariffs()` es fa
+ * servir com a taula de consulta completa en 5 llocs fora de la seva
+ * pròpia pantalla (packaging, office, orders/page, orders/new, orders/[id])
+ * per resoldre nom/codi de client — necessiten TOTS els clients, no una
+ * pàgina de 20. Només `app/client-tariffs/page.tsx` passa `mida: 20`
+ * explícit per paginar de veritat la seva pròpia llista.
+ */
+export type UseClientTariffsParams = { mida?: number };
+
 type UseClientTariffsResult = {
   data: ClientApi[];
+  paginacio: Paginacio | null;
+  pagina: number;
+  setPagina: (pagina: number) => void;
   isLoading: boolean;
   error: ApiError | null;
   refetch: () => void;
@@ -21,16 +36,25 @@ type UseClientTariffsResult = {
   editClient: (id: number, values: ClientFormValues) => Promise<void>;
 };
 
-// Mismo criterio que Categories/Catàleg/Tarifes: el màxim de pàgina del
-// contracte és 200 i el volum real cap còmodament, així que es trau tot
-// d'un GET i es manté el filtrat client-side.
-const MIDA_LLISTAT = 200;
+const MIDA_PER_DEFECTE = 200;
 
-export function useClientTariffs(): UseClientTariffsResult {
+export function useClientTariffs(
+  filters: ClientTariffsFilters = {},
+  params: UseClientTariffsParams = {},
+): UseClientTariffsResult {
+  const { mida = MIDA_PER_DEFECTE } = params;
   const [data, setData] = useState<ClientApi[]>([]);
+  const [paginacio, setPaginacio] = useState<Paginacio | null>(null);
+  const [pagina, setPagina] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const filtersKey = JSON.stringify(filters);
+
+  useEffect(() => {
+    setPagina(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,9 +62,12 @@ export function useClientTariffs(): UseClientTariffsResult {
     setError(null);
 
     api
-      .get<RespostaPaginada<ClientApi>>("/clients", { mida: MIDA_LLISTAT })
+      .get<RespostaPaginada<ClientApi>>("/clients", { mida, pagina, ...filters })
       .then((resposta) => {
-        if (!cancelled) setData(resposta.dades);
+        if (!cancelled) {
+          setData(resposta.dades);
+          setPaginacio(resposta.paginacio);
+        }
       })
       .catch((caught) => {
         if (!cancelled) {
@@ -56,7 +83,8 @@ export function useClientTariffs(): UseClientTariffsResult {
     return () => {
       cancelled = true;
     };
-  }, [reloadToken]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadToken, pagina, mida, filtersKey]);
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 
@@ -100,5 +128,5 @@ export function useClientTariffs(): UseClientTariffsResult {
     [refetch],
   );
 
-  return { data, isLoading, error, refetch, createClient, editClient };
+  return { data, paginacio, pagina, setPagina, isLoading, error, refetch, createClient, editClient };
 }

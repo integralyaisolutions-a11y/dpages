@@ -19,6 +19,11 @@ type UseRolsResult = {
  * GET /rols (contrato §4.12) no pagina — devuelve `{ dades: RolApi[] }` sin
  * `paginacio`, confirmat contra rols.ts. No hi ha DELETE /rols — aquest
  * hook no en té cap funció equivalent, la UI tampoc ofereix l'acció.
+ *
+ * Rollout de paginació real 2026-08-30: reconfirmat que segueix sense
+ * paginar (no hi ha hagut cap canvi de Gerardo) — es deixa aquest hook tal
+ * qual, sense `<Pagination>` a users/page.tsx (pestanya Rols), fins que el
+ * backend l'exposi. Volum real ~7 rols, no urgeix.
  */
 export function useRols(): UseRolsResult {
   const [data, setData] = useState<RolApi[]>([]);

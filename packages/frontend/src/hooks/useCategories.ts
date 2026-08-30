@@ -1,12 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, type CategoriaApi, type RespostaPaginada } from "@/lib/api";
+import { api, ApiError, type CategoriaApi, type Paginacio, type RespostaPaginada } from "@/lib/api";
 
 export type CategoryFormValues = Pick<CategoriaApi, "nom" | "elaboratPorc" | "agrupacioRendiment">;
 
+/**
+ * `mida` per defecte es manté a 200 (no 20): aquest hook no només alimenta
+ * la seva pròpia pantalla (Categories, que sí pagina de veritat passant
+ * `mida: 20` explícit) — `ProductForm.tsx`/`PigYieldFormModal.tsx`/
+ * `pig-yields/page.tsx` el fan servir com a taula de consulta completa per
+ * resoldre noms de categoria, i necessiten TOTES les files, no una pàgina.
+ * Canviar el valor per defecte trencaria aquests 3 llocs en silenci.
+ */
+export type UseCategoriesParams = { mida?: number };
+
 type UseCategoriesResult = {
   data: CategoriaApi[];
+  paginacio: Paginacio | null;
+  pagina: number;
+  setPagina: (pagina: number) => void;
   isLoading: boolean;
   error: ApiError | null;
   refetch: () => void;
@@ -15,13 +28,13 @@ type UseCategoriesResult = {
   deleteCategory: (id: number) => Promise<void>;
 };
 
-// Sin control de paginación en esta pantalla todavía (hoy son 8 categorías,
-// contrato §1 confirma 200 como el máximo permitido) — si el listado de
-// categorías creciera más allá de esto, hace falta agregar paginación real.
-const MIDA_LLISTAT = 200;
+const MIDA_PER_DEFECTE = 200;
 
-export function useCategories(): UseCategoriesResult {
+export function useCategories(params: UseCategoriesParams = {}): UseCategoriesResult {
+  const { mida = MIDA_PER_DEFECTE } = params;
   const [data, setData] = useState<CategoriaApi[]>([]);
+  const [paginacio, setPaginacio] = useState<Paginacio | null>(null);
+  const [pagina, setPagina] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
@@ -32,9 +45,12 @@ export function useCategories(): UseCategoriesResult {
     setError(null);
 
     api
-      .get<RespostaPaginada<CategoriaApi>>("/categories", { mida: MIDA_LLISTAT })
+      .get<RespostaPaginada<CategoriaApi>>("/categories", { mida, pagina })
       .then((resposta) => {
-        if (!cancelled) setData(resposta.dades);
+        if (!cancelled) {
+          setData(resposta.dades);
+          setPaginacio(resposta.paginacio);
+        }
       })
       .catch((caught) => {
         if (!cancelled) {
@@ -50,7 +66,7 @@ export function useCategories(): UseCategoriesResult {
     return () => {
       cancelled = true;
     };
-  }, [reloadToken]);
+  }, [reloadToken, pagina, mida]);
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 
@@ -81,5 +97,5 @@ export function useCategories(): UseCategoriesResult {
     [refetch],
   );
 
-  return { data, isLoading, error, refetch, createCategory, editCategory, deleteCategory };
+  return { data, paginacio, pagina, setPagina, isLoading, error, refetch, createCategory, editCategory, deleteCategory };
 }

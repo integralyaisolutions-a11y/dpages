@@ -6,6 +6,7 @@ import { DataCard, DataCardActions, DataCardField, DataCardGrid } from "@/compon
 import { DateInput } from "@/components/ui/DateInput";
 import { DecimalInput } from "@/components/ui/DecimalInput";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { StatCard } from "@/components/ui/StatCard";
 import { useCarriers } from "@/hooks/useCarriers";
@@ -274,13 +275,15 @@ export default function PackagingPage() {
     [shippingDateFilter, carrierId, clientId, deliveryDateFilter, productFilter],
   );
 
-  const { data, totals, isLoading, error, refetch, saveLliurament } = usePanellEmpaquetat(filters);
+  const { data, totals, paginacio, setPagina, isLoading, error, refetch, saveLliurament } =
+    usePanellEmpaquetat(filters);
 
-  // Ordenament client-side sobre el que ja ha arribat (usePanellEmpaquetat
-  // demana el mida màxim que accepta el backend, 200 — no hi ha cap control
-  // de paginació a la pantalla, així que no hi ha "pàgina 2" invisible amb
-  // més pendents). Array.prototype.sort és estable (ES2019): dins de cada
-  // grup (pendent/treballada) es manté l'ordre que ja portava el backend.
+  // TEMPORAL (paginació real, 2026-08-30): amb 20 files/pàgina, aquest sort
+  // només reordena DINS de la pàgina actual — mateixa limitació coneguda
+  // que workshop/page.tsx, mateix motiu (fa falta un paràmetre d'ordenació
+  // real al backend, demanat a Gerardo, pendent de resposta).
+  // Array.prototype.sort és estable (ES2019): dins de cada grup
+  // (pendent/treballada) es manté l'ordre que ja portava el backend.
   const sortedData = useMemo(
     () => [...data].sort((a, b) => Number(a.confirmatA !== null) - Number(b.confirmatA !== null)),
     [data],
@@ -394,6 +397,8 @@ export default function PackagingPage() {
               </tbody>
             </table>
           </div>
+
+          {paginacio && <Pagination paginacio={paginacio} onPageChange={setPagina} />}
         </>
       )}
     </div>

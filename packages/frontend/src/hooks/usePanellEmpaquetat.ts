@@ -6,6 +6,7 @@ import {
   ApiError,
   type FilaPanellEmpaquetatApi,
   type LliuramentBodyApi,
+  type Paginacio,
   type PanellEmpaquetatApi,
   type TotalsPanellEmpaquetatApi,
 } from "@/lib/api";
@@ -37,22 +38,32 @@ export type LliuramentSaveResult =
 type UsePanellEmpaquetatResult = {
   data: FilaPanellEmpaquetatApi[];
   totals: TotalsPanellEmpaquetatApi | null;
+  paginacio: Paginacio | null;
+  pagina: number;
+  setPagina: (pagina: number) => void;
   isLoading: boolean;
   error: ApiError | null;
   refetch: () => void;
   saveLliurament: (comandaId: number, liniaId: number, body: LliuramentBodyApi) => Promise<LliuramentSaveResult>;
 };
 
-// Mateix criteri que usePanellOficina.ts/usePanellObrador.ts.
-const MIDA_LLISTAT = 200;
+// Paginació real (20/pàgina), mateix criteri que usePanellOficina.ts/usePanellObrador.ts.
+const MIDA_PAGINA = 20;
 
 export function usePanellEmpaquetat(filters: PackagingPanelFilters = {}): UsePanellEmpaquetatResult {
   const [data, setData] = useState<FilaPanellEmpaquetatApi[]>([]);
   const [totals, setTotals] = useState<TotalsPanellEmpaquetatApi | null>(null);
+  const [paginacio, setPaginacio] = useState<Paginacio | null>(null);
+  const [pagina, setPagina] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const filtersKey = JSON.stringify(filters);
+
+  useEffect(() => {
+    setPagina(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,11 +71,12 @@ export function usePanellEmpaquetat(filters: PackagingPanelFilters = {}): UsePan
     setError(null);
 
     api
-      .get<PanellEmpaquetatApi>("/panells/empaquetat", { mida: MIDA_LLISTAT, ...filters })
+      .get<PanellEmpaquetatApi>("/panells/empaquetat", { mida: MIDA_PAGINA, pagina, ...filters })
       .then((resposta) => {
         if (!cancelled) {
           setData(resposta.dades);
           setTotals(resposta.totals);
+          setPaginacio(resposta.paginacio);
         }
       })
       .catch((caught) => {
@@ -80,7 +92,7 @@ export function usePanellEmpaquetat(filters: PackagingPanelFilters = {}): UsePan
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reloadToken, filtersKey]);
+  }, [reloadToken, pagina, filtersKey]);
 
   const refetch = () => setReloadToken((token) => token + 1);
 
@@ -106,5 +118,5 @@ export function usePanellEmpaquetat(filters: PackagingPanelFilters = {}): UsePan
     [],
   );
 
-  return { data, totals, isLoading, error, refetch, saveLliurament };
+  return { data, totals, paginacio, pagina, setPagina, isLoading, error, refetch, saveLliurament };
 }

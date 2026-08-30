@@ -8,6 +8,7 @@ import { EditableCell } from "@/components/ui/EditableCell";
 import { ClearFiltersButton, FilterBar } from "@/components/ui/FilterBar";
 import { IconButton } from "@/components/ui/IconButton";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { useCategories } from "@/hooks/useCategories";
 import { useEditableRow } from "@/hooks/useEditableRow";
@@ -187,9 +188,8 @@ function PigYieldCard({
 
 export default function PigYieldsPage() {
   const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORIES);
-  const { data, isLoading, error, refetch, createPigYield, updatePigYield, deletePigYield } = usePigYields(
-    categoryFilter === ALL_CATEGORIES ? {} : { categoria: categoryFilter },
-  );
+  const { data, paginacio, setPagina, isLoading, error, refetch, createPigYield, updatePigYield, deletePigYield } =
+    usePigYields(categoryFilter === ALL_CATEGORIES ? {} : { categoria: categoryFilter });
   // El filtre `?categoria=` és real i server-side (GET /rendiments-porcs,
   // confirmat amb curl) — les opcions del desplegable NO poden sortir de
   // `data`, perquè un cop filtrat `data` només conté el subconjunt triat i
@@ -290,6 +290,8 @@ export default function PigYieldsPage() {
               </tbody>
             </table>
           </div>
+
+          {paginacio && <Pagination paginacio={paginacio} onPageChange={setPagina} />}
         </>
       )}
 

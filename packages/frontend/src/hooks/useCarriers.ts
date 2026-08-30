@@ -1,22 +1,39 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, type RespostaPaginada, type TransportistaApi } from "@/lib/api";
+import { api, ApiError, type Paginacio, type RespostaPaginada, type TransportistaApi } from "@/lib/api";
+
+export type CarrierFormValues = Pick<TransportistaApi, "nom" | "codi">;
+
+/**
+ * `mida` per defecte es manté a 200 (no 20): `useCarriers()` es fa servir
+ * com a taula de consulta completa en 4 llocs fora de la seva pròpia
+ * pantalla (packaging, office, orders/new, orders/[id]) per omplir el
+ * `SelectFilter`/select de transportista — necessiten TOTS els
+ * transportistes, no una pàgina de 20. Només `app/transportistes/page.tsx`
+ * passa `mida: 20` explícit per paginar de veritat la seva pròpia llista.
+ */
+export type UseCarriersParams = { mida?: number };
 
 type UseCarriersResult = {
   data: TransportistaApi[];
+  paginacio: Paginacio | null;
+  pagina: number;
+  setPagina: (pagina: number) => void;
   isLoading: boolean;
   error: ApiError | null;
   refetch: () => void;
+  createCarrier: (values: CarrierFormValues) => Promise<void>;
+  editCarrier: (id: number, values: CarrierFormValues) => Promise<void>;
 };
 
-// Sólo lectura: esta pantalla no gestiona transportistes, sólo los consume
-// para el select de Comandes. Mismo criterio de "traer todo" que
-// Categories/Tarifes (volumen chico, cabe bajo el máximo de página de 200).
-const MIDA_LLISTAT = 200;
+const MIDA_PER_DEFECTE = 200;
 
-export function useCarriers(): UseCarriersResult {
+export function useCarriers(params: UseCarriersParams = {}): UseCarriersResult {
+  const { mida = MIDA_PER_DEFECTE } = params;
   const [data, setData] = useState<TransportistaApi[]>([]);
+  const [paginacio, setPaginacio] = useState<Paginacio | null>(null);
+  const [pagina, setPagina] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
@@ -27,9 +44,12 @@ export function useCarriers(): UseCarriersResult {
     setError(null);
 
     api
-      .get<RespostaPaginada<TransportistaApi>>("/transportistes", { mida: MIDA_LLISTAT })
+      .get<RespostaPaginada<TransportistaApi>>("/transportistes", { mida, pagina })
       .then((resposta) => {
-        if (!cancelled) setData(resposta.dades);
+        if (!cancelled) {
+          setData(resposta.dades);
+          setPaginacio(resposta.paginacio);
+        }
       })
       .catch((caught) => {
         if (!cancelled) {
@@ -45,9 +65,27 @@ export function useCarriers(): UseCarriersResult {
     return () => {
       cancelled = true;
     };
-  }, [reloadToken]);
+  }, [reloadToken, pagina, mida]);
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 
-  return { data, isLoading, error, refetch };
+  // Sin edición optimista, mismo criterio que useCategories.ts: el backend
+  // devuelve la fila creada/editada, más simple re-pedir la lista.
+  const createCarrier = useCallback(
+    async (values: CarrierFormValues) => {
+      await api.post<TransportistaApi>("/transportistes", values);
+      refetch();
+    },
+    [refetch],
+  );
+
+  const editCarrier = useCallback(
+    async (id: number, values: CarrierFormValues) => {
+      await api.patch<TransportistaApi>(`/transportistes/${id}`, values);
+      refetch();
+    },
+    [refetch],
+  );
+
+  return { data, paginacio, pagina, setPagina, isLoading, error, refetch, createCarrier, editCarrier };
 }
