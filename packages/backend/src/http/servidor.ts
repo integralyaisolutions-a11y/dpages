@@ -13,6 +13,7 @@ import { registrarRutesProductes } from './rutes/api/productes.js';
 import { registrarRutesRendimentsPorcs } from './rutes/api/rendiments-porcs.js';
 import { registrarRutesRols } from './rutes/api/rols.js';
 import { registrarRutesTarifes } from './rutes/api/tarifes.js';
+import { registrarRutaTreball } from './rutes/api/treball.js';
 import { registrarRutesTransportistes } from './rutes/api/transportistes.js';
 import { registrarRutesUsuaris } from './rutes/api/usuaris.js';
 import { registrarRutaSalut } from './rutes/salut.js';
@@ -111,6 +112,7 @@ export function construirServidor(): FastifyInstance {
       registrarRutesTransportistes(api);
       registrarRutesComandes(api);
       registrarRutaLliurament(api);
+      registrarRutaTreball(api);
       registrarRutesPanells(api);
       registrarRutesUsuaris(api);
       registrarRutesRols(api);

@@ -843,6 +843,46 @@ paths:
         '400': { $ref: '#/components/responses/Validacio' }
         '409': { $ref: '#/components/responses/Conflicte' }
 
+  /api/v1/comandes/{comandaId}/linies/{liniaId}/treball:
+    patch:
+      tags: [Comandes]
+      summary: >-
+        Capa 40. Marcar/desmarcar una línea como trabajada (Panell Obrador).
+      description: >-
+        marcat=true fija treballatA a la hora del servidor y treballatPer al
+        usuario autenticado; marcat=false desmarca, ambos vuelven a null. La
+        respuesta siempre se relee de la base después de escribir, nunca
+        ecoa el body (a diferencia del hallazgo de la capa 38 sobre
+        unitatsLliurades en PATCH .../lliurament). 409 si la comanda está
+        congelada, mismo criterio que el resto de endpoints de línea.
+      parameters:
+        - name: comandaId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: liniaId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [marcat]
+              properties:
+                marcat: { type: boolean }
+      responses:
+        '200':
+          description: Línea actualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TreballLiniaResposta' }
+        '400': { $ref: '#/components/responses/Validacio' }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+        '409': { $ref: '#/components/responses/Conflicte' }
+
   /api/v1/panells/oficina:
     get:
       tags: [Panells]
@@ -1916,6 +1956,22 @@ components:
         totalIncidencies: { type: integer }
         tipusIncidencia: { type: string, nullable: true }
 
+    TreballLiniaResposta:
+      type: object
+      description: >-
+        Capa 40. Respuesta de PATCH /comandes/{comandaId}/linies/{liniaId}/
+        treball — siempre releída de la base.
+      properties:
+        liniaId: { type: integer }
+        comandaId: { type: integer }
+        treballatA: { type: string, format: date-time, nullable: true }
+        treballatPer:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            nom: { type: string }
+
     FilaPanellObrador:
       type: object
       description: >-
@@ -1946,6 +2002,23 @@ components:
             unitats_demanades es NUMERIC(10,2) desde esta capa).
         kg: { type: string }
         obsProduccio: { type: string, nullable: true }
+        treballatA:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            Capa 40. Null si nadie marcó la línea como trabajada (o se
+            desmarcó). Ver PATCH /comandes/{comandaId}/linies/{liniaId}/treball.
+        treballatPer:
+          type: object
+          nullable: true
+          description: >-
+            Capa 40. A diferencia de LliuramentResposta.confirmatPer (texto
+            plano, uid de Firebase), esto es un FK real a usuari — se
+            resuelve a {id, nom} de verdad.
+          properties:
+            id: { type: integer }
+            nom: { type: string }
 
     RendimentPorc:
       type: object

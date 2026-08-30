@@ -407,6 +407,27 @@ export interface LliuramentRespostaApi {
   confirmatPer: { id: number; nom: string };
 }
 
+// ── Capa 40 · Treball (Panell Obrador) ──────────────────────────────────
+
+export interface TreballBodyApi {
+  marcat: boolean;
+}
+
+/**
+ * Capa 40 — `PATCH /comandes/:comandaId/linies/:liniaId/treball`. A
+ * diferencia de `LliuramentRespostaApi.confirmatPer` (uid de Firebase en
+ * texto, diseñado antes de que existiera la tabla `usuari`), `treballatPer`
+ * es un FK real — se resuelve con un JOIN, mismo shape `{id, nom}` que
+ * cualquier otra referencia del contrato (`ReferenciaApi`). La respuesta
+ * siempre se relee de la base después de escribir, nunca ecoa el body.
+ */
+export interface TreballLiniaRespostaApi {
+  liniaId: number;
+  comandaId: number;
+  treballatA: string | null;
+  treballatPer: ReferenciaApi | null;
+}
+
 // ── 4.6 · Panell Oficina ─────────────────────────────────────────────────
 
 export interface TotalsPanellOficinaApi {
@@ -486,6 +507,9 @@ export interface FilaPanellObradorApi {
   unitats: string;
   kg: string;
   obsProduccio: string | null;
+  /** Capa 40 — ver TreballLiniaRespostaApi. `null` si nadie marcó la línea como trabajada (o se desmarcó). */
+  treballatA: string | null;
+  treballatPer: ReferenciaApi | null;
 }
 
 export interface PanellObradorApi {

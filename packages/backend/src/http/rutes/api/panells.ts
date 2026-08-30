@@ -302,6 +302,7 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       JOIN producte p ON p.id = cl.producte_id
       LEFT JOIN categoria_producte cat ON cat.id = p.categoria_id
       LEFT JOIN client cli ON cli.id = c.client_id
+      LEFT JOIN usuari tu ON tu.id = cl.treballat_per
       ${where}
     `;
 
@@ -330,12 +331,16 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       unitats: string;
       kg: string;
       obs_produccio: string | null;
+      treballat_a: Date | null;
+      treballat_per_id_seq: string | null;
+      treballat_per_nom: string | null;
     }>(
       `SELECT cl.id_seq AS linia_id_seq, c.id_seq AS comanda_id_seq,
               p.id_seq AS producte_id_seq, p.codi AS producte_codi, p.descripcio AS producte_descripcio,
               cat.nom AS categoria_nom, p.format, p.envasat, cli.nom AS client_nom,
               cl.data_produccio, cl.unitats_demanades AS unitats, cl.pes_calculat_kg AS kg,
-              cl.obs_produccio
+              cl.obs_produccio, cl.treballat_a,
+              tu.id_seq AS treballat_per_id_seq, tu.nom AS treballat_per_nom
        ${base}
        ORDER BY cl.data_produccio ASC NULLS LAST, c.num ASC, cl.ordinal ASC
        LIMIT $${valors.length + 1} OFFSET $${valors.length + 2}`,
@@ -358,6 +363,12 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       unitats: f.unitats,
       kg: f.kg,
       obsProduccio: f.obs_produccio,
+      // Capa 40 — ver PATCH /comandes/:comandaId/linies/:liniaId/treball.
+      treballatA: formatearDataApi(f.treballat_a),
+      treballatPer:
+        f.treballat_per_id_seq !== null && f.treballat_per_nom !== null
+          ? { id: Number(f.treballat_per_id_seq), nom: f.treballat_per_nom }
+          : null,
     }));
 
     return {
