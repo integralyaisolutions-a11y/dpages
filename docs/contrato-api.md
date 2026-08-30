@@ -1073,7 +1073,9 @@ Filtros: `?dataProduccioDes=&dataProduccioFins=&categoriaId=&tipus=&producte=&fo
       "dataProduccio": "2026-08-16T06:00:00Z",
       "unitats": "10.00",
       "kg": "12.500",
-      "obsProduccio": "Tallar fi"
+      "obsProduccio": "Tallar fi",
+      "treballatA": "2026-08-16T07:15:00Z",
+      "treballatPer": { "id": 4, "nom": "Marc Obrador" }
     },
     {
       "liniaId": 982,
@@ -1086,7 +1088,9 @@ Filtros: `?dataProduccioDes=&dataProduccioFins=&categoriaId=&tipus=&producte=&fo
       "dataProduccio": null,
       "unitats": "4.00",
       "kg": "0.000",
-      "obsProduccio": null
+      "obsProduccio": null,
+      "treballatA": null,
+      "treballatPer": null
     }
   ],
   "paginacio": { "pagina": 1, "mida": 50, "total": 34, "totalPagines": 1 }
@@ -1118,6 +1122,44 @@ Filtros: `?dataProduccioDes=&dataProduccioFins=&categoriaId=&tipus=&producte=&fo
 >
 > Ningún filtro nuevo devuelve error si no matchea nada: `dades` queda
 > vacío y `totals` en cero, igual que cualquier otro filtro de este panel.
+
+> **`treballatA`/`treballatPer` (capa 40)** — Obrador no tenía forma de
+> marcar una línea como "trabajada", a diferencia de Empaquetat
+> (`confirmatA`/`confirmatPer`, sección 4.8/5). Se marca con
+> `PATCH /comandes/:comandaId/linies/:liniaId/treball` (ver más abajo).
+> `treballatA` es `null` si nadie la marcó (o se desmarcó). `treballatPer`
+> es una referencia real `{id, nom}` — a diferencia de `confirmatPer`
+> (texto plano con el uid de Firebase, diseñado antes de que existiera la
+> tabla de usuarios), acá sí hay un FK real a `usuari`, así que se resuelve
+> a un nombre de persona de verdad.
+
+**`PATCH /comandes/:comandaId/linies/:liniaId/treball`** (capa 40) — marca
+o desmarca una línea como trabajada desde Obrador.
+
+```json
+{ "marcat": true }
+```
+
+Respuesta `200`:
+
+```json
+{
+  "liniaId": 981,
+  "comandaId": 142,
+  "treballatA": "2026-08-16T07:15:00Z",
+  "treballatPer": { "id": 4, "nom": "Marc Obrador" }
+}
+```
+
+- `marcat: true` → `treballatA` pasa a la hora del servidor, `treballatPer`
+  al usuario autenticado que hizo la llamada.
+- `marcat: false` → **desmarca**: ambos vuelven a `null`.
+- La respuesta siempre se relee de la base después de escribir — nunca
+  ecoa valores calculados en el momento (ver el hallazgo de la capa 38
+  sobre `LliuramentRespostaApi.unitatsLliurades`, que si hacía eso).
+- `409 CONFLICTE` si la comanda está congelada — mismo criterio que el
+  resto de los endpoints de línea. `400 VALIDACIO` si `marcat` falta o no
+  es booleano. `404 NO_TROBAT` si la línea no existe.
 
 ---
 
@@ -1720,6 +1762,12 @@ qué fila estaba.
 **Una llamada por fila.** No acumules cambios para enviarlos juntos: si el
 operario confirma una fila, esa fila se guarda. Si la conexión se corta, no se
 pierde el trabajo de las anteriores.
+
+> **Emparentado, pero más simple (capa 40):**
+> `PATCH /comandes/:comandaId/linies/:liniaId/treball` (sección 4.7) marca/
+> desmarca una línea como trabajada desde Obrador — mismo guard de
+> congelación, pero sin las reglas de "nunca cero"/doble confirmación de
+> este endpoint: es un booleano, no una cantidad.
 
 ---
 
