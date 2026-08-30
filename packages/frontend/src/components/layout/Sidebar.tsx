@@ -14,6 +14,7 @@ import {
   Menu,
   Package,
   Tag,
+  Truck,
   Users,
   X,
 } from "lucide-react";
@@ -32,6 +33,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Catàleg", href: "/catalog", modul: "catalog", icon: Boxes },
   { label: "Llistat de Tarifes", href: "/rates", modul: "tarifes", icon: List },
   { label: "Tarifes per client", href: "/client-tariffs", modul: "tarifes-clients", icon: Tag },
+  { label: "Transportistes", href: "/transportistes", modul: "transportistes", icon: Truck },
   { label: "Comandes", href: "/orders", modul: "comandes", icon: Package },
   { label: "Rendiments Porcs", href: "/pig-yields", modul: "rendiments-porcs", icon: ClipboardList },
   { label: "Panell Oficina", href: "/office", modul: "panell-oficina", icon: LayoutGrid },

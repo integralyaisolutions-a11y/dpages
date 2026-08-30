@@ -36,6 +36,7 @@ const MODULS_VALIDS = [
   'panell-produccio',
   'usuaris',
   'rols',
+  'transportistes',
 ] as const;
 
 /** Elementos de `modulsPermesos` que no están en `MODULS_VALIDS` — vacío si todos son válidos. */

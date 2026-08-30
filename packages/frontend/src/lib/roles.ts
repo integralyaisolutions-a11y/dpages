@@ -25,6 +25,7 @@ export const MODUL_ROUTES: Record<string, string[]> = {
   "panell-empaquetat": ["/packaging"],
   "panell-produccio": ["/production"],
   usuaris: ["/users"],
+  transportistes: ["/transportistes"],
 };
 
 const FALLBACK_ROUTE = "/profile";
@@ -61,6 +62,7 @@ export const MODULS_VALIDS = [
   "panell-produccio",
   "usuaris",
   "rols",
+  "transportistes",
 ] as const;
 
 export const MODUL_LABELS: Record<string, string> = {
@@ -76,4 +78,5 @@ export const MODUL_LABELS: Record<string, string> = {
   "panell-produccio": "Panell de Producció",
   usuaris: "Usuaris",
   rols: "Rols",
+  transportistes: "Transportistes",
 };

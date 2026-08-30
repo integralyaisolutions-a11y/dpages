@@ -3,16 +3,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type RespostaPaginada, type TransportistaApi } from "@/lib/api";
 
+export type CarrierFormValues = Pick<TransportistaApi, "nom" | "codi">;
+
 type UseCarriersResult = {
   data: TransportistaApi[];
   isLoading: boolean;
   error: ApiError | null;
   refetch: () => void;
+  createCarrier: (values: CarrierFormValues) => Promise<void>;
+  editCarrier: (id: number, values: CarrierFormValues) => Promise<void>;
 };
 
-// Sólo lectura: esta pantalla no gestiona transportistes, sólo los consume
-// para el select de Comandes. Mismo criterio de "traer todo" que
-// Categories/Tarifes (volumen chico, cabe bajo el máximo de página de 200).
+// Mismo criterio de "traer todo" que Categories/Tarifes (volumen chico,
+// cabe bajo el máximo de página de 200).
 const MIDA_LLISTAT = 200;
 
 export function useCarriers(): UseCarriersResult {
@@ -49,5 +52,23 @@ export function useCarriers(): UseCarriersResult {
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 
-  return { data, isLoading, error, refetch };
+  // Sin edición optimista, mismo criterio que useCategories.ts: el backend
+  // devuelve la fila creada/editada, más simple re-pedir la lista.
+  const createCarrier = useCallback(
+    async (values: CarrierFormValues) => {
+      await api.post<TransportistaApi>("/transportistes", values);
+      refetch();
+    },
+    [refetch],
+  );
+
+  const editCarrier = useCallback(
+    async (id: number, values: CarrierFormValues) => {
+      await api.patch<TransportistaApi>(`/transportistes/${id}`, values);
+      refetch();
+    },
+    [refetch],
+  );
+
+  return { data, isLoading, error, refetch, createCarrier, editCarrier };
 }
