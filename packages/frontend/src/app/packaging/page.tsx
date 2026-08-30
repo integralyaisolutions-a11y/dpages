@@ -24,6 +24,26 @@ function clientLabel(client: ClientApi) {
   return `${client.codi ?? client.id} · ${client.nom ?? ""}`;
 }
 
+// De sólo lectura — l'únic camí real per marcar-la és carregar unitats/kg i
+// Guardar (que confirma al backend, ver PATCH .../lliurament); aquest
+// checkbox només reflecteix confirmatA, mai el modifica. Mateix tractament
+// que qualsevol checkbox disabled del projecte (ver office/page.tsx).
+function WorkedCheckbox({ confirmatA }: { confirmatA: string | null }) {
+  return (
+    <input
+      type="checkbox"
+      checked={confirmatA !== null}
+      disabled
+      aria-label={confirmatA !== null ? "Línia treballada" : "Línia pendent"}
+      className="h-4 w-4 rounded border-gray-300 text-ink"
+    />
+  );
+}
+
+function leftBorderClass(confirmatA: string | null) {
+  return confirmatA !== null ? "border-l-4 border-l-green-500" : "border-l-4 border-l-gray-200";
+}
+
 type Draft = { unitatsLliurades: string; kgLliurats: string };
 
 function PackagingRow({
@@ -63,6 +83,9 @@ function PackagingRow({
 
   return (
     <tr className="border-b border-gray-100 last:border-0">
+      <td className={`${leftBorderClass(line.confirmatA)} px-3 py-3 text-center`}>
+        <WorkedCheckbox confirmatA={line.confirmatA} />
+      </td>
       <td className="px-3 py-3 break-words text-gray-900">
         {line.dataExpedicio ? formatData(line.dataExpedicio, false) : "—"}
       </td>
@@ -142,9 +165,18 @@ function PackagingCard({
   });
 
   return (
-    <DataCard>
-      <p className="font-semibold text-gray-900">{line.producte}</p>
-      <p className="text-sm text-gray-500">{line.client ?? "—"}</p>
+    <div className="relative overflow-hidden rounded-xl">
+      <div
+        className={`absolute inset-y-0 left-0 w-1 ${line.confirmatA !== null ? "bg-green-500" : "bg-gray-200"}`}
+      />
+      <DataCard>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="font-semibold text-gray-900">{line.producte}</p>
+            <p className="text-sm text-gray-500">{line.client ?? "—"}</p>
+          </div>
+          <WorkedCheckbox confirmatA={line.confirmatA} />
+        </div>
 
       <div className="mt-3">
         <DataCardGrid>
@@ -194,7 +226,8 @@ function PackagingCard({
         </button>
       </DataCardActions>
       {generalError && <p className="mt-2 text-xs text-red-600">{generalError}</p>}
-    </DataCard>
+      </DataCard>
+    </div>
   );
 }
 
@@ -242,6 +275,16 @@ export default function PackagingPage() {
   );
 
   const { data, totals, isLoading, error, refetch, saveLliurament } = usePanellEmpaquetat(filters);
+
+  // Ordenament client-side sobre el que ja ha arribat (usePanellEmpaquetat
+  // demana el mida màxim que accepta el backend, 200 — no hi ha cap control
+  // de paginació a la pantalla, així que no hi ha "pàgina 2" invisible amb
+  // més pendents). Array.prototype.sort és estable (ES2019): dins de cada
+  // grup (pendent/treballada) es manté l'ordre que ja portava el backend.
+  const sortedData = useMemo(
+    () => [...data].sort((a, b) => Number(a.confirmatA !== null) - Number(b.confirmatA !== null)),
+    [data],
+  );
 
   function clearFilters() {
     setShippingDateFilter("");
@@ -308,7 +351,7 @@ export default function PackagingPage() {
       {!isLoading && !error && (
         <>
           <div className="flex flex-col gap-3 xl:hidden">
-            {data.map((line) => (
+            {sortedData.map((line) => (
               <PackagingCard key={line.liniaId} line={line} onSave={handleSave} />
             ))}
           </div>
@@ -317,32 +360,35 @@ export default function PackagingPage() {
             <table className="w-full table-fixed text-sm">
               <thead className="border-b border-gray-200">
                 <tr>
+                  <th className="w-[5%] px-3 py-2 text-center font-medium text-gray-500 break-words">
+                    <span className="sr-only">Treballada</span>
+                  </th>
                   <th className="w-[10%] px-3 py-2 text-left font-medium text-gray-500 break-words">
                     Data d&apos;expedició
                   </th>
-                  <th className="w-[9%] px-3 py-2 text-left font-medium text-gray-500 break-words">
+                  <th className="w-[8%] px-3 py-2 text-left font-medium text-gray-500 break-words">
                     Data de lliurament
                   </th>
                   <th className="w-[12%] px-3 py-2 text-left font-medium text-gray-500 break-words">Transportista</th>
                   <th className="w-[12%] px-3 py-2 text-left font-medium text-gray-500 break-words">Producte</th>
-                  <th className="w-[10%] px-3 py-2 text-left font-medium text-gray-500 break-words">Client</th>
+                  <th className="w-[9%] px-3 py-2 text-left font-medium text-gray-500 break-words">Client</th>
                   <th className="w-[10%] px-3 py-2 text-right font-medium text-gray-500 break-words">
                     Unitats demanades
                   </th>
-                  <th className="w-[9%] px-3 py-2 text-right font-medium text-gray-500 break-words">
+                  <th className="w-[8%] px-3 py-2 text-right font-medium text-gray-500 break-words">
                     Unitats lliurades
                   </th>
-                  <th className="w-[9%] px-3 py-2 text-right font-medium text-gray-500 break-words">
+                  <th className="w-[8%] px-3 py-2 text-right font-medium text-gray-500 break-words">
                     Kilos demanats
                   </th>
-                  <th className="w-[9%] px-3 py-2 text-right font-medium text-gray-500 break-words">
+                  <th className="w-[8%] px-3 py-2 text-right font-medium text-gray-500 break-words">
                     Kilos lliurats
                   </th>
                   <th className="w-[10%] px-3 py-2 text-center font-medium text-gray-500 break-words">Guardar</th>
                 </tr>
               </thead>
               <tbody>
-                {data.map((line) => (
+                {sortedData.map((line) => (
                   <PackagingRow key={line.liniaId} line={line} onSave={handleSave} />
                 ))}
               </tbody>

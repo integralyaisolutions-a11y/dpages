@@ -111,10 +111,10 @@ export default function ProductionPage() {
   const nombrePorcs = nombrePorcsInput.trim() === "" ? null : Number(nombrePorcsInput);
   const nombrePorcsValid = nombrePorcs !== null && Number.isFinite(nombrePorcs) && nombrePorcs > 0;
   // El backend ja rebutja ≤0 amb 400 — acá es talla abans de disparar cap
-  // fetch (mateix mecanisme que el buit) i es mostra un missatge concret
-  // vora el camp, en comptes de deixar que arribi l'error genèric del
-  // backend.
-  const nombrePorcsError = nombrePorcsInput.trim() !== "" && !nombrePorcsValid ? "El mínim és 1." : null;
+  // fetch i es mostra un missatge concret vora el camp, en comptes de
+  // deixar que arribi l'error genèric del backend. El camp buit es tracta
+  // exactament igual que 0/negatiu: sense fetch, mateix missatge.
+  const nombrePorcsError = !nombrePorcsValid ? "El mínim és 1." : null;
 
   const filters = useMemo(
     () => ({
