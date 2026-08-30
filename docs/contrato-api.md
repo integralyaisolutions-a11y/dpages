@@ -1422,10 +1422,20 @@ Confirmada con el cliente el 18/08/2026, implementada en la capa 17. Un
 restringe acciones dentro de un módulo. Ver ADR-021: hasta la capa 19,
 ningún endpoint de negocio bloqueaba por rol; `modulsPermesos` era sólo lo
 que el **frontend** usaba para decidir qué mostrar en el menú. La capa 19
-(`POST /usuaris`, más abajo) es la **primera excepción**: el backend
-mismo exige el módulo `"usuaris"` porque dar de alta gente con acceso al
-sistema no puede quedar librado a que el frontend oculte el botón. El
-resto de los endpoints sigue sin restricción de rol.
+(`POST /usuaris`) fue la primera excepción: el backend mismo exige el
+módulo `"usuaris"` porque dar de alta gente con acceso al sistema no puede
+quedar librado a que el frontend oculte el botón.
+
+> **Agujero de seguridad corregido en la capa 39.** Tres endpoints de
+> gestión de usuarios/roles se habían quedado sin esa misma protección:
+> `PATCH /usuaris/:id` (cualquier usuario autenticado, incluido uno recién
+> auto-provisionado como `"General"`, podía editar el `rolId` de
+> cualquiera — incluido el propio, auto-promoviéndose a Administrador) y
+> `POST`/`PATCH /rols` (cualquier usuario autenticado podía crear o editar
+> roles, incluido agregarles `"usuaris"`/`"rols"` a `modulsPermesos`). Los
+> tres exigen ahora el mismo módulo `"usuaris"` que ya exigía
+> `POST /usuaris` — `403 SENSE_PERMIS` sin él. El resto de los endpoints de
+> negocio sigue sin restricción de rol, tal como antes.
 
 > **Decisión de negocio ya tomada:** hoy existen dos roles. `"General"`
 > tiene acceso a todos los módulos **operativos** del negocio (lo que
@@ -1483,16 +1493,31 @@ resto de los endpoints sigue sin restricción de rol.
 }
 ```
 
-**`POST /rols`** · **`PATCH /rols/:id`** (cuerpo parcial)
+**`POST /rols`** · **`PATCH /rols/:id`** (cuerpo parcial) · **`DELETE /rols/:id`**
+(capa 39) — **los tres exigen el módulo `"usuaris"`** (ver nota de
+seguridad arriba); sin él, `403 SENSE_PERMIS`.
 
 ```json
 { "nom": "Obrador", "modulsPermesos": ["panell-obrador"] }
 ```
 
-> No hay `DELETE /rols/:id` todavía — un rol en uso por algún `usuari` no
-> se puede borrar sin dejarlo sin rol (`usuari.rolId` es obligatorio). Se
-> agrega en una capa posterior si hace falta, con el mismo criterio de
-> borrado protegido que ya usa `DELETE /categories/:id`.
+> **`modulsPermesos` (capa 39) se valida contra una lista cerrada.**
+> Cualquier valor fuera de esta lista rechaza con `400 VALIDACIO`, con el/
+> los valor(es) inválido(s) en el detalle del error. La lista es la unión
+> de los módulos de los dos roles sembrados por la migración 0014
+> (`"rols"` incluido, aunque el frontend todavía no tiene una pantalla de
+> gestión de roles que lo consuma — sigue siendo un permiso válido):
+>
+> `categories`, `catalog`, `tarifes`, `tarifes-clients`, `comandes`,
+> `rendiments-porcs`, `panell-oficina`, `panell-obrador`,
+> `panell-empaquetat`, `panell-produccio`, `usuaris`, `rols`.
+
+**`DELETE /rols/:id`** (capa 39, no existía) — **borrado protegido**, mismo
+criterio que `DELETE /categories/:id`: si algún `usuari` tiene este rol
+asignado (`usuari.rolId`), rechaza con `409 CONFLICTE` — nunca se puede
+borrar un rol en uso, porque `usuari.rolId` es obligatorio y no hay a qué
+reasignarlo automáticamente. Sin usuarios asignados, `204` sin cuerpo.
+`404 NO_TROBAT` si el id no existe.
 
 **`GET /usuaris`**
 
@@ -1520,7 +1545,9 @@ Filtros: `?actiu=true`
 
 **`PATCH /usuaris/:id`** (cuerpo parcial) — sólo `nom`, `rolId` y `actiu`.
 `firebaseUid` y `email` son **inmutables** una vez creado el usuario (el
-vínculo con el token de Firebase no se reasigna a mano).
+vínculo con el token de Firebase no se reasigna a mano). **Exige el módulo
+`"usuaris"` (capa 39)** — sin él, `403 SENSE_PERMIS`, incluido el caso de
+un usuario intentando editar su propio `rolId` (auto-promoción).
 
 ```json
 { "nom": "Anna Empaquetat", "rolId": 2 }

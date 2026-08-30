@@ -8,6 +8,7 @@ import {
   type EntornTestApi,
   netejarEntornApi,
   prepararEntornApi,
+  promoureAAdministrador,
 } from './test-suport.js';
 import { crearUsuariAmbLink } from './usuaris.js';
 
@@ -89,7 +90,7 @@ describe('API negoci — /jo, /usuaris, /rols (Postgres real, esquema aislado)',
 
   it('PATCH /usuaris/:id: edita nom/rolId/actiu, pero no toca firebaseUid ni email', async () => {
     const fastify = construirServidor();
-    await fastify.inject({ method: 'GET', url: '/api/v1/jo' });
+    await promoureAAdministrador(entorn, fastify);
     const jo = cuerpoJson<UsuariApi>(await fastify.inject({ method: 'GET', url: '/api/v1/jo' }));
 
     const rolNou = cuerpoJson<RolApi>(
@@ -120,6 +121,7 @@ describe('API negoci — /jo, /usuaris, /rols (Postgres real, esquema aislado)',
 
   it('PATCH /usuaris/:id amb un id inexistent da 404 NO_TROBAT', async () => {
     const fastify = construirServidor();
+    await promoureAAdministrador(entorn, fastify);
     const res = await fastify.inject({
       method: 'PATCH',
       url: '/api/v1/usuaris/999999',
@@ -134,7 +136,7 @@ describe('API negoci — /jo, /usuaris, /rols (Postgres real, esquema aislado)',
 
   it('PATCH /usuaris/:id amb rolId inexistent da 400 VALIDACIO', async () => {
     const fastify = construirServidor();
-    await fastify.inject({ method: 'GET', url: '/api/v1/jo' });
+    await promoureAAdministrador(entorn, fastify);
     const jo = cuerpoJson<UsuariApi>(await fastify.inject({ method: 'GET', url: '/api/v1/jo' }));
 
     const res = await fastify.inject({
@@ -239,6 +241,12 @@ describe('API negoci — /jo, /usuaris, /rols (Postgres real, esquema aislado)',
   it('POST /usuaris: sense el mòdul "usuaris" (rol General, per defecte en dev) dona 403 SENSE_PERMIS', async () => {
     const fastify = construirServidor();
     await fastify.inject({ method: 'GET', url: '/api/v1/jo' });
+    // Defensivo: no depende del orden respecto a otros tests de este mismo
+    // archivo (comparten esquema) que promueven al usuario de prueba a
+    // Administrador — se asegura de arrancar sin el módulo 'usuaris'.
+    await entorn.poolTest.query(
+      `UPDATE usuari SET rol_id = (SELECT id FROM rol WHERE nom = 'General') WHERE firebase_uid = 'dev-sense-auth'`,
+    );
 
     const res = await fastify.inject({
       method: 'POST',
@@ -274,6 +282,7 @@ describe('API negoci — /jo, /usuaris, /rols (Postgres real, esquema aislado)',
 
   it('POST /rols crea un rol nuevo', async () => {
     const fastify = construirServidor();
+    await promoureAAdministrador(entorn, fastify);
     const res = await fastify.inject({
       method: 'POST',
       url: '/api/v1/rols',
@@ -289,6 +298,7 @@ describe('API negoci — /jo, /usuaris, /rols (Postgres real, esquema aislado)',
 
   it('POST /rols sense nom da 400 VALIDACIO', async () => {
     const fastify = construirServidor();
+    await promoureAAdministrador(entorn, fastify);
     const res = await fastify.inject({
       method: 'POST',
       url: '/api/v1/rols',
@@ -303,6 +313,7 @@ describe('API negoci — /jo, /usuaris, /rols (Postgres real, esquema aislado)',
 
   it('PATCH /rols/:id edita modulsPermesos parcialmente', async () => {
     const fastify = construirServidor();
+    await promoureAAdministrador(entorn, fastify);
     const creat = cuerpoJson<RolApi>(
       await fastify.inject({
         method: 'POST',
@@ -314,13 +325,44 @@ describe('API negoci — /jo, /usuaris, /rols (Postgres real, esquema aislado)',
     const res = await fastify.inject({
       method: 'PATCH',
       url: `/api/v1/rols/${creat.id}`,
-      payload: { modulsPermesos: ['comandes', 'clients', 'tarifes'] },
+      payload: { modulsPermesos: ['comandes', 'tarifes-clients', 'tarifes'] },
     });
 
     expect(res.statusCode).toBe(200);
     const cuerpo = cuerpoJson<RolApi>(res);
     expect(cuerpo.nom).toBe('Oficina'); // no enviado, no cambia
-    expect(cuerpo.modulsPermesos).toEqual(['comandes', 'clients', 'tarifes']);
+    expect(cuerpo.modulsPermesos).toEqual(['comandes', 'tarifes-clients', 'tarifes']);
+
+    await fastify.close();
+  });
+
+  it('PATCH /usuaris/:id: usuari amb rol General (sense el mòdul "usuaris") intentant auto-promocionar-se a Administrador dona 403 SENSE_PERMIS', async () => {
+    const fastify = construirServidor();
+    const jo = cuerpoJson<UsuariApi>(await fastify.inject({ method: 'GET', url: '/api/v1/jo' }));
+    // Defensivo: no depende del orden de los tests anteriores — se
+    // asegura de que el usuario de prueba arranca sin el módulo 'usuaris',
+    // tal como lo deja el auto-provisioning real (rol General).
+    await entorn.poolTest.query(
+      `UPDATE usuari SET rol_id = (SELECT id FROM rol WHERE nom = 'General') WHERE firebase_uid = 'dev-sense-auth'`,
+    );
+    const rolAdmin = await entorn.poolTest.query<{ id_seq: string }>(
+      `SELECT id_seq FROM rol WHERE nom = 'Administrador'`,
+    );
+
+    const res = await fastify.inject({
+      method: 'PATCH',
+      url: `/api/v1/usuaris/${jo.id}`,
+      payload: { rolId: Number(rolAdmin.rows[0]!.id_seq) },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ error: { codi: 'SENSE_PERMIS' } });
+
+    // Y no quedó a medio aplicar: sigue siendo General.
+    const despues = cuerpoJson<UsuariApi>(
+      await fastify.inject({ method: 'GET', url: '/api/v1/jo' }),
+    );
+    expect(despues.rol.nom).toBe('General');
 
     await fastify.close();
   });

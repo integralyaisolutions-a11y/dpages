@@ -1180,6 +1180,12 @@ paths:
     post:
       tags: [Rols]
       summary: Crear un rol
+      description: >-
+        Capa 39: restringido, sólo usuarios con "usuaris" en su
+        modulsPermesos (403 SENSE_PERMIS si no) — mismo guard que ya usaba
+        POST /usuaris. modulsPermesos se valida contra la lista cerrada de
+        RolEntrada.modulsPermesos — cualquier valor fuera de ella rechaza
+        con 400 VALIDACIO.
       requestBody:
         required: true
         content:
@@ -1192,11 +1198,15 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Rol' }
         '400': { $ref: '#/components/responses/Validacio' }
+        '403': { $ref: '#/components/responses/SensePermis' }
 
   /api/v1/rols/{id}:
     patch:
       tags: [Rols]
       summary: Actualizar un rol (parcial)
+      description: >-
+        Capa 39: restringido, mismo guard y misma validación de
+        modulsPermesos que POST /rols.
       parameters:
         - $ref: '#/components/parameters/IdPath'
       requestBody:
@@ -1210,7 +1220,23 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Rol' }
         '400': { $ref: '#/components/responses/Validacio' }
+        '403': { $ref: '#/components/responses/SensePermis' }
         '404': { $ref: '#/components/responses/NoTrobat' }
+    delete:
+      tags: [Rols]
+      summary: Eliminar un rol (capa 39, no existía antes)
+      description: >-
+        Restringido, mismo guard que POST/PATCH /rols. Borrado protegido —
+        mismo criterio que DELETE /categories/{id}: si algún usuari tiene
+        este rol asignado, 409 CONFLICTE (usuari.rolId es obligatorio, no
+        hay a qué reasignarlo automáticamente).
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '204': { description: Eliminado }
+        '403': { $ref: '#/components/responses/SensePermis' }
+        '404': { $ref: '#/components/responses/NoTrobat' }
+        '409': { $ref: '#/components/responses/Conflicte' }
 
   /api/v1/usuaris:
     get:
@@ -1269,6 +1295,12 @@ paths:
       summary: >-
         Actualizar un usuario (parcial) — sólo nom/rolId/actiu.
         firebaseUid y email son inmutables una vez creado.
+      description: >-
+        Capa 39: restringido, sólo usuarios con "usuaris" en su
+        modulsPermesos (403 SENSE_PERMIS si no) — mismo guard que ya usaba
+        POST /usuaris. Corrige un agujero de seguridad: cualquier usuario
+        autenticado podía editar rolId de cualquiera, incluido el propio
+        (auto-promoción a Administrador).
       parameters:
         - $ref: '#/components/parameters/IdPath'
       requestBody:
@@ -1282,6 +1314,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Usuari' }
         '400': { $ref: '#/components/responses/Validacio' }
+        '403': { $ref: '#/components/responses/SensePermis' }
         '404': { $ref: '#/components/responses/NoTrobat' }
 
   /api/v1/jo:
@@ -2042,10 +2075,12 @@ components:
         Define qué módulos ve el usuario en el frontend. Capa 17. Hoy
         existen "Administrador" (todos los módulos) y "General" (todos
         salvo "usuaris"/"rols"). ADR-021: hasta la capa 19 ningún endpoint
-        de negocio restringía por rol — POST /usuaris (capa 19) es la
-        primera excepción, exige "usuaris" en modulsPermesos.
-        Parametrizable sin desarrollo si algún día hace falta más
-        granularidad.
+        de negocio restringía por rol — POST /usuaris (capa 19) fue la
+        primera excepción, exige "usuaris" en modulsPermesos. Capa 39:
+        PATCH /usuaris/{id} y POST/PATCH/DELETE /rols exigen ahora el mismo
+        módulo (agujero de seguridad corregido — auto-promoción a
+        Administrador). Parametrizable sin desarrollo si algún día hace
+        falta más granularidad.
       properties:
         id: { type: integer }
         nom: { type: string }
@@ -2065,6 +2100,7 @@ components:
               panell-empaquetat,
               panell-produccio,
               usuaris,
+              rols,
             ]
 
     RolEntrada:
@@ -2074,7 +2110,25 @@ components:
         nom: { type: string }
         modulsPermesos:
           type: array
-          items: { type: string }
+          description: >-
+            Capa 39: validado contra una lista cerrada — cualquier valor
+            fuera de ella rechaza con 400 VALIDACIO (con el/los valor(es)
+            inválido(s) en el detalle del error).
+          items:
+            type: string
+            enum:
+              - categories
+              - catalog
+              - tarifes
+              - tarifes-clients
+              - comandes
+              - rendiments-porcs
+              - panell-oficina
+              - panell-obrador
+              - panell-empaquetat
+              - panell-produccio
+              - usuaris
+              - rols
 
     Usuari:
       type: object
