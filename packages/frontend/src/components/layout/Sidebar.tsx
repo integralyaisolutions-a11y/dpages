@@ -99,7 +99,9 @@ function UserMenu({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: 
           {initial}
         </span>
         {!collapsed && (
-          <span className="min-w-0 flex-1 truncate text-left text-sm font-medium text-gray-900">{user.nom}</span>
+          <span title={user.nom} className="min-w-0 flex-1 truncate text-left text-sm font-medium text-gray-900">
+            {user.nom}
+          </span>
         )}
       </button>
     </div>
