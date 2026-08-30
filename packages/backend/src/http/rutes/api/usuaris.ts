@@ -204,7 +204,12 @@ export function registrarRutesUsuaris(fastify: FastifyInstance): void {
     return resposta;
   });
 
-  fastify.patch('/usuaris/:id', async (req, reply) => {
+  // Capa 39 — agujero de seguridad: este endpoint no tenía NINGÚN guard —
+  // cualquier usuario autenticado (incluido uno recién auto-provisionado
+  // como General) podía editar rolId de cualquier usuario, incluido el
+  // propio → auto-promoción a Administrador. Mismo guard que ya usaba
+  // POST /usuaris (crearGuardaModul, ver comu.ts), reusado tal cual.
+  fastify.patch('/usuaris/:id', { preHandler: crearGuardaModul('usuaris') }, async (req, reply) => {
     const idPublic = parsearIdPublic((req.params as { id: string }).id);
     if (idPublic === null) return enviarNoTrobat(reply);
 

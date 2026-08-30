@@ -59,6 +59,27 @@ export function cuerpoJson<T>(res: { json: () => unknown }): T {
   return res.json() as T;
 }
 
+/**
+ * Capa 39 — helper compartido: promueve el usuario auto-provisionado de
+ * test (uid fijo `dev-sense-auth`, ver `AUTH_DISABLED`) al rol
+ * Administrador, para poder ejercer endpoints con guarda de módulo
+ * (`usuaris`/`rols`) en los tests. El bypass de desarrollo siempre resuelve
+ * al mismo uid — no hay forma de simular un segundo usuario real vía
+ * headers — así que "ser Administrador" en un test es literalmente mover
+ * el `rol_id` de esa única fila. Dispara el auto-provisioning primero
+ * (`GET /jo`) por si todavía no corrió en este esquema.
+ */
+export async function promoureAAdministrador(
+  entorn: EntornTestApi,
+  fastify: { inject: (opcions: { method: string; url: string }) => Promise<unknown> },
+): Promise<void> {
+  await fastify.inject({ method: 'GET', url: '/api/v1/jo' });
+  await entorn.poolTest.query(
+    `UPDATE usuari SET rol_id = (SELECT id FROM rol WHERE nom = 'Administrador')
+     WHERE firebase_uid = 'dev-sense-auth'`,
+  );
+}
+
 export async function netejarEntornApi(entorn: EntornTestApi): Promise<void> {
   delete process.env.PGOPTIONS;
   await entorn.poolTest.end();
