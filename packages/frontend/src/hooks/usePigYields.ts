@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   api,
   ApiError,
+  type Paginacio,
   type RendimentPorcApi,
   type RendimentPorcEntradaApi,
   type RespostaPaginada,
@@ -17,6 +18,9 @@ export type PigYieldFilters = {
 
 type UsePigYieldsResult = {
   data: RendimentPorcApi[];
+  paginacio: Paginacio | null;
+  pagina: number;
+  setPagina: (pagina: number) => void;
   isLoading: boolean;
   error: ApiError | null;
   refetch: () => void;
@@ -25,17 +29,21 @@ type UsePigYieldsResult = {
   deletePigYield: (id: number) => Promise<void>;
 };
 
-// El catàleg real té ~111 articles i cada rendiment és 1 línia per producte
-// com a molt — 200 (el màxim de pàgina del contracte) hi cap sencer, mateix
-// criteri que useCatalog.ts.
-const MIDA_LLISTAT = 200;
+const MIDA_PAGINA = 20;
 
 export function usePigYields(filters: PigYieldFilters = {}): UsePigYieldsResult {
   const [data, setData] = useState<RendimentPorcApi[]>([]);
+  const [paginacio, setPaginacio] = useState<Paginacio | null>(null);
+  const [pagina, setPagina] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const filtersKey = JSON.stringify(filters);
+
+  useEffect(() => {
+    setPagina(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,9 +51,12 @@ export function usePigYields(filters: PigYieldFilters = {}): UsePigYieldsResult 
     setError(null);
 
     api
-      .get<RespostaPaginada<RendimentPorcApi>>("/rendiments-porcs", { mida: MIDA_LLISTAT, ...filters })
+      .get<RespostaPaginada<RendimentPorcApi>>("/rendiments-porcs", { mida: MIDA_PAGINA, pagina, ...filters })
       .then((resposta) => {
-        if (!cancelled) setData(resposta.dades);
+        if (!cancelled) {
+          setData(resposta.dades);
+          setPaginacio(resposta.paginacio);
+        }
       })
       .catch((caught) => {
         if (!cancelled) {
@@ -59,10 +70,8 @@ export function usePigYields(filters: PigYieldFilters = {}): UsePigYieldsResult 
     return () => {
       cancelled = true;
     };
-    // filtersKey serialitza `filters` (objecte pla de primitives) — evita
-    // refer la petició en cada render per canvi d'identitat de l'objecte.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reloadToken, filtersKey]);
+  }, [reloadToken, pagina, filtersKey]);
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 
@@ -96,5 +105,16 @@ export function usePigYields(filters: PigYieldFilters = {}): UsePigYieldsResult 
     [refetch],
   );
 
-  return { data, isLoading, error, refetch, createPigYield, updatePigYield, deletePigYield };
+  return {
+    data,
+    paginacio,
+    pagina,
+    setPagina,
+    isLoading,
+    error,
+    refetch,
+    createPigYield,
+    updatePigYield,
+    deletePigYield,
+  };
 }

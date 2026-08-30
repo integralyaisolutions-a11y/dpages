@@ -6,6 +6,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DataCard, DataCardActions, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
 import { IconButton } from "@/components/ui/IconButton";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { useCategories, type CategoryFormValues } from "@/hooks/useCategories";
 import { ApiError, type CategoriaApi } from "@/lib/api";
 import { CategoryFormModal } from "./CategoryFormModal";
@@ -45,7 +46,8 @@ function CategoryCard({
 }
 
 export default function CategoriesPage() {
-  const { data, isLoading, error, refetch, createCategory, editCategory, deleteCategory } = useCategories();
+  const { data, paginacio, setPagina, isLoading, error, refetch, createCategory, editCategory, deleteCategory } =
+    useCategories({ mida: 20 });
   const [formState, setFormState] = useState<{ mode: "create" | "edit"; category?: CategoriaApi } | null>(null);
   const [categoryToDelete, setCategoryToDelete] = useState<CategoriaApi | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -160,6 +162,8 @@ export default function CategoriesPage() {
               </tbody>
             </table>
           </div>
+
+          {paginacio && <Pagination paginacio={paginacio} onPageChange={setPagina} />}
         </>
       )}
 

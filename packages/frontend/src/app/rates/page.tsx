@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { EditableCell } from "@/components/ui/EditableCell";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { useCatalog } from "@/hooks/useCatalog";
@@ -16,6 +17,11 @@ import { TariffFormModal } from "./TariffFormModal";
 
 const ALL = "Tots";
 const ALL_FEM = "Totes";
+
+// Valors fixos del enum real (CHECK constraint, migració 0011) — no es
+// deriva de `data` (amb paginació real la pàgina actual pot no contenir
+// tots els formats possibles), mateix criteri que catalog/page.tsx.
+const FORMAT_OPTIONS = ["SENCER", "TALLAT", "LLESCAT"];
 
 // Descripció és l'ÚNICA columna fixa ("sticky"): no es desplaça amb el
 // scroll horitzontal. Categoria, Format i Codi Producte ara scrollegen
@@ -172,12 +178,23 @@ function RateProductRow({
 }
 
 export default function RatesPage() {
-  const { data, tariffColumns, isLoading, error, refetch, savePrices, createTariff } = useRates();
-  const { data: catalog } = useCatalog();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState(ALL_FEM);
   const [format, setFormat] = useState(ALL);
+
+  // Cerca migrada a server-side (paginació real 2026-08-30): GET
+  // /tarifes/matriu ja accepta `cerca` (ILIKE sobre descripcio/codi,
+  // confirmat contra tarifes.ts) — abans es filtrava client-side sobre les
+  // 200 files ja carregades.
+  const ratesFilters = useMemo(() => (search.trim() ? { cerca: search.trim() } : {}), [search]);
+  const { data, tariffColumns, paginacio, pagina, setPagina, isLoading, error, refetch, savePrices, createTariff } =
+    useRates(ratesFilters);
+  // useCatalog() SENSE paràmetres: es fa servir com a taula de consulta
+  // completa per resoldre categoria/format de CADA producte de la matriu
+  // (no només els 20 de la pàgina actual) — manté `mida: 200` per defecte,
+  // no es toca.
+  const { data: catalog } = useCatalog();
   const [scrollContainer, setScrollContainer] = useState<HTMLDivElement | null>(null);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
@@ -226,17 +243,19 @@ export default function RatesPage() {
     return map;
   }, [catalog]);
 
+  // Categoria: LIMITACIÓ CONEGUDA amb paginació real (mateix criteri que
+  // catalog/page.tsx) — només reflecteix les categories presents a la
+  // pàgina actual, no tot el catàleg. Format SÍ és un conjunt tancat
+  // conegut (CHECK constraint), per això va hardcodejat i no pateix això.
   const categoryOptions = useMemo(
     () => [ALL_FEM, ...distinct(data.map((product) => categoryByProductId.get(product.producteId) ?? "—"))],
     [data, categoryByProductId],
   );
-  const formatOptions = useMemo(
-    () => [ALL, ...distinct(data.map((product) => formatByProductId.get(product.producteId) ?? "—"))],
-    [data, formatByProductId],
-  );
 
+  // `search` ja no es filtra acá: viatja com a `cerca` server-side (ver
+  // `ratesFilters` dalt). Categoria/Format es mantenen client-side sobre la
+  // pàgina actual, fora de l'abast d'aquesta tasca.
   const filtered = data.filter((product) => {
-    if (search && !product.descripcio.toLowerCase().includes(search.toLowerCase())) return false;
     if (category !== ALL_FEM && (categoryByProductId.get(product.producteId) ?? "—") !== category) return false;
     if (format !== ALL && (formatByProductId.get(product.producteId) ?? "—") !== format) return false;
     return true;
@@ -253,7 +272,7 @@ export default function RatesPage() {
       <FilterBar>
         <SearchInput label="Cerca descripció" value={search} onChange={setSearch} />
         <SelectFilter label="Categoria" options={categoryOptions} value={category} onChange={setCategory} />
-        <SelectFilter label="Format" options={formatOptions} value={format} onChange={setFormat} />
+        <SelectFilter label="Format" options={[ALL, ...FORMAT_OPTIONS]} value={format} onChange={setFormat} />
       </FilterBar>
 
       {isLoading && <p className="text-sm text-gray-500">Carregant...</p>}
@@ -271,6 +290,7 @@ export default function RatesPage() {
       )}
 
       {!isLoading && !error && (
+        <>
         <div className="relative">
           <div ref={setScrollContainer} className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
             <table className="text-sm" style={{ width: tableWidth, tableLayout: "fixed", borderCollapse: "collapse" }}>
@@ -340,6 +360,9 @@ export default function RatesPage() {
             </div>
           )}
         </div>
+
+        {paginacio && <Pagination paginacio={paginacio} onPageChange={setPagina} />}
+        </>
       )}
 
       <TariffFormModal

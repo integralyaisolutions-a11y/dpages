@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, type ProducteApi, type RespostaPaginada } from "@/lib/api";
+import { api, ApiError, type Paginacio, type ProducteApi, type RespostaPaginada } from "@/lib/api";
 
 export type ProductFormValues = {
   codi: string | null;
@@ -16,8 +16,24 @@ export type ProductFormValues = {
   actiu: boolean;
 };
 
+export type CatalogFilters = { cerca?: string };
+
+/**
+ * `mida` per defecte es manté a 200 (no 20): `useCatalog()` es fa servir
+ * com a taula de consulta completa en 7 llocs fora de la seva pròpia
+ * pantalla (workshop, packaging, production, orders/new, orders/[id],
+ * PigYieldFormModal, rates/page.tsx — aquest últim el necessita per
+ * resoldre categoria/format de CADA producte de la matriu de tarifes, no
+ * només els 20 de la pàgina actual). Sols `app/catalog/page.tsx` passa
+ * `mida: 20` explícit per paginar de veritat la seva pròpia llista.
+ */
+export type UseCatalogParams = { mida?: number };
+
 type UseCatalogResult = {
   data: ProducteApi[];
+  paginacio: Paginacio | null;
+  pagina: number;
+  setPagina: (pagina: number) => void;
   isLoading: boolean;
   error: ApiError | null;
   refetch: () => void;
@@ -25,17 +41,24 @@ type UseCatalogResult = {
   editProduct: (id: number, values: ProductFormValues) => Promise<void>;
 };
 
-// El màxim de pàgina del contracte és 200 (comu.ts, MIDA_PAGINA_MAXIMA) — el
-// catàleg real té ~111 articles, així que un sol GET els trau tots i es
-// manté el filtrat client-side que ja fa app/catalog/page.tsx, sense haver
-// de recablejar cada filtre a un paràmetre de query.
-const MIDA_LLISTAT = 200;
+const MIDA_PER_DEFECTE = 200;
 
-export function useCatalog(): UseCatalogResult {
+export function useCatalog(filters: CatalogFilters = {}, params: UseCatalogParams = {}): UseCatalogResult {
+  const { mida = MIDA_PER_DEFECTE } = params;
   const [data, setData] = useState<ProducteApi[]>([]);
+  const [paginacio, setPaginacio] = useState<Paginacio | null>(null);
+  const [pagina, setPagina] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const filtersKey = JSON.stringify(filters);
+
+  // Un canvi de cerca torna a la pàgina 1 — evita quedar-se en una pàgina
+  // que ja no existeix pel nou resultat filtrat.
+  useEffect(() => {
+    setPagina(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,9 +66,12 @@ export function useCatalog(): UseCatalogResult {
     setError(null);
 
     api
-      .get<RespostaPaginada<ProducteApi>>("/productes", { mida: MIDA_LLISTAT })
+      .get<RespostaPaginada<ProducteApi>>("/productes", { mida, pagina, ...filters })
       .then((resposta) => {
-        if (!cancelled) setData(resposta.dades);
+        if (!cancelled) {
+          setData(resposta.dades);
+          setPaginacio(resposta.paginacio);
+        }
       })
       .catch((caught) => {
         if (!cancelled) {
@@ -61,7 +87,8 @@ export function useCatalog(): UseCatalogResult {
     return () => {
       cancelled = true;
     };
-  }, [reloadToken]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadToken, pagina, mida, filtersKey]);
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 
@@ -99,5 +126,5 @@ export function useCatalog(): UseCatalogResult {
     [refetch],
   );
 
-  return { data, isLoading, error, refetch, createProduct, editProduct };
+  return { data, paginacio, pagina, setPagina, isLoading, error, refetch, createProduct, editProduct };
 }

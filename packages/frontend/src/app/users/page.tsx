@@ -7,6 +7,7 @@ import { DataCard, DataCardActions } from "@/components/ui/DataCard";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { IconButton } from "@/components/ui/IconButton";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { useRols } from "@/hooks/useRols";
@@ -76,14 +77,28 @@ export default function UsersPage() {
   const [statusFilter, setStatusFilter] = useState(ALL);
 
   // Únic filtre real de GET /usuaris confirmat (contrato §4.12) — la cerca
-  // per nom/email és client-side sobre el llistat complet, mateix criteri
-  // que Categories/Tarifes amb volums petits (~10 persones).
+  // per nom/email és client-side sobre la pàgina actual (20 usuaris): GET
+  // /usuaris no accepta cerca de text lliure (confirmat contra usuaris.ts,
+  // només `actiu`). Pendent de decidir si val la pena afegir suport real
+  // al backend.
   const userFilters = useMemo(
     () => (statusFilter === ALL ? {} : { actiu: statusFilter === "Actiu" }),
     [statusFilter],
   );
 
-  const { data: users, isLoading: usersLoading, error: usersError, createUser, editUser } = useUsers(userFilters);
+  const {
+    data: users,
+    paginacio: usersPaginacio,
+    setPagina: setUsersPagina,
+    isLoading: usersLoading,
+    error: usersError,
+    createUser,
+    editUser,
+  } = useUsers(userFilters);
+  // GET /rols encara NO pagina (confirmat contra rols.ts: `{ dades: RolApi[] }`
+  // sense `paginacio`) — es deixa sense component de paginació a la pestanya
+  // Rols fins que el backend l'exposi. El volum real (~7 rols) fa que no
+  // urgeixi.
   const { data: roles, isLoading: rolesLoading, error: rolesError, createRole, editRole } = useRols();
 
   const [userFormState, setUserFormState] = useState<{ mode: "create" | "edit"; user?: UsuariApi } | null>(null);
@@ -185,6 +200,8 @@ export default function UsersPage() {
                   </tbody>
                 </table>
               </div>
+
+              {usersPaginacio && <Pagination paginacio={usersPaginacio} onPageChange={setUsersPagina} />}
             </>
           )}
         </>

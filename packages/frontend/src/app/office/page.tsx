@@ -7,6 +7,7 @@ import { DataCard, DataCardField, DataCardGrid } from "@/components/ui/DataCard"
 import { DateRangeInput } from "@/components/ui/DateRangeInput";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { StatCard } from "@/components/ui/StatCard";
 import { useCarriers } from "@/hooks/useCarriers";
@@ -154,7 +155,7 @@ export default function OfficePage() {
     ],
   );
 
-  const { data, totals, isLoading, error, refetch } = usePanellOficina(filters);
+  const { data, totals, paginacio, setPagina, isLoading, error, refetch } = usePanellOficina(filters);
 
   // Població de destí no té cap catàleg propi (és text lliure a
   // `comanda.poblacio_desti`, no una entitat com client/tarifa/
@@ -162,6 +163,9 @@ export default function OfficePage() {
   // disponible sense un endpoint dedicat. Es descarten els nulls: no hi ha
   // manera de filtrar per "sense població" contra un backend que compara
   // per igualtat exacta de text (enviar-ho literal no matchejaria res).
+  // LIMITACIÓ CONEGUDA amb paginació real (2026-08-30): només reflecteix
+  // les poblacions presents a la pàgina actual (20 comandes), no totes les
+  // que existeixen — no hi ha cap fix net possible sense un endpoint nou.
   const destinationOptions = useMemo(
     () => [
       ALL_FEM,
@@ -339,6 +343,8 @@ export default function OfficePage() {
               </tbody>
             </table>
           </div>
+
+          {paginacio && <Pagination paginacio={paginacio} onPageChange={setPagina} />}
         </>
       )}
     </div>

@@ -8,6 +8,7 @@ import { DataCard, DataCardActions, DataCardField, DataCardGrid } from "@/compon
 import { FilterBar } from "@/components/ui/FilterBar";
 import { IconButton } from "@/components/ui/IconButton";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { useCatalog } from "@/hooks/useCatalog";
@@ -16,6 +17,14 @@ import { formatDecimal } from "@/lib/decimals";
 
 const ALL = "Tots";
 const ALL_FEM = "Totes";
+
+// Valors fixos del enum real (CHECK constraint, migració 0011) — mateix
+// criteri que workshop/page.tsx: no es deriven de `data` perquè amb
+// paginació real (20/pàgina) la pàgina actual pot no contenir tots els
+// valors possibles.
+const FORMAT_OPTIONS = ["SENCER", "TALLAT", "LLESCAT"];
+const PACKAGING_OPTIONS = ["NORMAL", "NORMAL (pes)", "NORMAL (web)", "ESPECIAL"];
+const STATUS_OPTIONS = ["Actiu", "Inactiu"];
 
 function formatPrice(value: string | null) {
   const formatted = formatDecimal(value, 2);
@@ -67,7 +76,6 @@ function CatalogCard({ product, onEdit }: { product: ProducteApi; onEdit: () => 
 
 export default function CatalogPage() {
   const router = useRouter();
-  const { data, isLoading, error, refetch } = useCatalog();
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState(ALL_FEM);
@@ -76,6 +84,20 @@ export default function CatalogPage() {
   const [packaging, setPackaging] = useState(ALL);
   const [status, setStatus] = useState(ALL);
 
+  // Cerca migrada a server-side (paginació real 2026-08-30): GET /productes
+  // ja accepta `cerca` (ILIKE sobre descripcio/descripcio_venda/codi,
+  // confirmat contra productes.ts) — abans es filtrava client-side sobre
+  // els 200 ja carregats, cosa que amb paginació de 20 només hauria trobat
+  // resultats dins la pàgina actual.
+  const filters = useMemo(() => (search.trim() ? { cerca: search.trim() } : {}), [search]);
+  const { data, paginacio, setPagina, isLoading, error, refetch } = useCatalog(filters, { mida: 20 });
+
+  // Categoria/Agrupació producció: es mantenen derivades de `data` (mateix
+  // criteri d'abans) — LIMITACIÓ CONEGUDA, no resolta acà: amb paginació
+  // real només reflecteixen els valors presents a la pàgina actual, no tot
+  // el catàleg. Format/Envasat/Estat SÍ són un conjunt tancat conegut
+  // (CHECK constraint / booleà), per això van hardcodejats dalt i no
+  // pateixen aquest problema.
   const categoryOptions = useMemo(
     () => [ALL_FEM, ...distinct(data.map((product) => product.categoria?.nom ?? "—"))],
     [data],
@@ -84,15 +106,11 @@ export default function CatalogPage() {
     () => [ALL, ...distinct(data.map((product) => product.agrupacioProduccio ?? "—"))],
     [data],
   );
-  const formatOptions = useMemo(() => [ALL, ...distinct(data.map((product) => product.format ?? "—"))], [data]);
-  const packagingOptions = useMemo(() => [ALL, ...distinct(data.map((product) => product.envasat ?? "—"))], [data]);
-  const statusOptions = useMemo(
-    () => [ALL, ...distinct(data.map((product) => (product.actiu ? "Actiu" : "Inactiu")))],
-    [data],
-  );
 
+  // Format/Envasat/Estat: filtre client-side sobre la pàgina actual, mateix
+  // criteri d'abans (fora de l'abast d'aquesta tasca migrar-los a
+  // server-side, tot i que /productes ja els accepta com a query param).
   const filtered = data.filter((product) => {
-    if (search && !product.descripcio.toLowerCase().includes(search.toLowerCase())) return false;
     if (category !== ALL_FEM && (product.categoria?.nom ?? "—") !== category) return false;
     if (productionGroup !== ALL && (product.agrupacioProduccio ?? "—") !== productionGroup) return false;
     if (format !== ALL && (product.format ?? "—") !== format) return false;
@@ -122,9 +140,9 @@ export default function CatalogPage() {
           value={productionGroup}
           onChange={setProductionGroup}
         />
-        <SelectFilter label="Format" options={formatOptions} value={format} onChange={setFormat} />
-        <SelectFilter label="Envasat" options={packagingOptions} value={packaging} onChange={setPackaging} />
-        <SelectFilter label="Estat" options={statusOptions} value={status} onChange={setStatus} />
+        <SelectFilter label="Format" options={[ALL, ...FORMAT_OPTIONS]} value={format} onChange={setFormat} />
+        <SelectFilter label="Envasat" options={[ALL, ...PACKAGING_OPTIONS]} value={packaging} onChange={setPackaging} />
+        <SelectFilter label="Estat" options={[ALL, ...STATUS_OPTIONS]} value={status} onChange={setStatus} />
       </FilterBar>
 
       {isLoading && <p className="text-sm text-gray-500">Carregant...</p>}
@@ -203,6 +221,8 @@ export default function CatalogPage() {
               </tbody>
             </table>
           </div>
+
+          {paginacio && <Pagination paginacio={paginacio} onPageChange={setPagina} />}
         </>
       )}
     </div>

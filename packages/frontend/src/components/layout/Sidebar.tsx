@@ -28,20 +28,86 @@ type NavItem = {
   icon: ComponentType<{ className?: string }>;
 };
 
-const NAV_ITEMS: NavItem[] = [
-  { label: "Categories", href: "/categories", modul: "categories", icon: Layers },
-  { label: "Catàleg", href: "/catalog", modul: "catalog", icon: Boxes },
-  { label: "Llistat de Tarifes", href: "/rates", modul: "tarifes", icon: List },
-  { label: "Tarifes per client", href: "/client-tariffs", modul: "tarifes-clients", icon: Tag },
-  { label: "Transportistes", href: "/transportistes", modul: "transportistes", icon: Truck },
-  { label: "Comandes", href: "/orders", modul: "comandes", icon: Package },
-  { label: "Rendiments Porcs", href: "/pig-yields", modul: "rendiments-porcs", icon: ClipboardList },
-  { label: "Panell Oficina", href: "/office", modul: "panell-oficina", icon: LayoutGrid },
-  { label: "Panell Producció", href: "/production", modul: "panell-produccio", icon: LayoutGrid },
-  { label: "Panell Obrador", href: "/workshop", modul: "panell-obrador", icon: LayoutGrid },
-  { label: "Panell Empaquetat", href: "/packaging", modul: "panell-empaquetat", icon: LayoutGrid },
-  { label: "Administració d'usuaris", href: "/users", modul: "usuaris", icon: Users },
+// Comandes queda solta, primera i destacada (mateixa jerarquia visual que ja
+// tenia) — no forma part de cap grup.
+const STANDALONE_ITEM: NavItem = { label: "Comandes", href: "/orders", modul: "comandes", icon: Package };
+
+type NavGroup = { label: string; items: NavItem[] };
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    label: "Catàleg",
+    items: [
+      { label: "Categories", href: "/categories", modul: "categories", icon: Layers },
+      { label: "Catàleg", href: "/catalog", modul: "catalog", icon: Boxes },
+      { label: "Rendiments Porcs", href: "/pig-yields", modul: "rendiments-porcs", icon: ClipboardList },
+    ],
+  },
+  {
+    label: "Tarifes",
+    items: [
+      { label: "Llistat de Tarifes", href: "/rates", modul: "tarifes", icon: List },
+      { label: "Tarifes per client", href: "/client-tariffs", modul: "tarifes-clients", icon: Tag },
+    ],
+  },
+  {
+    label: "Panells",
+    items: [
+      { label: "Panell Oficina", href: "/office", modul: "panell-oficina", icon: LayoutGrid },
+      { label: "Panell Obrador", href: "/workshop", modul: "panell-obrador", icon: LayoutGrid },
+      { label: "Panell Empaquetat", href: "/packaging", modul: "panell-empaquetat", icon: LayoutGrid },
+      { label: "Panell Producció", href: "/production", modul: "panell-produccio", icon: LayoutGrid },
+    ],
+  },
+  {
+    label: "Configuració",
+    items: [
+      { label: "Administració d'usuaris", href: "/users", modul: "usuaris", icon: Users },
+      { label: "Transportistes", href: "/transportistes", modul: "transportistes", icon: Truck },
+    ],
+  },
 ];
+
+function NavLink({
+  item,
+  pathname,
+  collapsed,
+  onNavigate,
+}: {
+  item: NavItem;
+  pathname: string;
+  collapsed: boolean;
+  onNavigate?: () => void;
+}) {
+  const active = pathname === item.href;
+  const Icon = item.icon;
+  return (
+    <Link
+      href={item.href}
+      onClick={onNavigate}
+      title={collapsed ? item.label : undefined}
+      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] leading-tight font-medium transition-colors ${
+        active ? "bg-ink text-white" : "text-gray-700 hover:bg-gray-100"
+      } ${collapsed ? "justify-center" : ""}`}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      {!collapsed && <span>{item.label}</span>}
+    </Link>
+  );
+}
+
+// Encabezat no interactiu a propòsit (ni col·lapsable ni clicable) — el
+// pedido prioritza simple sobre elaborat, i amb com a molt 4 ítems per grup
+// no fa falta plegar-los. `spaced` evita un marge superior buit quan és el
+// primer bloc visible de tots (Comandes ocult + primer grup, o primer grup
+// a seques).
+function NavGroupHeader({ label, spaced }: { label: string; spaced: boolean }) {
+  return (
+    <p className={`px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400 ${spaced ? "mt-3" : "mt-0"}`}>
+      {label}
+    </p>
+  );
+}
 
 function UserMenu({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const { user, logout } = useAuth();
@@ -123,64 +189,71 @@ function SidebarContent({
 }) {
   const pathname = usePathname();
   const { user } = useAuth();
-  const visibleItems = user ? NAV_ITEMS.filter((item) => user.rol.modulsPermesos.includes(item.modul)) : [];
+  const modulsPermesos = user?.rol.modulsPermesos ?? [];
+  const standaloneVisible = modulsPermesos.includes(STANDALONE_ITEM.modul);
+  // Grup sencer fora si cap dels seus ítems és visible pel rol actual — mai
+  // es renderitza un títol de grup sense entrades a sota.
+  const visibleGroups = NAV_GROUPS.map((group) => ({
+    label: group.label,
+    items: group.items.filter((item) => modulsPermesos.includes(item.modul)),
+  })).filter((group) => group.items.length > 0);
 
   return (
-    <div className="flex h-full flex-col justify-between">
-      <div>
-        <div className="flex items-center justify-between px-5 pt-6 pb-5">
-          {!collapsed && (
-            <div>
-              <p className="text-base font-bold text-gray-900">Gestió de Comandes</p>
-              <p className="text-sm text-gray-400">Panell operatiu</p>
-            </div>
-          )}
-          {onToggleCollapse && (
-            <button
-              type="button"
-              onClick={onToggleCollapse}
-              aria-label={collapsed ? "Expandir menú" : "Col·lapsar menú"}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 text-gray-400 hover:bg-gray-50"
-            >
-              {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-            </button>
-          )}
-          {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Tancar menú"
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 text-gray-400 hover:bg-gray-50"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-
-        <nav className="flex flex-col gap-1 px-3">
-          {visibleItems.map(({ label, href, icon: Icon }) => {
-            const active = pathname === href;
-            return (
-              <Link
-                key={href}
-                href={href}
-                onClick={onNavigate}
-                title={collapsed ? label : undefined}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                  active ? "bg-ink text-white" : "text-gray-700 hover:bg-gray-100"
-                } ${collapsed ? "justify-center" : ""}`}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {!collapsed && <span>{label}</span>}
-              </Link>
-            );
-          })}
-        </nav>
+    <div className="flex h-full flex-col">
+      <div className="flex shrink-0 items-center justify-between px-5 pt-6 pb-5">
+        {!collapsed && (
+          <div>
+            <p className="text-base font-bold text-gray-900">Gestió de Comandes</p>
+            <p className="text-sm text-gray-400">Panell operatiu</p>
+          </div>
+        )}
+        {onToggleCollapse && (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            aria-label={collapsed ? "Expandir menú" : "Col·lapsar menú"}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 text-gray-400 hover:bg-gray-50"
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </button>
+        )}
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Tancar menú"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 text-gray-400 hover:bg-gray-50"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
-      <div className="border-t border-gray-100 px-3 pt-3 pb-6">
+      {/* flex-1 min-h-0 és imprescindible: sense min-h-0 un fill de flex mai
+          es comprimeix per sota de l'alçada del seu contingut (encara que
+          tingui overflow-y-auto), i la llista es desborda per sota del
+          contenidor en comptes de scrollejar — mateix patró que Modal.tsx. */}
+      <nav className="sidebar-nav-scroll flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pb-2">
+        {standaloneVisible && (
+          <NavLink item={STANDALONE_ITEM} pathname={pathname} collapsed={collapsed} onNavigate={onNavigate} />
+        )}
+        {visibleGroups.map((group, index) => {
+          const somethingBefore = index > 0 || standaloneVisible;
+          return (
+            <div key={group.label} className="flex flex-col gap-1">
+              {collapsed
+                ? somethingBefore && <div className="my-2 border-t border-gray-100" />
+                : <NavGroupHeader label={group.label} spaced={somethingBefore} />}
+              {group.items.map((item) => (
+                <NavLink key={item.href} item={item} pathname={pathname} collapsed={collapsed} onNavigate={onNavigate} />
+              ))}
+            </div>
+          );
+        })}
+      </nav>
+
+      <div className="shrink-0 border-t border-gray-100 px-3 pt-3 pb-4">
         <UserMenu collapsed={collapsed} onNavigate={onNavigate} />
-        {!collapsed && <p className="mt-3 px-1 text-xs text-gray-400">v0.1</p>}
       </div>
     </div>
   );

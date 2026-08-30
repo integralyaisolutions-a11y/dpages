@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, ApiError, type PanellProduccioApi, type PanellProduccioFilaApi } from "@/lib/api";
+import { api, ApiError, type Paginacio, type PanellProduccioApi, type PanellProduccioFilaApi } from "@/lib/api";
 
 /**
  * Els filtres reals de GET /panells/produccio (confirmat contra
@@ -21,6 +21,9 @@ export type ProductionPanelFilters = {
 type UseProductionPanellResult = {
   data: PanellProduccioFilaApi[];
   totals: PanellProduccioApi["totals"] | null;
+  paginacio: Paginacio | null;
+  pagina: number;
+  setPagina: (pagina: number) => void;
   isLoading: boolean;
   error: ApiError | null;
   refetch: () => void;
@@ -28,11 +31,17 @@ type UseProductionPanellResult = {
   isReady: boolean;
 };
 
-const MIDA_LLISTAT = 200;
+// Paginació real (20/pàgina) — les files venen d'un GROUP BY
+// (agrupacioProduccio × agrupacioRendiment, ver panells.ts), acotat pel
+// catàleg real; en la pràctica és probable que `totalPagines` sigui sempre
+// 1, però el component es mostra igual per consistència amb la resta.
+const MIDA_PAGINA = 20;
 
 export function useProductionPanell(filters: ProductionPanelFilters): UseProductionPanellResult {
   const [data, setData] = useState<PanellProduccioFilaApi[]>([]);
   const [totals, setTotals] = useState<PanellProduccioApi["totals"] | null>(null);
+  const [paginacio, setPaginacio] = useState<Paginacio | null>(null);
+  const [pagina, setPagina] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
@@ -41,9 +50,15 @@ export function useProductionPanell(filters: ProductionPanelFilters): UseProduct
   const filtersKey = JSON.stringify(filters);
 
   useEffect(() => {
+    setPagina(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersKey]);
+
+  useEffect(() => {
     if (!isReady) {
       setData([]);
       setTotals(null);
+      setPaginacio(null);
       setError(null);
       setIsLoading(false);
       return;
@@ -55,11 +70,12 @@ export function useProductionPanell(filters: ProductionPanelFilters): UseProduct
 
     const { nombrePorcs, ...rest } = filters;
     api
-      .get<PanellProduccioApi>("/panells/produccio", { mida: MIDA_LLISTAT, nombrePorcs: nombrePorcs!, ...rest })
+      .get<PanellProduccioApi>("/panells/produccio", { mida: MIDA_PAGINA, pagina, nombrePorcs: nombrePorcs!, ...rest })
       .then((resposta) => {
         if (!cancelled) {
           setData(resposta.dades);
           setTotals(resposta.totals);
+          setPaginacio(resposta.paginacio);
         }
       })
       .catch((caught) => {
@@ -75,9 +91,9 @@ export function useProductionPanell(filters: ProductionPanelFilters): UseProduct
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reloadToken, filtersKey, isReady]);
+  }, [reloadToken, pagina, filtersKey, isReady]);
 
   const refetch = () => setReloadToken((token) => token + 1);
 
-  return { data, totals, isLoading, error, refetch, isReady };
+  return { data, totals, paginacio, pagina, setPagina, isLoading, error, refetch, isReady };
 }

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { DataCard, DataCardActions, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
 import { IconButton } from "@/components/ui/IconButton";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { useCarriers } from "@/hooks/useCarriers";
 import type { TransportistaApi } from "@/lib/api";
 import { TransportistFormModal } from "./TransportistFormModal";
@@ -35,7 +36,9 @@ function CarrierCard({ carrier, onEdit }: { carrier: TransportistaApi; onEdit: (
 }
 
 export default function TransportistesPage() {
-  const { data, isLoading, error, refetch, createCarrier, editCarrier } = useCarriers();
+  const { data, paginacio, setPagina, isLoading, error, refetch, createCarrier, editCarrier } = useCarriers({
+    mida: 20,
+  });
   const [formState, setFormState] = useState<{ mode: "create" | "edit"; carrier?: TransportistaApi } | null>(null);
 
   async function handleSave(values: { nom: string; codi: string | null }) {
@@ -117,6 +120,8 @@ export default function TransportistesPage() {
               </tbody>
             </table>
           </div>
+
+          {paginacio && <Pagination paginacio={paginacio} onPageChange={setPagina} />}
         </>
       )}
 

@@ -5,6 +5,7 @@ import { ClearFiltersButton, FilterBar } from "@/components/ui/FilterBar";
 import { DataCard, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
 import { DateInput } from "@/components/ui/DateInput";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { StatCard } from "@/components/ui/StatCard";
 import { useCatalog } from "@/hooks/useCatalog";
@@ -130,7 +131,7 @@ export default function ProductionPage() {
     [nombrePorcsValid, nombrePorcs, agrupacioFilter, productFilter, dateFrom, dateFromTouched, dateTo, dateToTouched],
   );
 
-  const { data, totals, isLoading, error, refetch, isReady } = useProductionPanell(filters);
+  const { data, totals, paginacio, setPagina, isLoading, error, refetch, isReady } = useProductionPanell(filters);
 
   function clearFilters() {
     setAgrupacioFilter(ALL);
@@ -269,6 +270,12 @@ export default function ProductionPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Probablement sempre totalPagines=1 en la pràctica (les files
+              venen d'un GROUP BY agrupacioProduccio×agrupacioRendiment,
+              acotat pel catàleg real) — es mostra igual per consistència
+              amb la resta de pantalles. */}
+          {paginacio && <Pagination paginacio={paginacio} onPageChange={setPagina} />}
         </>
       )}
     </div>
