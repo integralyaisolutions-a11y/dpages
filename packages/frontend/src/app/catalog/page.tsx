@@ -157,18 +157,18 @@ export default function CatalogPage() {
             <table className="w-full table-fixed text-sm">
               <thead className="border-b border-gray-200">
                 <tr>
-                  <th className="w-[12%] px-2 py-2 text-left font-medium text-gray-500 break-words">Categoria</th>
+                  <th className="w-[11%] px-2 py-2 text-left font-medium text-gray-500 break-words">Categoria</th>
                   <th className="w-[12%] px-2 py-2 text-left font-medium text-gray-500 break-words">
                     Agrupació producció
                   </th>
                   <th className="w-[10%] px-2 py-2 text-left font-medium text-gray-500 break-words">Codi</th>
-                  <th className="w-[20%] px-2 py-2 text-left font-medium text-gray-500 break-words">Descripció</th>
+                  <th className="w-[18%] px-2 py-2 text-left font-medium text-gray-500 break-words">Descripció</th>
                   <th className="w-[8%] px-2 py-2 text-left font-medium text-gray-500 break-words">Format</th>
                   <th className="w-[9%] px-2 py-2 text-left font-medium text-gray-500 break-words">Envasat</th>
                   <th className="w-[8%] px-2 py-2 text-right font-medium text-gray-500 break-words">Pes (kg)</th>
                   <th className="w-[9%] px-2 py-2 text-right font-medium text-gray-500 break-words">Preu base</th>
                   <th className="w-[7%] px-2 py-2 text-left font-medium text-gray-500 break-words">Estat</th>
-                  <th className="w-[5%] px-2 py-2 text-right font-medium text-gray-500 break-words">Accions</th>
+                  <th className="w-[8%] px-2 py-2 text-right font-medium text-gray-500 break-words">Accions</th>
                 </tr>
               </thead>
               <tbody>

@@ -17,27 +17,28 @@ import { TariffFormModal } from "./TariffFormModal";
 const ALL = "Tots";
 const ALL_FEM = "Totes";
 
-// Columnes fixes (esquerra) queden "sticky": no es desplacen amb el scroll
-// horitzontal, que només afecta les columnes de tarifa i Guardar (poden
-// créixer amb "Nova tarifa"). És l'únic lloc del projecte on el scroll
+// Descripció és l'ÚNICA columna fixa ("sticky"): no es desplaça amb el
+// scroll horitzontal. Categoria, Format i Codi Producte ara scrollegen
+// juntes amb les columnes de tarifa i "Guardar" (mateix tractament que
+// abans tenien només elles). És l'únic lloc del projecte on el scroll
 // horitzontal contingut és la solució correcta en lloc de tarjetes, perquè
 // el nombre de columnes és dinàmic.
 //
-// A mòbil (<640px) les 4 columnes fixes amb l'amplada d'escriptori (460px)
-// no caben dins del viewport: ocupen tot l'espai visible i la columna de
-// tarifes (i la seva ombra indicadora) queden fora de la vista, sense cap
-// pista que es pugui fer scroll. Per sota de 640px s'usen amplades més
-// compactes perquè les 4 columnes fixes càpiguen i quedi sempre visible
-// una franja de la primera columna de tarifa.
-const CATEGORIA_WIDTH_DESKTOP = 110;
-const FORMAT_WIDTH_DESKTOP = 90;
-const CODI_WIDTH_DESKTOP = 100;
+// Descripció va PRIMERA (abans de Categoria/Format/Codi) perquè és
+// l'única sticky — un sticky no-primer "salta" a l'esquerra en quant
+// l'usuari comença a scrollejar, en lloc de quedar-se on ja estava.
+//
+// Pressupost real a 320px (abans deixava només ~18px lliures, insuficient
+// per percebre cap columna de tarifa — ver informe d'investigació):
+//   320 viewport − 48 padding de <main> (px-6×2) − ~2 border del
+//   contenidor de scroll = 270px disponibles.
+//   270 − 150 (DESCRIPCIO_WIDTH_MOBILE) = 120px lliures per la propera
+//   columna scrollejable — molt per sobre del mínim de 25-30px demanat.
+const CATEGORIA_WIDTH = 110;
+const FORMAT_WIDTH = 90;
+const CODI_WIDTH = 100;
 const DESCRIPCIO_WIDTH_DESKTOP = 160;
-
-const CATEGORIA_WIDTH_MOBILE = 62;
-const FORMAT_WIDTH_MOBILE = 54;
-const CODI_WIDTH_MOBILE = 62;
-const DESCRIPCIO_WIDTH_MOBILE = 74;
+const DESCRIPCIO_WIDTH_MOBILE = 150;
 
 const GUARDAR_WIDTH = 90;
 const TARIFF_COLUMN_WIDTH = 110;
@@ -65,33 +66,9 @@ function distinct(values: string[]) {
   return Array.from(new Set(values));
 }
 
-type ColumnWidths = {
-  categoria: number;
-  format: number;
-  codi: number;
-  descripcio: number;
-  formatLeft: number;
-  codiLeft: number;
-  descripcioLeft: number;
-};
-
-function useColumnWidths(): ColumnWidths {
+function useDescripcioWidth(): number {
   const isMobile = useIsMobileWidth();
-  return useMemo(() => {
-    const categoria = isMobile ? CATEGORIA_WIDTH_MOBILE : CATEGORIA_WIDTH_DESKTOP;
-    const format = isMobile ? FORMAT_WIDTH_MOBILE : FORMAT_WIDTH_DESKTOP;
-    const codi = isMobile ? CODI_WIDTH_MOBILE : CODI_WIDTH_DESKTOP;
-    const descripcio = isMobile ? DESCRIPCIO_WIDTH_MOBILE : DESCRIPCIO_WIDTH_DESKTOP;
-    return {
-      categoria,
-      format,
-      codi,
-      descripcio,
-      formatLeft: categoria,
-      codiLeft: categoria + format,
-      descripcioLeft: categoria + format + codi,
-    };
-  }, [isMobile]);
+  return isMobile ? DESCRIPCIO_WIDTH_MOBILE : DESCRIPCIO_WIDTH_DESKTOP;
 }
 
 function RateProductRow({
@@ -99,14 +76,14 @@ function RateProductRow({
   category,
   format,
   tariffColumns,
-  columnWidths,
+  descripcioWidth,
   onSave,
 }: {
   product: FilaMatriuTarifesApi;
   category: string;
   format: string;
   tariffColumns: TarifaResumApi[];
-  columnWidths: ColumnWidths;
+  descripcioWidth: number;
   onSave: (producteId: number, changes: Record<string, string>, deletions: string[]) => Promise<CellSaveResult[]>;
 }) {
   const [cellErrors, setCellErrors] = useState<Record<string, string>>({});
@@ -153,28 +130,19 @@ function RateProductRow({
   return (
     <tr className="border-b border-gray-100 last:border-0">
       <td
-        className="sticky left-0 z-10 bg-white px-2 py-3 break-words text-gray-900"
-        style={{ width: columnWidths.categoria }}
-      >
-        {category}
-      </td>
-      <td
-        className="sticky z-10 bg-white px-2 py-3 break-words text-gray-900"
-        style={{ left: columnWidths.formatLeft, width: columnWidths.format }}
-      >
-        {format}
-      </td>
-      <td
-        className="sticky z-10 bg-white px-2 py-3 break-words"
-        style={{ left: columnWidths.codiLeft, width: columnWidths.codi }}
-      >
-        <span className="font-semibold text-gray-900">{product.codi}</span>
-      </td>
-      <td
-        className={`sticky z-10 bg-white px-2 py-3 break-words text-gray-900 ${STICKY_LEFT_SHADOW}`}
-        style={{ left: columnWidths.descripcioLeft, width: columnWidths.descripcio }}
+        className={`sticky left-0 z-10 bg-white px-2 py-3 break-words text-gray-900 ${STICKY_LEFT_SHADOW}`}
+        style={{ width: descripcioWidth }}
       >
         {product.descripcio}
+      </td>
+      <td className="px-2 py-3 break-words text-gray-900" style={{ width: CATEGORIA_WIDTH }}>
+        {category}
+      </td>
+      <td className="px-2 py-3 break-words text-gray-900" style={{ width: FORMAT_WIDTH }}>
+        {format}
+      </td>
+      <td className="px-2 py-3 break-words" style={{ width: CODI_WIDTH }}>
+        <span className="font-semibold text-gray-900">{product.codi}</span>
       </td>
       {tariffColumns.map((tariff) => (
         <td key={tariff.id} className="px-1 py-3 text-right align-top" style={{ width: TARIFF_COLUMN_WIDTH }}>
@@ -213,13 +181,13 @@ export default function RatesPage() {
   const [scrollContainer, setScrollContainer] = useState<HTMLDivElement | null>(null);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
-  const columnWidths = useColumnWidths();
+  const descripcioWidth = useDescripcioWidth();
 
   const tableWidth =
-    columnWidths.categoria +
-    columnWidths.format +
-    columnWidths.codi +
-    columnWidths.descripcio +
+    descripcioWidth +
+    CATEGORIA_WIDTH +
+    FORMAT_WIDTH +
+    CODI_WIDTH +
     tariffColumns.length * TARIFF_COLUMN_WIDTH +
     GUARDAR_WIDTH;
 
@@ -309,28 +277,19 @@ export default function RatesPage() {
               <thead className="border-b border-gray-200">
                 <tr>
                   <th
-                    className="sticky left-0 z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words"
-                    style={{ width: columnWidths.categoria }}
-                  >
-                    Categoria
-                  </th>
-                  <th
-                    className="sticky z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words"
-                    style={{ left: columnWidths.formatLeft, width: columnWidths.format }}
-                  >
-                    Format
-                  </th>
-                  <th
-                    className="sticky z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words"
-                    style={{ left: columnWidths.codiLeft, width: columnWidths.codi }}
-                  >
-                    Codi Producte
-                  </th>
-                  <th
-                    className={`sticky z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words ${STICKY_LEFT_SHADOW}`}
-                    style={{ left: columnWidths.descripcioLeft, width: columnWidths.descripcio }}
+                    className={`sticky left-0 z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words ${STICKY_LEFT_SHADOW}`}
+                    style={{ width: descripcioWidth }}
                   >
                     Descripció
+                  </th>
+                  <th className="px-2 py-2 text-left font-medium text-gray-500 break-words" style={{ width: CATEGORIA_WIDTH }}>
+                    Categoria
+                  </th>
+                  <th className="px-2 py-2 text-left font-medium text-gray-500 break-words" style={{ width: FORMAT_WIDTH }}>
+                    Format
+                  </th>
+                  <th className="px-2 py-2 text-left font-medium text-gray-500 break-words" style={{ width: CODI_WIDTH }}>
+                    Codi Producte
                   </th>
                   {tariffColumns.map((tariff) => (
                     <th
@@ -357,7 +316,7 @@ export default function RatesPage() {
                     category={categoryByProductId.get(product.producteId) ?? "—"}
                     format={formatByProductId.get(product.producteId) ?? "—"}
                     tariffColumns={tariffColumns}
-                    columnWidths={columnWidths}
+                    descripcioWidth={descripcioWidth}
                     onSave={savePrices}
                   />
                 ))}

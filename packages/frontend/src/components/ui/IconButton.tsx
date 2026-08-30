@@ -20,10 +20,15 @@ export function IconButton({
   variant,
   label,
   onClick,
+  disabled,
+  className = "",
 }: {
   variant: IconButtonVariant;
   label: string;
   onClick?: () => void;
+  disabled?: boolean;
+  /** Classes utilitàries addicionals (ex. `shrink-0` dins d'una fila flex amb un sibling `w-full`). */
+  className?: string;
 }) {
   const Icon = VARIANT_ICON[variant];
 
@@ -31,8 +36,9 @@ export function IconButton({
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-label={label}
-      className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${VARIANT_STYLES[variant]}`}
+      className={`flex h-11 w-11 items-center justify-center rounded-md transition-colors disabled:cursor-not-allowed disabled:text-gray-300 ${VARIANT_STYLES[variant]} ${className}`}
     >
       <Icon className="h-4 w-4" />
     </button>

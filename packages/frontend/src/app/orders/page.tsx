@@ -211,21 +211,21 @@ export default function OrdersPage() {
               <thead className="border-b border-gray-200">
                 <tr>
                   <th className="w-[8%] px-2 py-2 text-left font-medium text-gray-500 break-words">Núm.</th>
-                  <th className="w-[14%] px-2 py-2 text-left font-medium text-gray-500 break-words">Client</th>
+                  <th className="w-[13%] px-2 py-2 text-left font-medium text-gray-500 break-words">Client</th>
                   <th className="w-[10%] px-2 py-2 text-left font-medium text-gray-500 break-words">Tarifa</th>
                   <th className="w-[9%] px-2 py-2 text-left font-medium text-gray-500 break-words">Data comanda</th>
-                  <th className="w-[10%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                  <th className="w-[9%] px-2 py-2 text-left font-medium text-gray-500 break-words">
                     Data producció
                   </th>
                   <th className="w-[9%] px-2 py-2 text-left font-medium text-gray-500 break-words">
                     Data lliurament
                   </th>
-                  <th className="w-[12%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                  <th className="w-[11%] px-2 py-2 text-left font-medium text-gray-500 break-words">
                     Transportista
                   </th>
                   <th className="w-[7%] px-2 py-2 text-right font-medium text-gray-500 break-words">Bultos</th>
                   <th className="w-[9%] px-2 py-2 text-left font-medium text-gray-500 break-words">Estat</th>
-                  <th className="w-[12%] px-2 py-2 text-right font-medium text-gray-500 break-words">Accions</th>
+                  <th className="w-[15%] px-2 py-2 text-right font-medium text-gray-500 break-words">Accions</th>
                 </tr>
               </thead>
               <tbody>

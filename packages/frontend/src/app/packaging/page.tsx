@@ -304,7 +304,7 @@ export default function PackagingPage() {
         title="Panell d'Empaquetat"
         subtitle="Línies de comanda per a la planificació d'empaquetat."
         right={
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <StatCard label="TOTAL UNITATS VISIBLES" value={formatDecimal(totals?.unitatsDemanades ?? null, 2)} />
             <StatCard
               label="TOTAL LÍNIES"

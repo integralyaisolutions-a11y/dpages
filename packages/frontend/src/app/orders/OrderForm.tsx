@@ -1,10 +1,11 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DataCard, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
 import { DecimalInput } from "@/components/ui/DecimalInput";
+import { IconButton } from "@/components/ui/IconButton";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { TextField } from "@/components/ui/TextField";
 import type { OrderFormValues, OrderLineChanges } from "@/hooks/useOrders";
@@ -242,15 +243,7 @@ function LineFormCard({
             </option>
           ))}
         </select>
-        <button
-          type="button"
-          onClick={onRemove}
-          disabled={disabled}
-          aria-label="Eliminar línia"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-red-500 hover:text-red-600 disabled:cursor-not-allowed disabled:text-gray-300"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+        <IconButton variant="delete" label="Eliminar línia" onClick={onRemove} disabled={disabled} className="shrink-0" />
       </div>
 
       <div className="mt-3">
@@ -722,17 +715,17 @@ export const OrderForm = forwardRef<
           <table className="w-full table-fixed text-sm">
             <thead className="border-b border-gray-200">
               <tr>
-                <th className="w-[14%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">Producte</th>
+                <th className="w-[13%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">Producte</th>
                 <th className="w-[9%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">Categoria</th>
                 <th className="w-[9%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">Format</th>
                 <th className="w-[8%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">Envasat</th>
-                <th className="w-[15%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">Data producció</th>
+                <th className="w-[13%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">Data producció</th>
                 <th className="w-[9%] px-1.5 py-2 text-right font-medium text-gray-500 break-words">Unitats demanades</th>
                 <th className="w-[9%] px-1.5 py-2 text-right font-medium text-gray-500 break-words">Unitats lliurades</th>
                 <th className="w-[8%] px-1.5 py-2 text-right font-medium text-gray-500 break-words">Pes demanat (kg)</th>
                 <th className="w-[7%] px-1.5 py-2 text-right font-medium text-gray-500 break-words">Pes lliurat (kg)</th>
                 <th className="w-[7%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">Obs. producció</th>
-                <th className="w-[5%] px-1.5 py-2" />
+                <th className="w-[8%] px-1.5 py-2" />
               </tr>
             </thead>
             <tbody>
@@ -823,15 +816,7 @@ export const OrderForm = forwardRef<
                       />
                     </td>
                     <td className="px-1.5 py-2">
-                      <button
-                        type="button"
-                        onClick={() => removeLine(line)}
-                        disabled={isFrozen}
-                        aria-label="Eliminar línia"
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-red-500 hover:text-red-600 disabled:cursor-not-allowed disabled:text-gray-300"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <IconButton variant="delete" label="Eliminar línia" onClick={() => removeLine(line)} disabled={isFrozen} />
                     </td>
                   </tr>
                 );

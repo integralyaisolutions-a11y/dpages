@@ -88,7 +88,7 @@ export default function WorkshopPage() {
         title="Panell d'Obrador"
         subtitle="Línies de comanda per a la planificació d'obrador."
         right={
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <StatCard
               label="TOTAL KG VISIBLES"
               value={formatDecimal(totals?.totalKg ?? null, 3)}

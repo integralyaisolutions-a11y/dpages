@@ -10,6 +10,7 @@ packages/backend/firebase-service-account*.json
 data/
 *.log
 .DS_Store
+dump-local/
 
 *.sql
 !packages/backend/migrations/*.sql
