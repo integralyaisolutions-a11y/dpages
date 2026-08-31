@@ -1060,6 +1060,14 @@ Filtros: `?dataProduccioDes=&dataProduccioFins=&categoriaId=&tipus=&producte=&fo
 > `dataProduccioFins` incluye el día completo — ver "Filtros de rango de
 > fecha" en la sección 2 (capa 36).
 
+> **Orden por defecto (capa 46), no opcional**: las líneas **pendientes**
+> (`treballatA` es `null`) salen siempre primero, sin que el frontend pida
+> nada — necesario porque con paginación real (`?mida=`) una página podría
+> mostrar sólo líneas ya trabajadas si las pendientes cayeran en otra
+> página. Dentro de cada grupo (pendientes / trabajadas) el orden es el
+> mismo de siempre: `dataProduccio` ascendente, después `num` de pedido,
+> después `ordinal` de línea — sin ningún criterio nuevo ahí.
+
 ```json
 {
   "totals": {
@@ -1068,21 +1076,6 @@ Filtros: `?dataProduccioDes=&dataProduccioFins=&categoriaId=&tipus=&producte=&fo
     "totalKg": "142.300"
   },
   "dades": [
-    {
-      "liniaId": 981,
-      "comandaId": 142,
-      "producte": { "id": 12, "codi": "LLF01", "descripcio": "Llom fresc de porc" },
-      "categoria": "Fresc",
-      "format": "SENCER",
-      "envasat": "NORMAL (pes)",
-      "client": "Restaurant Example",
-      "dataProduccio": "2026-08-16T06:00:00Z",
-      "unitats": "10.00",
-      "kg": "12.500",
-      "obsProduccio": "Tallar fi",
-      "treballatA": "2026-08-16T07:15:00Z",
-      "treballatPer": { "id": 4, "nom": "Marc Obrador" }
-    },
     {
       "liniaId": 982,
       "comandaId": 142,
@@ -1097,11 +1090,29 @@ Filtros: `?dataProduccioDes=&dataProduccioFins=&categoriaId=&tipus=&producte=&fo
       "obsProduccio": null,
       "treballatA": null,
       "treballatPer": null
+    },
+    {
+      "liniaId": 981,
+      "comandaId": 142,
+      "producte": { "id": 12, "codi": "LLF01", "descripcio": "Llom fresc de porc" },
+      "categoria": "Fresc",
+      "format": "SENCER",
+      "envasat": "NORMAL (pes)",
+      "client": "Restaurant Example",
+      "dataProduccio": "2026-08-16T06:00:00Z",
+      "unitats": "10.00",
+      "kg": "12.500",
+      "obsProduccio": "Tallar fi",
+      "treballatA": "2026-08-16T07:15:00Z",
+      "treballatPer": { "id": 4, "nom": "Marc Obrador" }
     }
   ],
   "paginacio": { "pagina": 1, "mida": 50, "total": 34, "totalPagines": 1 }
 }
 ```
+
+> El orden de este ejemplo cambió en la capa 46 (antes mostraba la línia
+> trabajada primero) — ver la nota de orden por defecto arriba.
 
 > Cada fila es exactamente una `comanda_linia` — `liniaId`/`comandaId`
 > identifican de qué pedido viene, por si obrador necesita volver al
@@ -1186,6 +1197,12 @@ Filtros: `?dataExpedicioDes=&dataExpedicioFins=&dataLliuramentDes=&dataLliuramen
 > case-insensitive contra `producte.descripcio` — regla 3.1 transversal,
 > mismo criterio que `?producte=` en `/panells/obrador`,
 > `/panells/produccio` y `/rendiments-porcs` — no substring).
+
+> **Orden por defecto (capa 46), no opcional**: mismo criterio que
+> `/panells/obrador` (sección 4.7) — las líneas **pendientes**
+> (`confirmatA` es `null`) salen siempre primero, sin que el frontend pida
+> nada. Dentro de cada grupo (pendiente / confirmada) el orden es el mismo
+> de siempre: `dataExpedicio` ascendente, después `num`, después `ordinal`.
 
 ```json
 {
@@ -1559,9 +1576,14 @@ quedar librado a que el frontend oculte el botón.
         "panell-produccio"
       ]
     }
-  ]
+  ],
+  "paginacio": { "pagina": 1, "mida": 50, "total": 2, "totalPagines": 1 }
 }
 ```
+
+> **`paginacio` (capa 46)**: era la única de ~12 rutas de listado sin este
+> objeto. Mismo patrón que el resto (`?pagina=&mida=`, sección 2) — el
+> orden (`nom ASC`) no cambió.
 
 **`POST /rols`** · **`PATCH /rols/:id`** (cuerpo parcial) · **`DELETE /rols/:id`**
 (capa 39) — **los tres exigen el módulo `"usuaris"`** (ver nota de

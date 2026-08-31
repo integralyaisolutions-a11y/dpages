@@ -342,7 +342,15 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
               cl.obs_produccio, cl.treballat_a,
               tu.id_seq AS treballat_per_id_seq, tu.nom AS treballat_per_nom
        ${base}
-       ORDER BY cl.data_produccio ASC NULLS LAST, c.num ASC, cl.ordinal ASC
+       -- Capa 46 — pendents primer, per defecte (no és un parametre
+       -- opcional): amb paginacio real de 20/50 files, una pagina podria
+       -- mostrar nomes linies ja treballades si les pendents queien en una
+       -- altra pagina. (cl.treballat_a IS NOT NULL) val false per a
+       -- pendents i true per a treballades — ASC posa false (pendents)
+       -- primer. La resta de l'ordre (data_produccio, num, ordinal) es
+       -- exactament el mateix que ja hi havia, sense tocar.
+       ORDER BY (cl.treballat_a IS NOT NULL) ASC,
+                cl.data_produccio ASC NULLS LAST, c.num ASC, cl.ordinal ASC
        LIMIT $${valors.length + 1} OFFSET $${valors.length + 2}`,
       [...valors, mida, offset],
     );
@@ -489,7 +497,11 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
               cl.unitats_demanades, cl.pes_calculat_kg AS kg_demanats, cl.unitats_lliurades,
               cl.kg_lliurats, cl.confirmat_a, cl.confirmat_per
        ${base}
-       ORDER BY c.data_expedicio ASC NULLS LAST, c.num ASC, cl.ordinal ASC
+       -- Capa 46 — mismo criterio que /panells/obrador (ver comentario ahí):
+       -- pendents (confirmat_a IS NULL) primer, per defecte, sense tocar la
+       -- resta de l'ordre existent.
+       ORDER BY (cl.confirmat_a IS NOT NULL) ASC,
+                c.data_expedicio ASC NULLS LAST, c.num ASC, cl.ordinal ASC
        LIMIT $${valors.length + 1} OFFSET $${valors.length + 2}`,
       [...valors, mida, offset],
     );

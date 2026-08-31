@@ -978,6 +978,12 @@ paths:
         Panel de obrador (solo lectura). Confirmado con el cliente el
         18/08/2026: líneas de pedido INDIVIDUALES, ya no agrupado por
         artículo.
+      description: >-
+        Orden por defecto (capa 46), no opcional: las líneas pendientes
+        (treballatA null) salen siempre primero, sin ningún parámetro —
+        necesario para que la paginación real no muestre una página con
+        sólo líneas ya trabajadas. Dentro de cada grupo se mantiene el
+        orden de siempre (dataProduccio, num, ordinal).
       parameters:
         - name: dataProduccioDes
           in: query
@@ -1084,6 +1090,10 @@ paths:
       summary: Panel de empaquetado (única pantalla operativa con edición, vía /lliurament)
       description: >-
         Capa 37: 2 filtros nuevos — dataLliuramentDes/Fins y producte.
+        Orden por defecto (capa 46), no opcional: mismo criterio que
+        /panells/obrador — las líneas pendientes (confirmatA null) salen
+        siempre primero, sin ningún parámetro. Dentro de cada grupo se
+        mantiene el orden de siempre (dataExpedicio, num, ordinal).
       parameters:
         - name: dataExpedicioDes
           in: query
@@ -1211,7 +1221,12 @@ paths:
   /api/v1/rols:
     get:
       tags: [Rols]
-      summary: Listar roles (capa 17).
+      summary: >-
+        Listar roles (capa 17). Paginado desde la capa 46 — era la única
+        ruta de listado sin paginacio.
+      parameters:
+        - $ref: '#/components/parameters/Pagina'
+        - $ref: '#/components/parameters/Mida'
       responses:
         '200':
           description: Listado
@@ -1223,6 +1238,7 @@ paths:
                   dades:
                     type: array
                     items: { $ref: '#/components/schemas/Rol' }
+                  paginacio: { $ref: '#/components/schemas/Paginacio' }
     post:
       tags: [Rols]
       summary: Crear un rol

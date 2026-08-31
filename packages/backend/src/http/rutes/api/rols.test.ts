@@ -213,4 +213,31 @@ describe('API negoci — /rols, guardas i validació de mòduls (capa 39, Postgr
 
     await fastify.close();
   });
+
+  // Capa 46 — Michel reportó que GET /rols era la única de ~12 rutas de
+  // listado sin objeto paginacio. El total real se lee de la base en vez de
+  // hardcodearlo: otros tests de este archivo crean/borran roles, así que
+  // el número exacto depende del orden de ejecución.
+  it('GET /rols retorna paginacio real', async () => {
+    const fastify = construirServidor();
+    const compte = await entorn.poolTest.query<{ count: string }>('SELECT count(*) FROM rol');
+    const totalReal = Number(compte.rows[0]!.count);
+
+    const res = await fastify.inject({ method: 'GET', url: '/api/v1/rols' });
+
+    expect(res.statusCode).toBe(200);
+    const cuerpo = cuerpoJson<{
+      dades: RolApi[];
+      paginacio: { pagina: number; mida: number; total: number; totalPagines: number };
+    }>(res);
+    expect(cuerpo.paginacio).toEqual({
+      pagina: 1,
+      mida: 50,
+      total: totalReal,
+      totalPagines: Math.ceil(totalReal / 50),
+    });
+    expect(cuerpo.dades).toHaveLength(Math.min(totalReal, 50));
+
+    await fastify.close();
+  });
 });

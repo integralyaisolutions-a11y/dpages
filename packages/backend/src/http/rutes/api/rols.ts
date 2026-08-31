@@ -2,11 +2,13 @@ import type { RolApi } from '@dpages/shared';
 import type { FastifyInstance } from 'fastify';
 import { pool } from '../../../db/pool.js';
 import {
+  construirPaginacio,
   crearGuardaModul,
   enviarConflicte,
   enviarNoTrobat,
   enviarValidacio,
   parsearIdPublic,
+  parsearPaginacio,
   resolverRolUuid,
 } from './comu.js';
 
@@ -89,11 +91,22 @@ function validarModulsPermesos(
 }
 
 export function registrarRutesRols(fastify: FastifyInstance): void {
-  fastify.get('/rols', async () => {
+  // Capa 46 — Michel reportó que era la única de ~12 rutas de listado sin
+  // objeto paginacio. Mismo patrón que el resto (parsearPaginacio/
+  // construirPaginacio, ver comu.ts) — el ORDER BY nom ASC no cambia.
+  fastify.get('/rols', async (req) => {
+    const { pagina, mida, offset } = parsearPaginacio(req.query as Record<string, unknown>);
+
+    const total = await pool.query<{ count: string }>('SELECT count(*) FROM rol');
     const files = await pool.query<FilaRol>(
-      'SELECT id_seq, nom, moduls_permesos FROM rol ORDER BY nom ASC',
+      'SELECT id_seq, nom, moduls_permesos FROM rol ORDER BY nom ASC LIMIT $1 OFFSET $2',
+      [mida, offset],
     );
-    return { dades: files.rows.map(aApi) };
+
+    return {
+      dades: files.rows.map(aApi),
+      paginacio: construirPaginacio(pagina, mida, Number(total.rows[0]?.count ?? 0)),
+    };
   });
 
   // Capa 44 — Michel reportó MODULS_VALIDS duplicado a mano en el frontend
