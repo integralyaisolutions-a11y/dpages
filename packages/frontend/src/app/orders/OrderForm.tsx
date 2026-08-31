@@ -2,6 +2,7 @@
 
 import { Plus } from "lucide-react";
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import { Badge } from "@/components/ui/Badge";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DataCard, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
 import { DecimalInput } from "@/components/ui/DecimalInput";
@@ -15,10 +16,12 @@ import type {
   ComandaLiniaApi,
   LiniaCreacioApi,
   LiniaEdicioApi,
+  OrigenComandaApi,
   ProducteApi,
   TarifaResumApi,
   TransportistaApi,
 } from "@/lib/api";
+import { origenBadgeVariant } from "@/lib/comandaOrigen";
 import { formatDecimal } from "@/lib/decimals";
 import { calculateOrderedWeightKg } from "@/lib/orderCalculations";
 
@@ -26,6 +29,15 @@ const NO_CLIENT = "Selecciona client...";
 const NO_TARIFF = "Sense tarifa";
 const NO_CARRIER = "Selecciona transportista...";
 const NO_PRODUCT = "Selecciona producte...";
+const NO_ORIGIN = "Selecciona origen...";
+
+// Capa 43 — un pedido NUEVO sólo puede cargarse manualmente por estos 3
+// canales (whatsapp/telefon/correu, ver origen_comanda). "manual" y
+// "woocommerce" siguen siendo códigos válidos (pedidos viejos/sincronizados
+// ya los tienen), pero nunca se ofrecen como opción al crear uno desde acá
+// — por eso el filtro es explícito por código, no "todo lo que devuelva
+// GET /origens-comanda".
+const CODIS_ORIGEN_ELEGIBLES = ["whatsapp", "telefon", "correu"];
 
 // amb_incidencia queda FORA d'aquesta llista a propòsit (capa 31, decisió
 // de UX confirmada): el selector de capçalera només serveix per triar
@@ -351,6 +363,7 @@ export const OrderForm = forwardRef<
     tariffs: TarifaResumApi[];
     carriers: TransportistaApi[];
     products: ProducteApi[];
+    origins: OrigenComandaApi[];
     onSave: (values: OrderFormValues, lineChanges: OrderLineChanges) => Promise<void>;
     onDeleteLine?: (liniaId: number) => Promise<void>;
     /**
@@ -371,6 +384,7 @@ export const OrderForm = forwardRef<
     tariffs,
     carriers,
     products,
+    origins,
     onSave,
     onDeleteLine,
     onDateErrorsChange,
@@ -378,6 +392,7 @@ export const OrderForm = forwardRef<
   ref,
 ) {
   const [estat, setEstat] = useState<string>(initialData?.estat ?? "oberta");
+  const [origenCodi, setOrigenCodi] = useState<string | null>(null);
   const [clientId, setClientId] = useState<number | null>(initialData?.client?.id ?? null);
   const [poblacioDesti, setPoblacioDesti] = useState(initialData?.poblacioDesti ?? "");
   const [tarifaId, setTarifaId] = useState<number | null>(initialData?.tarifa?.id ?? null);
@@ -482,6 +497,11 @@ export const OrderForm = forwardRef<
         return;
       }
 
+      if (mode === "create" && !origenCodi) {
+        setError("Cal seleccionar un origen.");
+        return;
+      }
+
       if (hasDateErrors) {
         setError("Hi ha dates inconsistents al formulari — revisa els missatges marcats en vermell abans de desar.");
         return;
@@ -508,6 +528,11 @@ export const OrderForm = forwardRef<
       void onSave(
         {
           clientId,
+          // Capa 43 — en edición, origen viaja informativo (PATCH nunca lo
+          // acepta, ver comentari a useOrders.ts) — se manda el que ya
+          // tenía el pedido, sin pasar por `origenCodi` (que en edició ni
+          // es toca, el camp queda de sòl lectura).
+          origen: mode === "create" ? origenCodi : (initialData?.origen ?? null),
           tarifaId,
           transportistaId,
           dataProduccio: dataProduccio ? `${dataProduccio}T00:00:00Z` : null,
@@ -552,6 +577,22 @@ export const OrderForm = forwardRef<
     ? ESTAT_OPTIONS_SELECCIONABLES
     : [estat, ...ESTAT_OPTIONS_SELECCIONABLES];
 
+  // Capa 43 — "manual"/"woocommerce" mai apareixen com a opció triable
+  // (CODIS_ORIGEN_ELEGIBLES dalt), encara que siguin codis vàlids per a
+  // comandes ja existents.
+  const eligibleOrigins = origins.filter((origin) => CODIS_ORIGEN_ELEGIBLES.includes(origin.codi));
+  const originOptions = [NO_ORIGIN, ...eligibleOrigins.map((origin) => origin.nom)];
+  const originValue = origenCodi
+    ? (eligibleOrigins.find((origin) => origin.codi === origenCodi)?.nom ?? NO_ORIGIN)
+    : NO_ORIGIN;
+  // PATCH /comandes/:id no accepta `origen` (confirmat contra comandes.ts):
+  // en edició es mostra de sòl lectura, mai com a part del desplegable
+  // editable — resol l'etiqueta encara que el codi sigui "manual"/
+  // "woocommerce" (no estan a `eligibleOrigins`, però sí a `origins` sencer).
+  const existingOriginLabel = initialData?.origen
+    ? (origins.find((origin) => origin.codi === initialData.origen)?.nom ?? initialData.origen)
+    : "—";
+
   return (
     <div className="flex flex-col gap-6">
       <div className="rounded-xl border border-gray-200 bg-white p-6">
@@ -573,6 +614,28 @@ export const OrderForm = forwardRef<
               handleClientChange(client?.id ?? null);
             }}
           />
+          {mode === "create" ? (
+            <SelectFilter
+              label="Origen"
+              options={originOptions}
+              value={originValue}
+              onChange={(label) => {
+                const origin = eligibleOrigins.find((item) => item.nom === label);
+                setOrigenCodi(origin?.codi ?? null);
+              }}
+            />
+          ) : (
+            // Sòl lectura sempre en edició (PATCH /comandes/:id mai accepta
+            // `origen`, ver comentari a useOrders.ts) — badge en comptes de
+            // TextField gris, mateix component/colors que el llistat de
+            // Comandes (comandaOrigen.ts).
+            <div className="flex flex-col gap-1.5 text-sm">
+              <span className="font-medium text-gray-900">Origen</span>
+              <div>
+                <Badge variant={origenBadgeVariant(initialData?.origen ?? "")}>{existingOriginLabel}</Badge>
+              </div>
+            </div>
+          )}
           <SelectFilter
             label="Estat"
             options={estatOptions.map((value) => ESTAT_LABELS[value]!)}

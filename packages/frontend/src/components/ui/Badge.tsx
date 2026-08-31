@@ -1,12 +1,22 @@
 import type { ReactNode } from "react";
 
-type BadgeVariant = "neutral" | "info" | "positive" | "negative";
+export type BadgeVariant = "neutral" | "info" | "positive" | "negative" | "purple" | "amber" | "orange" | "yellow";
 
 const VARIANT_STYLES: Record<BadgeVariant, string> = {
   neutral: "bg-gray-100 text-gray-700",
   info: "bg-blue-50 text-blue-700",
   positive: "bg-green-50 text-green-700",
   negative: "bg-red-50 text-red-700",
+  // Capa 43 — reservats per a "Origen" (OrderForm.tsx/orders), una família
+  // pròpia que no es solapi amb Estat (info=blau, negative=vermell) perquè
+  // els dos badges no es confonguin a primer cop d'ull. purple queda per a
+  // woocommerce (color propi, sense cap altre ús a l'app); amber/orange/
+  // yellow és la família càlida "acordada" dels 3 canals manuals elegibles
+  // (whatsapp/telefon/correu) — mateix to, distingibles entre ells.
+  purple: "bg-purple-50 text-purple-700",
+  amber: "bg-amber-50 text-amber-700",
+  orange: "bg-orange-50 text-orange-700",
+  yellow: "bg-yellow-50 text-yellow-700",
 };
 
 export function Badge({

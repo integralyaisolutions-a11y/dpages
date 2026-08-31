@@ -243,13 +243,14 @@ export default function RatesPage() {
     return map;
   }, [catalog]);
 
-  // Categoria: LIMITACIÓ CONEGUDA amb paginació real (mateix criteri que
-  // catalog/page.tsx) — només reflecteix les categories presents a la
-  // pàgina actual, no tot el catàleg. Format SÍ és un conjunt tancat
-  // conegut (CHECK constraint), per això va hardcodejat i no pateix això.
+  // Efecte col·lateral de la paginació (2026-08-30) resolt: abans es
+  // derivava de `data` (les 20 files de tarifes de la pàgina actual) — ara
+  // ve de `catalog`, que ja és la font completa (useCatalog() sense `mida`,
+  // per defecte 200) que aquesta mateixa pantalla ja carregava per resoldre
+  // categoria/format de cada fila. Format segueix hardcodejat (enum tancat).
   const categoryOptions = useMemo(
-    () => [ALL_FEM, ...distinct(data.map((product) => categoryByProductId.get(product.producteId) ?? "—"))],
-    [data, categoryByProductId],
+    () => [ALL_FEM, ...distinct(catalog.map((product) => product.categoria?.nom ?? "—"))],
+    [catalog],
   );
 
   // `search` ja no es filtra acá: viatja com a `cerca` server-side (ver

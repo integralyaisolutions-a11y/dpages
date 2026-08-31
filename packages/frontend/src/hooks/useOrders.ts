@@ -27,6 +27,15 @@ export type OrderListFilters = {
 export type OrderFormValues = {
   clientId: number | null;
   /**
+   * Capa 43 — `OrigenComandaApi.codi`. Sólo se usa en creación (ver
+   * `createOrder` más abajo); `PATCH /comandes/:id` no acepta `origen`
+   * (confirmado contra comandes.ts, el handler nunca lee `cos.origen`), así
+   * que en edición este valor viaja informativo pero `editOrder` lo ignora.
+   * OrderForm.tsx valida que no sea `null` antes de llamar a `onSave` en
+   * modo creación.
+   */
+  origen: string | null;
+  /**
    * Capa 32 — `POST /comandes` acepta `tarifaId` directo (createOrder, más
    * abajo). En edición viaja igual en el PATCH.
    */
@@ -174,7 +183,10 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
   // guardaron.
   const createOrder = useCallback(
     async (values: OrderFormValues) => {
-      const cos: ComandaCreacioApi = { origen: "manual", linies: values.linies };
+      // Capa 43 — OrderForm.tsx ya valida que `origen` no sea null antes de
+      // llegar acá (mode create); el "manual" de reserva nunca debería
+      // disparar en la práctica, sólo defensivo.
+      const cos: ComandaCreacioApi = { origen: values.origen ?? "manual", linies: values.linies };
       if (values.clientId !== null) cos.clientId = values.clientId;
       if (values.tarifaId !== null) cos.tarifaId = values.tarifaId;
       if (values.dataLliurament !== null) cos.dataLliurament = values.dataLliurament;

@@ -1,13 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, type RolApi } from "@/lib/api";
+import { api, ApiError, type Paginacio, type RolApi } from "@/lib/api";
 
 export type CreateRoleInput = { nom: string; modulsPermesos: string[] };
 export type EditRoleInput = Partial<{ nom: string; modulsPermesos: string[] }>;
 
 type UseRolsResult = {
   data: RolApi[];
+  paginacio: Paginacio | null;
+  pagina: number;
+  setPagina: (pagina: number) => void;
   isLoading: boolean;
   error: ApiError | null;
   refetch: () => void;
@@ -15,18 +18,16 @@ type UseRolsResult = {
   editRole: (id: number, input: EditRoleInput) => Promise<RolApi>;
 };
 
-/**
- * GET /rols (contrato §4.12) no pagina — devuelve `{ dades: RolApi[] }` sin
- * `paginacio`, confirmat contra rols.ts. No hi ha DELETE /rols — aquest
- * hook no en té cap funció equivalent, la UI tampoc ofereix l'acció.
- *
- * Rollout de paginació real 2026-08-30: reconfirmat que segueix sense
- * paginar (no hi ha hagut cap canvi de Gerardo) — es deixa aquest hook tal
- * qual, sense `<Pagination>` a users/page.tsx (pestanya Rols), fins que el
- * backend l'exposi. Volum real ~7 rols, no urgeix.
- */
+// Capa 46 — GET /rols ya pagina de verdad (mismo shape que el resto,
+// confirmado contra rols.ts: parsearPaginacio/construirPaginacio). No hi ha
+// DELETE /rols — aquest hook no en té cap funció equivalent, la UI tampoc
+// ofereix l'acció.
+const MIDA_PAGINA = 20;
+
 export function useRols(): UseRolsResult {
   const [data, setData] = useState<RolApi[]>([]);
+  const [paginacio, setPaginacio] = useState<Paginacio | null>(null);
+  const [pagina, setPagina] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
@@ -37,9 +38,12 @@ export function useRols(): UseRolsResult {
     setError(null);
 
     api
-      .get<{ dades: RolApi[] }>("/rols")
+      .get<{ dades: RolApi[]; paginacio: Paginacio }>("/rols", { mida: MIDA_PAGINA, pagina })
       .then((resposta) => {
-        if (!cancelled) setData(resposta.dades);
+        if (!cancelled) {
+          setData(resposta.dades);
+          setPaginacio(resposta.paginacio);
+        }
       })
       .catch((caught) => {
         if (!cancelled) {
@@ -53,7 +57,7 @@ export function useRols(): UseRolsResult {
     return () => {
       cancelled = true;
     };
-  }, [reloadToken]);
+  }, [reloadToken, pagina]);
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 
@@ -75,5 +79,5 @@ export function useRols(): UseRolsResult {
     [refetch],
   );
 
-  return { data, isLoading, error, refetch, createRole, editRole };
+  return { data, paginacio, pagina, setPagina, isLoading, error, refetch, createRole, editRole };
 }

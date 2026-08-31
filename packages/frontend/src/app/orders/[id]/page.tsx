@@ -10,6 +10,7 @@ import { useCarriers } from "@/hooks/useCarriers";
 import { useCatalog } from "@/hooks/useCatalog";
 import { useClientTariffs } from "@/hooks/useClientTariffs";
 import { extractComandaErrorMessage, type OrderLineChanges, useOrders } from "@/hooks/useOrders";
+import { useOrigensComanda } from "@/hooks/useOrigensComanda";
 import { useRates } from "@/hooks/useRates";
 import { api, ApiError, type ComandaDetallApi } from "@/lib/api";
 import { OrderForm, type OrderFormHandle } from "../OrderForm";
@@ -22,6 +23,7 @@ export default function OrderDetailPage() {
   const { tariffColumns } = useRates();
   const { data: carriers } = useCarriers();
   const { data: products } = useCatalog();
+  const { data: origins } = useOrigensComanda();
   const formRef = useRef<OrderFormHandle>(null);
 
   const [order, setOrder] = useState<ComandaDetallApi | null>(null);
@@ -204,6 +206,7 @@ export default function OrderDetailPage() {
           tariffs={tariffColumns}
           carriers={carriers}
           products={products}
+          origins={origins}
           onSave={handleSave}
           onDeleteLine={handleDeleteLine}
           onDateErrorsChange={setHasDateErrors}

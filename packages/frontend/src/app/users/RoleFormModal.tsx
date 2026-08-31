@@ -4,9 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Modal } from "@/components/ui/Modal";
 import { TextField } from "@/components/ui/TextField";
+import { useModulsValids } from "@/hooks/useModulsValids";
 import type { CreateRoleInput, EditRoleInput } from "@/hooks/useRols";
 import { ApiError, type RolApi } from "@/lib/api";
-import { MODUL_LABELS, MODULS_VALIDS } from "@/lib/roles";
+import { MODUL_LABELS } from "@/lib/roles";
 
 type FieldErrors = { nom?: string };
 
@@ -27,6 +28,7 @@ export function RoleFormModal({
   onCreate: (input: CreateRoleInput) => Promise<RolApi>;
   onEdit: (id: number, input: EditRoleInput) => Promise<RolApi>;
 }) {
+  const { data: modulsValids, isLoading: modulsLoading, error: modulsError } = useModulsValids();
   const [nom, setNom] = useState(initialData?.nom ?? "");
   const [modulsPermesos, setModulsPermesos] = useState<string[]>(initialData?.modulsPermesos ?? []);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -103,19 +105,27 @@ export function RoleFormModal({
           />
           <div>
             <span className="text-sm font-medium text-gray-900">Mòduls permesos</span>
-            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {MODULS_VALIDS.map((modul) => (
-                <label key={modul} className="flex items-center gap-2 text-sm text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={modulsPermesos.includes(modul)}
-                    onChange={() => toggleModul(modul)}
-                    className="h-4 w-4 rounded border-gray-300 text-ink"
-                  />
-                  {MODUL_LABELS[modul] ?? modul}
-                </label>
-              ))}
-            </div>
+            {modulsLoading && <p className="mt-2 text-sm text-gray-500">Carregant mòduls...</p>}
+            {modulsError && (
+              <p className="mt-2 text-sm text-red-600">
+                No s&apos;han pogut carregar els mòduls disponibles: {modulsError.message}
+              </p>
+            )}
+            {!modulsLoading && !modulsError && (
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {modulsValids.map((modul) => (
+                  <label key={modul} className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={modulsPermesos.includes(modul)}
+                      onChange={() => toggleModul(modul)}
+                      className="h-4 w-4 rounded border-gray-300 text-ink"
+                    />
+                    {MODUL_LABELS[modul] ?? modul}
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
         </div>

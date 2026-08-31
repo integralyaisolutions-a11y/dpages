@@ -275,19 +275,12 @@ export default function PackagingPage() {
     [shippingDateFilter, carrierId, clientId, deliveryDateFilter, productFilter],
   );
 
+  // Capa 46 — "pendents primer" ja ve per defecte des del backend (GET
+  // /panells/empaquetat, ORDER BY confirmat_a IS NOT NULL ASC), sense cap
+  // paràmetre — confirmat amb curl real abans de treure el sort
+  // client-side que hi havia acá com a pedaç temporal.
   const { data, totals, paginacio, setPagina, isLoading, error, refetch, saveLliurament } =
     usePanellEmpaquetat(filters);
-
-  // TEMPORAL (paginació real, 2026-08-30): amb 20 files/pàgina, aquest sort
-  // només reordena DINS de la pàgina actual — mateixa limitació coneguda
-  // que workshop/page.tsx, mateix motiu (fa falta un paràmetre d'ordenació
-  // real al backend, demanat a Gerardo, pendent de resposta).
-  // Array.prototype.sort és estable (ES2019): dins de cada grup
-  // (pendent/treballada) es manté l'ordre que ja portava el backend.
-  const sortedData = useMemo(
-    () => [...data].sort((a, b) => Number(a.confirmatA !== null) - Number(b.confirmatA !== null)),
-    [data],
-  );
 
   function clearFilters() {
     setShippingDateFilter("");
@@ -354,7 +347,7 @@ export default function PackagingPage() {
       {!isLoading && !error && (
         <>
           <div className="flex flex-col gap-3 xl:hidden">
-            {sortedData.map((line) => (
+            {data.map((line) => (
               <PackagingCard key={line.liniaId} line={line} onSave={handleSave} />
             ))}
           </div>
@@ -391,7 +384,7 @@ export default function PackagingPage() {
                 </tr>
               </thead>
               <tbody>
-                {sortedData.map((line) => (
+                {data.map((line) => (
                   <PackagingRow key={line.liniaId} line={line} onSave={handleSave} />
                 ))}
               </tbody>

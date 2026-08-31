@@ -192,20 +192,11 @@ export default function WorkshopPage() {
     [productFilter, envasatFilter, formatFilter, productionDateFilter],
   );
 
+  // Capa 46 — "pendents primer" ja ve per defecte des del backend (GET
+  // /panells/obrador, ORDER BY treballat_a IS NOT NULL ASC), sense cap
+  // paràmetre — confirmat amb curl real abans de treure el sort client-side
+  // que hi havia acá com a pedaç temporal.
   const { data, totals, paginacio, setPagina, isLoading, error, refetch, toggleTreball } = usePanellObrador(filters);
-
-  // TEMPORAL (paginació real, 2026-08-30): amb 20 files/pàgina, aquest sort
-  // només reordena DINS de la pàgina actual — si totes les pendents cauen a
-  // una altra pàgina, aquesta puede mostrar només treballades. És una
-  // limitació coneguda, no resolta acà: fa falta que el backend exposi un
-  // paràmetre d'ordenació real (ex. `ordenar=pendents_primer`) perquè la
-  // pàgina 1 mostri sempre les pendents primer sense importar el total —
-  // demanat a Gerardo, pendent de resposta. Array.prototype.sort és estable
-  // (ES2019).
-  const sortedData = useMemo(
-    () => [...data].sort((a, b) => Number(a.treballatA !== null) - Number(b.treballatA !== null)),
-    [data],
-  );
 
   function clearFilters() {
     setProductFilter(ALL);
@@ -256,7 +247,7 @@ export default function WorkshopPage() {
       {!isLoading && !error && (
         <>
           <div className="flex flex-col gap-3 xl:hidden">
-            {sortedData.map((line) => (
+            {data.map((line) => (
               <WorkshopCard key={line.liniaId} line={line} onToggle={toggleTreball} />
             ))}
           </div>
@@ -283,7 +274,7 @@ export default function WorkshopPage() {
                 </tr>
               </thead>
               <tbody>
-                {sortedData.map((line) => (
+                {data.map((line) => (
                   <WorkshopRow key={line.liniaId} line={line} onToggle={toggleTreball} />
                 ))}
               </tbody>

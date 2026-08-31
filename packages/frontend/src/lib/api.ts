@@ -24,6 +24,7 @@ export type {
   FilaMatriuTarifesApi,
   ClientApi,
   TransportistaApi,
+  OrigenComandaApi,
   ReferenciaApi,
   ComandaResumApi,
   ComandaDetallApi,
