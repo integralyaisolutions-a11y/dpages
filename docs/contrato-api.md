@@ -1422,9 +1422,15 @@ rango de fechas filtrado — no sólo las de agrupación `"MAGRE"`.
 
 ### 4.11 · Orígens de comanda
 
-Nueva (confirmada con el cliente el 18/08/2026). CRUD simple de la tabla
-`origen_comanda` — reemplaza el enum fijo `OrigenComanda` que tenía el
-contrato hasta esta versión (ver sección 3).
+Confirmada con el cliente el 18/08/2026, implementada capa 43. CRUD de la
+tabla `origen_comanda` — reemplaza el enum fijo `OrigenComanda` que tenía
+el contrato hasta la versión anterior (ver sección 3). Modelo real de
+negocio (capa 43): `woocommerce` (automático, sólo para pedidos
+sincronizados, nunca se elige a mano), `manual` (valor histórico de
+pedidos ya cargados a mano antes de esta capa — deja de ofrecerse en el
+desplegable de alta nueva, pero sigue siendo un valor válido para lo
+existente), y los 3 canales reales de un pedido manual: `whatsapp`,
+`telefon`, `correu`.
 
 **`GET /origens-comanda`**
 
@@ -1432,28 +1438,37 @@ contrato hasta esta versión (ver sección 3).
 {
   "dades": [
     { "id": 1, "codi": "woocommerce", "nom": "WooCommerce", "actiu": true },
-    { "id": 2, "codi": "manual", "nom": "Manual", "actiu": true }
-  ]
+    { "id": 2, "codi": "manual", "nom": "Manual", "actiu": true },
+    { "id": 3, "codi": "whatsapp", "nom": "WhatsApp", "actiu": true },
+    { "id": 4, "codi": "telefon", "nom": "Telèfon", "actiu": true },
+    { "id": 5, "codi": "correu", "nom": "Correu", "actiu": true }
+  ],
+  "paginacio": { "pagina": 1, "mida": 50, "total": 5, "totalPagines": 1 }
 }
 ```
 
-**`POST /origens-comanda`**
+**`POST /origens-comanda`** — exige el mòdul `"comandes"`; sense ell, `403
+SENSE_PERMIS`.
 
 ```json
 { "codi": "whatsapp", "nom": "WhatsApp" }
 ```
 
 Respuesta `201`, misma forma que una fila de `GET /origens-comanda`
-(`actiu` arranca en `true` si no se manda).
+(`actiu` arranca en `true` si no se manda). `codi` repetido → `409
+CONFLICTE`.
 
-**`PATCH /origens-comanda/:id`** — cuerpo parcial (`nom`, `actiu`). `codi`
-no se edita una vez creado — es la clave estable que usan
-`ComandaResumApi.origen`/`ComandaDetallApi.origen`.
+**`PATCH /origens-comanda/:id`** — cuerpo parcial (`nom`, `actiu`). Exige
+el mòdul `"comandes"`, mismo criterio que `POST`. `codi` no se edita una
+vez creado — es la clave estable que usan
+`ComandaResumApi.origen`/`ComandaDetallApi.origen`; si se manda igual en
+el cuerpo, se ignora en silencio (mismo criterio que `firebaseUid`/`email`
+en `PATCH /usuaris/:id`).
 
-**`DELETE /origens-comanda/:id`** — `204` sin cuerpo. En la práctica,
-preferí `PATCH { "actiu": false }` si ya hay pedidos usando ese origen —
-borrarlo de verdad puede dejar pedidos existentes con un `origen` que ya
-no resuelve a nada.
+> No hay `DELETE /origens-comanda/:id` (capa 43, mismo criterio que
+> `/transportistes` y `/usuaris`): para dar de baja un origen,
+> `PATCH { "actiu": false }` — borrarlo de verdad podría dejar
+> `comanda.origen_id` apuntando a nada.
 
 ---
 

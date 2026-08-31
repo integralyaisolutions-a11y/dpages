@@ -20,8 +20,8 @@ info:
     (ya no agrupado por producto), orígenes de pedido como tabla mantenible
     (ya no un enum fijo), y usuarios/roles. Esta versión es SOLO contrato —
     los endpoints nuevos (rendiments-porcs, panells/produccio,
-    origens-comanda, usuaris, rols, jo) todavía no están implementados en
-    el backend real.
+    usuaris, rols, jo) todavía no están implementados en el backend real
+    (origens-comanda, implementado desde la capa 43).
   contact:
     name: VisioFlow Tech
 
@@ -1141,8 +1141,8 @@ paths:
     get:
       tags: [OrigensComanda]
       summary: >-
-        Listar orígenes de pedido. Nuevo, confirmado 18/08/2026 — reemplaza
-        el enum fijo OrigenComanda. Todavía no implementado en el backend real.
+        Listar orígenes de pedido (capa 43). Confirmado 18/08/2026 —
+        reemplaza el enum fijo OrigenComanda.
       responses:
         '200':
           description: Listado
@@ -1154,9 +1154,10 @@ paths:
                   dades:
                     type: array
                     items: { $ref: '#/components/schemas/OrigenComanda' }
+                  paginacio: { $ref: '#/components/schemas/Paginacio' }
     post:
       tags: [OrigensComanda]
-      summary: Crear un origen de pedido
+      summary: Crear un origen de pedido. Exige el mòdul "comandes".
       requestBody:
         required: true
         content:
@@ -1169,11 +1170,15 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/OrigenComanda' }
         '400': { $ref: '#/components/responses/Validacio' }
+        '403': { $ref: '#/components/responses/SensePermis' }
+        '409': { $ref: '#/components/responses/Conflicte' }
 
   /api/v1/origens-comanda/{id}:
     patch:
       tags: [OrigensComanda]
-      summary: Actualizar un origen de pedido (parcial — codi no se edita)
+      summary: >-
+        Actualizar un origen de pedido (parcial — codi no se edita). Exige
+        el mòdul "comandes".
       parameters:
         - $ref: '#/components/parameters/IdPath'
       requestBody:
@@ -1190,16 +1195,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OrigenComanda' }
-        '404': { $ref: '#/components/responses/NoTrobat' }
-    delete:
-      tags: [OrigensComanda]
-      summary: >-
-        Eliminar un origen de pedido. En la práctica, preferir
-        PATCH {actiu: false} si ya hay pedidos usando ese origen.
-      parameters:
-        - $ref: '#/components/parameters/IdPath'
-      responses:
-        '204': { description: Eliminado }
+        '403': { $ref: '#/components/responses/SensePermis' }
         '404': { $ref: '#/components/responses/NoTrobat' }
 
   /api/v1/rols:

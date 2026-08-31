@@ -960,6 +960,18 @@ por defecto y para auditoría; si el cliente cambia de criterio y pide
 restringir por rol más adelante, el punto de enganche ya existe
 (`req.usuari.rol` en cada handler) y no hace falta tocar el middleware.
 
+**Nota (30/08/2026) — capa 39/43, el punto de enganche ya se usó, pero
+sin efecto real todavía**: pese a lo dicho arriba, sí llegaron guards de
+módulo puntuales — `crearGuardaModul` en `usuaris`/`rols` (capa 39,
+hallazgo de seguridad) y en `origens-comanda` (capa 43, `'comandes'`).
+El de `origens-comanda` está construido y probado (test con un rol
+sintético), pero **hoy no bloquea a nadie en la práctica**: los únicos 2
+roles existentes (`Administrador`, `General`, ver ADR de migración
+`0014_usuaris_i_rols`) tienen ambos el módulo `'comandes'` en
+`moduls_permesos`. Va a empezar a tener efecto real recién el día que
+exista un rol más restrictivo sin ese módulo — que quede registrado acá
+para que no se confunda con un bug cuando eso pase.
+
 ---
 
 ## ADR-022 — CI necesita su propio Postgres efímero, con el mismo puerto que espera `vitest.config.ts`
