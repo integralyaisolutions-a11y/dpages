@@ -1,6 +1,7 @@
 import type { RolApi } from '@dpages/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { construirServidor as construirServidorType } from '../../servidor.js';
+import { MODULS_VALIDS } from './rols.js';
 import {
   cuerpoJson,
   type EntornTestApi,
@@ -192,6 +193,23 @@ describe('API negoci — /rols, guardas i validació de mòduls (capa 39, Postgr
 
     expect(res.statusCode).toBe(404);
     expect(res.json()).toMatchObject({ error: { codi: 'NO_TROBAT' } });
+
+    await fastify.close();
+  });
+
+  // Capa 44 — Michel reportó MODULS_VALIDS duplicado a mano en el frontend,
+  // con riesgo de desincronizarse en silencio. Compara contra la constante
+  // real importada (no una lista hardcodeada acá): si mañana se agrega un
+  // módulo nuevo a rols.ts, este test lo sigue viendo pasar sin tocarlo, y
+  // el frontend puede dejar de mantener su propia copia.
+  it('GET /rols/moduls-valids retorna la constant real, sense guard', async () => {
+    const fastify = construirServidor();
+    // Sense promoureAAdministrador: usuari General (per defecte) ha de poder llegir-ho igual.
+    const res = await fastify.inject({ method: 'GET', url: '/api/v1/rols/moduls-valids' });
+
+    expect(res.statusCode).toBe(200);
+    const cuerpo = cuerpoJson<{ dades: string[] }>(res);
+    expect(cuerpo.dades).toEqual([...MODULS_VALIDS]);
 
     await fastify.close();
   });

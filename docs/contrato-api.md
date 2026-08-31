@@ -1560,14 +1560,54 @@ seguridad arriba); sin él, `403 SENSE_PERMIS`.
 
 > **`modulsPermesos` (capa 39) se valida contra una lista cerrada.**
 > Cualquier valor fuera de esta lista rechaza con `400 VALIDACIO`, con el/
-> los valor(es) inválido(s) en el detalle del error. La lista es la unión
-> de los módulos de los dos roles sembrados por la migración 0014
-> (`"rols"` incluido, aunque el frontend todavía no tiene una pantalla de
-> gestión de roles que lo consuma — sigue siendo un permiso válido):
+> los valor(es) inválido(s) en el detalle del error. Hoy es (`"rols"`
+> incluido, aunque el frontend todavía no tiene una pantalla de gestión de
+> roles que lo consuma — sigue siendo un permiso válido):
 >
 > `categories`, `catalog`, `tarifes`, `tarifes-clients`, `comandes`,
 > `rendiments-porcs`, `panell-oficina`, `panell-obrador`,
-> `panell-empaquetat`, `panell-produccio`, `usuaris`, `rols`.
+> `panell-empaquetat`, `panell-produccio`, `usuaris`, `rols`,
+> `transportistes`.
+>
+> **Esta lista puede quedar desactualizada acá** (ya pasó con
+> `transportistes`, agregado a `MODULS_VALIDS` sin actualizar este
+> ejemplo) — `GET /rols/moduls-valids` (capa 44, ver abajo) es la fuente
+> viva, pensada exactamente para que ningún consumidor (frontend incluido)
+> tenga que mantener su propia copia hardcodeada.
+
+**`GET /rols/moduls-valids`** (capa 44) — la lista real y actual de
+módulos válidos, la misma constante que valida `modulsPermesos` arriba.
+Sin guard (información de referencia, igual que `GET /rols`). Pensado
+para que el frontend (`lib/roles.ts`, `MODULS_VALIDS`) deje de mantener su
+propia copia — el hallazgo que motivó esta capa: un módulo agregado de un
+lado sin avisar al otro fallaba en silencio (pasó con `transportistes`).
+
+```json
+{
+  "dades": [
+    "categories",
+    "catalog",
+    "tarifes",
+    "tarifes-clients",
+    "comandes",
+    "rendiments-porcs",
+    "panell-oficina",
+    "panell-obrador",
+    "panell-empaquetat",
+    "panell-produccio",
+    "usuaris",
+    "rols",
+    "transportistes"
+  ]
+}
+```
+
+> Sólo los códigos, no nombres legibles: `MODULS_VALIDS` en el backend
+> nunca tuvo nombres para mostrar en UI — eso vive hoy sólo en el
+> frontend (`MODUL_LABELS` de `lib/roles.ts`). Agregar acá un mapeo de
+> etiquetas habría creado una segunda fuente de verdad para texto de
+> interfaz que el backend no necesita — no es el duplicado que esta capa
+> vino a resolver.
 
 **`DELETE /rols/:id`** (capa 39, no existía) — **borrado protegido**, mismo
 criterio que `DELETE /categories/:id`: si algún `usuari` tiene este rol

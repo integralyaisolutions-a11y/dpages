@@ -1236,6 +1236,40 @@ paths:
         '400': { $ref: '#/components/responses/Validacio' }
         '403': { $ref: '#/components/responses/SensePermis' }
 
+  /api/v1/rols/moduls-valids:
+    get:
+      tags: [Rols]
+      summary: >-
+        Llistar els mòduls vàlids (capa 44). Mateixa constant que valida
+        modulsPermesos a POST/PATCH /rols — sense guard, informació de
+        referència. Pensat perquè el frontend deixi de mantenir la seva
+        pròpia còpia hardcodejada (lib/roles.ts, MODULS_VALIDS).
+      responses:
+        '200':
+          description: Llistat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dades:
+                    type: array
+                    items: { type: string }
+                    example:
+                      - categories
+                      - catalog
+                      - tarifes
+                      - tarifes-clients
+                      - comandes
+                      - rendiments-porcs
+                      - panell-oficina
+                      - panell-obrador
+                      - panell-empaquetat
+                      - panell-produccio
+                      - usuaris
+                      - rols
+                      - transportistes
+
   /api/v1/rols/{id}:
     patch:
       tags: [Rols]

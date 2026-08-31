@@ -23,7 +23,10 @@ import {
  *   sigue siendo un valor válido de permiso (gatea `POST`/`PATCH`/
  *   `DELETE /rols` — ver más abajo).
  */
-const MODULS_VALIDS = [
+// export: capa 44, GET /rols/moduls-valids expone esta misma constante (no
+// una copia) — y rols.test.ts la importa para no hardcodear la lista
+// esperada en el test.
+export const MODULS_VALIDS = [
   'categories',
   'catalog',
   'tarifes',
@@ -91,6 +94,20 @@ export function registrarRutesRols(fastify: FastifyInstance): void {
       'SELECT id_seq, nom, moduls_permesos FROM rol ORDER BY nom ASC',
     );
     return { dades: files.rows.map(aApi) };
+  });
+
+  // Capa 44 — Michel reportó MODULS_VALIDS duplicado a mano en el frontend
+  // (lib/roles.ts), con riesgo de desincronizarse en silencio (ya pasó con
+  // 'transportistes'). Este endpoint expone la MISMA constante que valida
+  // POST/PATCH /rols — no una copia — para que el frontend deje de mantener
+  // la suya. Sin guard (igual que GET /rols): es información de referencia,
+  // no de negocio, cualquier usuario autenticado puede leerla. Sólo los
+  // códigos (MODULS_VALIDS no tiene nombres legibles del lado del backend —
+  // eso vive hoy sólo en el frontend, MODUL_LABELS de lib/roles.ts; agregar
+  // un mapeo de labels acá sería inventar una segunda fuente de verdad para
+  // texto de UI, no lo que esta capa pide resolver).
+  fastify.get('/rols/moduls-valids', () => {
+    return { dades: MODULS_VALIDS };
   });
 
   // Capa 39 — agujero de seguridad: hasta esta capa, POST/PATCH/DELETE
