@@ -22,6 +22,12 @@ describe('API negoci — /productes (Postgres real, esquema aislado)', () => {
     await entorn.poolTest.query(
       `INSERT INTO producte (codi, descripcio, tipus) VALUES ('PIC01', 'Picada de porc', 'simple')`,
     );
+    // Capa 45 — agrupacio_produccio con mayúscula inicial, para el test de
+    // filtro case-insensitive de más abajo.
+    await entorn.poolTest.query(
+      `INSERT INTO producte (codi, descripcio, tipus, agrupacio_produccio)
+       VALUES ('COS01', 'Costelletes de porc', 'simple', 'Costelletes')`,
+    );
   });
 
   afterAll(() => netejarEntornApi(entorn));
@@ -32,7 +38,7 @@ describe('API negoci — /productes (Postgres real, esquema aislado)', () => {
 
     expect(res.statusCode).toBe(200);
     const cuerpo = cuerpoJson<RespostaPaginada<ProducteApi>>(res);
-    expect(cuerpo.paginacio.total).toBe(2);
+    expect(cuerpo.paginacio.total).toBe(3);
 
     const llom = cuerpo.dades.find((p) => p.codi === 'LLF01');
     const picada = cuerpo.dades.find((p) => p.codi === 'PIC01');
@@ -49,6 +55,39 @@ describe('API negoci — /productes (Postgres real, esquema aislado)', () => {
     const cuerpo = cuerpoJson<RespostaPaginada<ProducteApi>>(res);
     expect(cuerpo.dades).toHaveLength(1);
     expect(cuerpo.dades[0]?.codi).toBe('LLF01');
+
+    await fastify.close();
+  });
+
+  // Capa 45 — hallazgo de Michel: este filtro quedó case-sensitive por
+  // descuido, inconsistente con ?cerca= de arriba. El fixture guarda
+  // 'Costelletes' (mayúscula inicial) — 'costelletes' y 'COSTELLETES'
+  // tienen que matchear igual.
+  it('GET /productes?agrupacioProduccio= exige coincidencia exacta, case-insensitive', async () => {
+    const fastify = construirServidor();
+
+    const minuscules = await fastify.inject({
+      method: 'GET',
+      url: '/api/v1/productes?agrupacioProduccio=costelletes',
+    });
+    const cuerpoMinuscules = cuerpoJson<RespostaPaginada<ProducteApi>>(minuscules);
+    expect(cuerpoMinuscules.dades).toHaveLength(1);
+    expect(cuerpoMinuscules.dades[0]?.codi).toBe('COS01');
+
+    const majuscules = await fastify.inject({
+      method: 'GET',
+      url: '/api/v1/productes?agrupacioProduccio=COSTELLETES',
+    });
+    const cuerpoMajuscules = cuerpoJson<RespostaPaginada<ProducteApi>>(majuscules);
+    expect(cuerpoMajuscules.dades).toHaveLength(1);
+    expect(cuerpoMajuscules.dades[0]?.codi).toBe('COS01');
+
+    const capMatch = await fastify.inject({
+      method: 'GET',
+      url: '/api/v1/productes?agrupacioProduccio=llom',
+    });
+    const cuerpoCapMatch = cuerpoJson<RespostaPaginada<ProducteApi>>(capMatch);
+    expect(cuerpoCapMatch.dades).toHaveLength(0);
 
     await fastify.close();
   });

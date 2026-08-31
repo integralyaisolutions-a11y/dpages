@@ -71,9 +71,12 @@ export function registrarRutesRendimentsPorcs(fastify: FastifyInstance): void {
       condicions.push(`cat.nom = $${valors.length + 1}`);
       valors.push(query.categoria);
     }
-    if (typeof query.agrupacioProduccio === 'string' && query.agrupacioProduccio !== '') {
-      condicions.push(`p.agrupacio_produccio = $${valors.length + 1}`);
-      valors.push(query.agrupacioProduccio);
+    if (typeof query.agrupacioProduccio === 'string' && query.agrupacioProduccio.trim() !== '') {
+      // Capa 45 — hallazgo de Michel: quedó case-sensitive por descuido,
+      // inconsistente con el filtro de producte de acá abajo. Mismo criterio
+      // (regla 3.1 transversal): coincidencia EXACTA, case-insensitive.
+      condicions.push(`LOWER(p.agrupacio_produccio) = LOWER($${valors.length + 1})`);
+      valors.push(query.agrupacioProduccio.trim());
     }
     if (typeof query.producte === 'string' && query.producte.trim() !== '') {
       // Coincidencia EXACTA por descripción, no substring (regla 3.1

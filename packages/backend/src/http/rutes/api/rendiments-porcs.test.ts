@@ -132,6 +132,38 @@ describe('API negoci — /rendiments-porcs (Postgres real, esquema aislado)', ()
     await fastify.close();
   });
 
+  // Capa 45 — hallazgo de Michel: este filtro quedó case-sensitive por
+  // descuido, inconsistente con el de producte de arriba. El fixture guarda
+  // 'Llom' (con mayúscula inicial) — 'llom' y 'LLOM' tienen que matchear igual.
+  it('GET /rendiments-porcs?agrupacioProduccio= exige coincidencia exacta, case-insensitive', async () => {
+    const fastify = construirServidor();
+
+    const minuscules = await fastify.inject({
+      method: 'GET',
+      url: '/api/v1/rendiments-porcs?agrupacioProduccio=llom',
+    });
+    const cuerpoMinuscules = cuerpoJson<RespostaPaginada<RendimentPorcApi>>(minuscules);
+    expect(cuerpoMinuscules.dades).toHaveLength(1);
+    expect(cuerpoMinuscules.dades[0]?.id).toBe(rendimentId);
+
+    const majuscules = await fastify.inject({
+      method: 'GET',
+      url: '/api/v1/rendiments-porcs?agrupacioProduccio=LLOM',
+    });
+    const cuerpoMajuscules = cuerpoJson<RespostaPaginada<RendimentPorcApi>>(majuscules);
+    expect(cuerpoMajuscules.dades).toHaveLength(1);
+    expect(cuerpoMajuscules.dades[0]?.id).toBe(rendimentId);
+
+    const capMatch = await fastify.inject({
+      method: 'GET',
+      url: '/api/v1/rendiments-porcs?agrupacioProduccio=costelletes',
+    });
+    const cuerpoCapMatch = cuerpoJson<RespostaPaginada<RendimentPorcApi>>(capMatch);
+    expect(cuerpoCapMatch.dades).toHaveLength(0);
+
+    await fastify.close();
+  });
+
   it('PATCH /rendiments-porcs/:id actualiza sólo el campo enviado', async () => {
     const fastify = construirServidor();
     const res = await fastify.inject({

@@ -149,6 +149,13 @@ paths:
         - name: cerca
           in: query
           schema: { type: string }
+        - name: agrupacioProduccio
+          in: query
+          description: >-
+            Coincidencia exacta (case-insensitive, capa 45) — regla 3.1
+            transversal del proyecto, no substring. No confundir con
+            cerca, que sí es substring.
+          schema: { type: string }
         - $ref: '#/components/parameters/Pagina'
         - $ref: '#/components/parameters/Mida'
       responses:
@@ -225,6 +232,9 @@ paths:
           schema: { type: string }
         - name: agrupacioProduccio
           in: query
+          description: >-
+            Coincidencia exacta (case-insensitive, capa 45) — regla 3.1
+            transversal del proyecto, no substring.
           schema: { type: string }
         - name: producte
           in: query

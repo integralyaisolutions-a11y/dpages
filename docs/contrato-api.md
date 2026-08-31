@@ -328,7 +328,13 @@ pudo hacer.
 
 **`GET /productes`**
 
-Filtros: `?categoriaId=1&tipus=simple&actiu=true&cerca=llom`
+Filtros: `?categoriaId=1&tipus=simple&actiu=true&cerca=llom&agrupacioProduccio=Llom`
+
+> **`agrupacioProduccio` (capa 45, corrección de Michel)**: coincidencia
+> EXACTA, case-insensitive (`LOWER(...) = LOWER(...)`, regla 3.1
+> transversal) — hasta esta capa quedó case-sensitive por descuido. No
+> confundir con `cerca`, que sí es substring (`ILIKE`) sobre
+> descripció/descripcioVenda/codi.
 
 ```json
 {
@@ -1238,6 +1244,13 @@ case-sensitive) — regla 3.1 transversal del proyecto
 (`docs/especificacion-funcional-dpages.md`): buscar "Llom" no debe traer
 "Cap de llom". Igual que `agrupacioRendiment`/`categoria`/`agrupacioProduccio`,
 que también son coincidencia exacta.
+
+> **`agrupacioProduccio` (capa 45, corrección de Michel)**: hasta esta
+> capa quedó case-sensitive por descuido, inconsistente con `producte` de
+> arriba — buscar "llom" no traía nada si el dato real era "Llom". Ya
+> aplica el mismo criterio (`LOWER(...) = LOWER(...)`, regla 3.1). El
+> mismo fix se aplicó también en `GET /productes` (sección 4.2), que tiene
+> el mismo filtro con el mismo bug.
 
 ```json
 {

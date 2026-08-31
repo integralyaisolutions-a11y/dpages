@@ -106,9 +106,12 @@ export function registrarRutesProductes(fastify: FastifyInstance): void {
       condicions.push(`p.envasat = $${valors.length + 1}`);
       valors.push(query.envasat);
     }
-    if (typeof query.agrupacioProduccio === 'string' && query.agrupacioProduccio !== '') {
-      condicions.push(`p.agrupacio_produccio = $${valors.length + 1}`);
-      valors.push(query.agrupacioProduccio);
+    if (typeof query.agrupacioProduccio === 'string' && query.agrupacioProduccio.trim() !== '') {
+      // Capa 45 — mismo hallazgo y mismo fix que rendiments-porcs.ts: quedó
+      // case-sensitive por descuido. Regla 3.1 transversal: coincidencia
+      // EXACTA, case-insensitive.
+      condicions.push(`LOWER(p.agrupacio_produccio) = LOWER($${valors.length + 1})`);
+      valors.push(query.agrupacioProduccio.trim());
     }
     if (typeof query.cerca === 'string' && query.cerca.trim() !== '') {
       condicions.push(
