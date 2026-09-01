@@ -14,7 +14,9 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { useClientTariffs } from "@/hooks/useClientTariffs";
 import { useOrders } from "@/hooks/useOrders";
+import { useOrigensComanda } from "@/hooks/useOrigensComanda";
 import { ApiError, type ComandaResumApi } from "@/lib/api";
+import { origenBadgeVariant } from "@/lib/comandaOrigen";
 import { formatData } from "@/lib/dates";
 
 const ALL = "Tots";
@@ -32,10 +34,12 @@ function productionDates(order: ComandaResumApi): string {
 
 function OrderCard({
   order,
+  originLabel,
   onOpen,
   onMarkIncidence,
 }: {
   order: ComandaResumApi;
+  originLabel: (codi: string) => string;
   onOpen: () => void;
   onMarkIncidence: () => void;
 }) {
@@ -56,6 +60,9 @@ function OrderCard({
 
       <div className="mt-3">
         <DataCardGrid>
+          <DataCardField label="Origen">
+            <Badge variant={origenBadgeVariant(order.origen)}>{originLabel(order.origen)}</Badge>
+          </DataCardField>
           <DataCardField label="Tarifa">{order.tarifa?.nom ?? "—"}</DataCardField>
           <DataCardField label="Transportista">{order.transportista?.nom ?? "—"}</DataCardField>
           <DataCardField label="Data comanda">{formatData(order.dataComanda, true)}</DataCardField>
@@ -131,6 +138,11 @@ export default function OrdersPage() {
   // useClientTariffs() SENSE paràmetres: taula de consulta completa per
   // resoldre el codi de client (manté `mida: 200` per defecte, no es toca).
   const { data: clients } = useClientTariffs();
+  const { data: origins } = useOrigensComanda();
+  const originLabel = useMemo(() => {
+    const byCodi = new Map(origins.map((origin) => [origin.codi, origin.nom]));
+    return (codi: string) => byCodi.get(codi) ?? codi;
+  }, [origins]);
 
   // El buscador de client segueix sent client-side sobre la pàgina actual
   // (20 comandes) des que hi ha paginació real — GET /comandes no accepta
@@ -204,6 +216,7 @@ export default function OrdersPage() {
               <OrderCard
                 key={order.id}
                 order={order}
+                originLabel={originLabel}
                 onOpen={() => router.push(`/orders/${order.id}`)}
                 onMarkIncidence={() => {
                   setIncidenceError(null);
@@ -220,7 +233,8 @@ export default function OrdersPage() {
                 <tr>
                   <th className="w-[8%] px-2 py-2 text-left font-medium text-gray-500 break-words">Núm.</th>
                   <th className="w-[13%] px-2 py-2 text-left font-medium text-gray-500 break-words">Client</th>
-                  <th className="w-[10%] px-2 py-2 text-left font-medium text-gray-500 break-words">Tarifa</th>
+                  <th className="w-[7%] px-2 py-2 text-left font-medium text-gray-500 break-words">Origen</th>
+                  <th className="w-[8%] px-2 py-2 text-left font-medium text-gray-500 break-words">Tarifa</th>
                   <th className="w-[9%] px-2 py-2 text-left font-medium text-gray-500 break-words">Data comanda</th>
                   <th className="w-[9%] px-2 py-2 text-left font-medium text-gray-500 break-words">
                     Data producció
@@ -228,12 +242,12 @@ export default function OrdersPage() {
                   <th className="w-[9%] px-2 py-2 text-left font-medium text-gray-500 break-words">
                     Data lliurament
                   </th>
-                  <th className="w-[11%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                  <th className="w-[9%] px-2 py-2 text-left font-medium text-gray-500 break-words">
                     Transportista
                   </th>
-                  <th className="w-[7%] px-2 py-2 text-right font-medium text-gray-500 break-words">Bultos</th>
+                  <th className="w-[6%] px-2 py-2 text-right font-medium text-gray-500 break-words">Bultos</th>
                   <th className="w-[9%] px-2 py-2 text-left font-medium text-gray-500 break-words">Estat</th>
-                  <th className="w-[15%] px-2 py-2 text-right font-medium text-gray-500 break-words">Accions</th>
+                  <th className="w-[13%] px-2 py-2 text-right font-medium text-gray-500 break-words">Accions</th>
                 </tr>
               </thead>
               <tbody>
@@ -247,6 +261,9 @@ export default function OrdersPage() {
                       <span className="font-semibold text-gray-900">{order.num}</span>
                     </td>
                     <td className="px-2 py-3 break-words text-gray-900">{order.client?.nom ?? "—"}</td>
+                    <td className="px-2 py-3 break-words">
+                      <Badge variant={origenBadgeVariant(order.origen)}>{originLabel(order.origen)}</Badge>
+                    </td>
                     <td className="px-2 py-3 break-words text-gray-900">{order.tarifa?.nom ?? "—"}</td>
                     <td className="px-2 py-3 break-words text-gray-900">{formatData(order.dataComanda, true)}</td>
                     <td className="px-2 py-3 break-words text-gray-900">{productionDates(order) || "—"}</td>

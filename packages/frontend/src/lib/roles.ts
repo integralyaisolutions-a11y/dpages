@@ -46,27 +46,12 @@ export function isModuleRouteAllowed(modulsPermesos: string[], pathname: string)
   );
 }
 
-// ── Els 12 mòduls reals (migració 0014_usuaris_i_rols.up.sql, confirmat) ──
-//
-// "rols" no té ruta pròpia (viu dins de /users, mateixa pantalla que
-// "usuaris") — per això no és a MODUL_ROUTES, però sí és un mòdul real que
-// es pot assignar a un rol.
-export const MODULS_VALIDS = [
-  "categories",
-  "catalog",
-  "tarifes",
-  "tarifes-clients",
-  "comandes",
-  "rendiments-porcs",
-  "panell-oficina",
-  "panell-obrador",
-  "panell-empaquetat",
-  "panell-produccio",
-  "usuaris",
-  "rols",
-  "transportistes",
-] as const;
-
+// Capa 44 — la llista de mòduls vàlids ja NO viu acá: era una còpia a mà
+// de la mateixa constant del backend (rols.ts), amb risc real de
+// desincronitzar-se en silenci (va passar amb "transportistes"). Ara es
+// consumeix en directe via `hooks/useModulsValids.ts` (GET
+// /rols/moduls-valids, capa 44) — `RoleFormModal.tsx` és l'únic consumidor
+// real (confirmat amb grep abans de treure l'exportació).
 export const MODUL_LABELS: Record<string, string> = {
   categories: "Categories",
   catalog: "Catàleg",

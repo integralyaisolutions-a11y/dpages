@@ -12,6 +12,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { SelectFilter } from "@/components/ui/SelectFilter";
 import { useCatalog } from "@/hooks/useCatalog";
+import { useCategories } from "@/hooks/useCategories";
 import type { ProducteApi } from "@/lib/api";
 import { formatDecimal } from "@/lib/decimals";
 
@@ -92,19 +93,22 @@ export default function CatalogPage() {
   const filters = useMemo(() => (search.trim() ? { cerca: search.trim() } : {}), [search]);
   const { data, paginacio, setPagina, isLoading, error, refetch } = useCatalog(filters, { mida: 20 });
 
-  // Categoria/Agrupació producció: es mantenen derivades de `data` (mateix
-  // criteri d'abans) — LIMITACIÓ CONEGUDA, no resolta acà: amb paginació
-  // real només reflecteixen els valors presents a la pàgina actual, no tot
-  // el catàleg. Format/Envasat/Estat SÍ són un conjunt tancat conegut
-  // (CHECK constraint / booleà), per això van hardcodejats dalt i no
-  // pateixen aquest problema.
+  // Efecte col·lateral de la paginació (2026-08-30) resolt: Categoria i
+  // Agrupació producció ja no deriven de `data` (paginat a 20) — es
+  // resolen contra fonts completes ja disponibles, mateix patró que
+  // Format/Envasat/Estat (constants) però per a valors oberts que no ho
+  // poden ser. `useCategories()`/`useCatalog()` acá SENSE `mida: 20` és una
+  // segona crida independent (mida per defecte 200), no la mateixa que
+  // alimenta la taula.
+  const { data: allCategories } = useCategories();
+  const { data: allProducts } = useCatalog();
   const categoryOptions = useMemo(
-    () => [ALL_FEM, ...distinct(data.map((product) => product.categoria?.nom ?? "—"))],
-    [data],
+    () => [ALL_FEM, ...distinct(allCategories.map((category) => category.nom))],
+    [allCategories],
   );
   const productionGroupOptions = useMemo(
-    () => [ALL, ...distinct(data.map((product) => product.agrupacioProduccio ?? "—"))],
-    [data],
+    () => [ALL, ...distinct(allProducts.map((product) => product.agrupacioProduccio ?? "—"))],
+    [allProducts],
   );
 
   // Format/Envasat/Estat: filtre client-side sobre la pàgina actual, mateix

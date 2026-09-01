@@ -1,6 +1,13 @@
 "use client";
 
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import {
+  AuthErrorCodes,
+  onAuthStateChanged,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signOut,
+  type AuthError,
+} from "firebase/auth";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, setAuthTokenProvider, type UsuariApi } from "@/lib/api";
 import { auth } from "@/lib/firebase";
@@ -14,12 +21,23 @@ setAuthTokenProvider(async () => (auth.currentUser ? auth.currentUser.getIdToken
 
 export type LoginResult = { ok: true; user: UsuariApi } | { ok: false; reason: "invalid" | "inactive" };
 
+// Firebase gestiona la pantalla de contrasenya (alta i restabliment són el
+// mateix mecanisme: sendPasswordResetEmail / generatePasswordResetLink),
+// nosaltres només controlem la pantalla de destí un cop la persona ja l'ha
+// establerta — sempre torna a /login amb aquest query param.
+export type PasswordResetResult = { ok: true } | { ok: false; reason: "too-many-requests" | "unknown" };
+
 type AuthContextValue = {
   user: UsuariApi | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<LoginResult>;
   logout: () => void;
+  requestPasswordReset: (email: string) => Promise<PasswordResetResult>;
 };
+
+function passwordResetActionCodeSettings() {
+  return { url: `${window.location.origin}/login?passwordReset=success`, handleCodeInApp: false };
+}
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -77,7 +95,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  const value = useMemo(() => ({ user, isLoading, login, logout }), [user, isLoading, login, logout]);
+  const requestPasswordReset = useCallback(async (email: string): Promise<PasswordResetResult> => {
+    try {
+      await sendPasswordResetEmail(auth, email, passwordResetActionCodeSettings());
+      return { ok: true };
+    } catch (error) {
+      const code = (error as AuthError).code;
+      if (code === AuthErrorCodes.TOO_MANY_ATTEMPTS_TRY_LATER) return { ok: false, reason: "too-many-requests" };
+      // auth/user-not-found es un cas normal, no un error: no revelem si
+      // l'email existeix o no al sistema (evita enumeració de comptes).
+      if (code === AuthErrorCodes.USER_DELETED) return { ok: true };
+      return { ok: false, reason: "unknown" };
+    }
+  }, []);
+
+  const value = useMemo(
+    () => ({ user, isLoading, login, logout, requestPasswordReset }),
+    [user, isLoading, login, logout, requestPasswordReset],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

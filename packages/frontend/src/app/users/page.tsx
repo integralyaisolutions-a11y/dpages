@@ -95,11 +95,16 @@ export default function UsersPage() {
     createUser,
     editUser,
   } = useUsers(userFilters);
-  // GET /rols encara NO pagina (confirmat contra rols.ts: `{ dades: RolApi[] }`
-  // sense `paginacio`) — es deixa sense component de paginació a la pestanya
-  // Rols fins que el backend l'exposi. El volum real (~7 rols) fa que no
-  // urgeixi.
-  const { data: roles, isLoading: rolesLoading, error: rolesError, createRole, editRole } = useRols();
+  // Capa 46 — GET /rols ja pagina de veritat (abans no ho feia).
+  const {
+    data: roles,
+    paginacio: rolesPaginacio,
+    setPagina: setRolesPagina,
+    isLoading: rolesLoading,
+    error: rolesError,
+    createRole,
+    editRole,
+  } = useRols();
 
   const [userFormState, setUserFormState] = useState<{ mode: "create" | "edit"; user?: UsuariApi } | null>(null);
   const [roleFormState, setRoleFormState] = useState<{ mode: "create" | "edit"; role?: RolApi } | null>(null);
@@ -263,6 +268,8 @@ export default function UsersPage() {
                   </tbody>
                 </table>
               </div>
+
+              {rolesPaginacio && <Pagination paginacio={rolesPaginacio} onPageChange={setRolesPagina} />}
             </>
           )}
         </>
