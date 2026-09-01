@@ -1735,6 +1735,15 @@ Respuesta `201`:
 > El campo `linkEstabliment` nunca debe quedar en un log ni guardarse en
 > ningún sitio más allá de esta respuesta — es un token de un solo uso que
 > da acceso a establecer la contraseña de otra persona.
+>
+> **A dónde redirige Firebase DESPUÉS de que la persona ya estableció su
+> contraseña (capa 47)**: `<origen>/login?passwordReset=success` — nadie
+> ve `linkEstabliment` en sí (es la URL de Firebase con el `oobCode`), pero
+> sí ve esta pantalla al terminar. `<origen>` se resuelve con el MISMO
+> criterio que CORS (`http/cors.ts`/`opcionsCors()`): fuera de producción,
+> `http://localhost:3000` fijo; en producción, `CORS_ORIGIN`. Si
+> `CORS_ORIGIN` falta en producción, `POST /usuaris` falla explícito en vez
+> de generar un link con un origen vacío/roto.
 
 **`GET /jo`** — devuelve el usuario autenticado (resuelto por el `uid` del
 token de Firebase, sección 2) con su rol y módulos permitidos. Es lo

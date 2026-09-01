@@ -1,8 +1,14 @@
 import type { FastifyCorsOptions } from '@fastify/cors';
 import { env } from '../config/env.js';
 
-/** El frontend de Michel corre acá en desarrollo — nada que configurar para levantar los dos en local. */
-const ORIGEN_DESENVOLUPAMENT = 'http://localhost:3000';
+/**
+ * El frontend de Michel corre acá en desarrollo — nada que configurar para
+ * levantar los dos en local. Exportada (capa 47): auth-firebase.ts la
+ * reusa para el mismo criterio de entorno al armar la URL del link de alta
+ * de usuario — mismo módulo `http/`, sin necesidad de un archivo compartido
+ * nuevo para una sola constante.
+ */
+export const ORIGEN_DESENVOLUPAMENT = 'http://localhost:3000';
 
 /**
  * `@fastify/cors` usa 'GET,HEAD,POST' como default de `methods` cuando no

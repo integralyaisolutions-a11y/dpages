@@ -2,6 +2,7 @@ import type { App, ServiceAccount } from 'firebase-admin/app';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { env } from '../config/env.js';
 import { logger } from '../lib/logger.js';
+import { ORIGEN_DESENVOLUPAMENT } from './cors.js';
 import { cosError } from './error-api.js';
 
 /**
@@ -149,23 +150,42 @@ export interface GestioUsuarisFirebase {
 }
 
 /**
- * TODO(capa 19 / frontend): actualizar `url` a la pantalla real de
- * establecimiento de contraseña en cuanto Michel la tenga lista — hoy
- * apunta al backend sólo como placeholder, nadie ve esta URL (Firebase
- * redirige acá DESPUÉS de que la persona ya estableció su contraseña).
+ * Capa 47 — antes apuntaba fijo al placeholder de Cloud Run (nadie veía esa
+ * URL, pero tampoco era la pantalla real). Mismo criterio de entorno que
+ * `opcionsCors()` en cors.ts: fuera de producción, el origen fijo de
+ * desarrollo; en producción, `env.CORS_ORIGIN`. A diferencia de CORS (que
+ * si falta simplemente cierra el acceso, `origin: false`), acá NO hay un
+ * fallback seguro posible — sin origen no hay URL que construir, así que
+ * falla explícito en el momento de generar el link, nunca con un
+ * `undefined`/string vacío incrustado en la URL en silencio.
  *
- * Obligatorio pasarlo explícito a `generatePasswordResetLink`: sin esto,
- * el Admin SDK intenta generar un link corto vía Firebase Dynamic Links,
- * que Google dio de baja — la llamada queda colgada esperando una
- * respuesta que nunca llega, sin lanzar error (encontrado probando este
- * endpoint contra Firebase real, ver consola: "finalizó el período de
- * baja de Firebase Dynamic Links"). `handleCodeInApp: false` evita que
- * intente generar un deep link a una app móvil, que tampoco existe.
+ * Exportada para poder testear la construcción de la URL sin pasar por
+ * Firebase real (`generarLinkEstabliment` de abajo nunca corre en los
+ * tests de este repo).
  */
-const ACTION_CODE_SETTINGS_ESTABLIMENT = {
-  url: 'https://dpages-backend-493716972967.europe-west1.run.app',
-  handleCodeInApp: false,
-};
+export function construirActionCodeSettingsEstabliment(): {
+  url: string;
+  handleCodeInApp: boolean;
+} {
+  const origen = env.NODE_ENV === 'production' ? env.CORS_ORIGIN : ORIGEN_DESENVOLUPAMENT;
+  if (!origen) {
+    throw new Error(
+      'CORS_ORIGIN no està configurada en producció — no es pot generar el link ' +
+        "d'establiment de contrasenya sense saber a quin origen ha d'apuntar.",
+    );
+  }
+  return {
+    url: `${origen}/login?passwordReset=success`,
+    // Obligatorio pasarlo explícito a `generatePasswordResetLink`: sin
+    // esto, el Admin SDK intenta generar un link corto vía Firebase
+    // Dynamic Links, que Google dio de baja — la llamada queda colgada
+    // esperando una respuesta que nunca llega, sin lanzar error (encontrado
+    // probando este endpoint contra Firebase real, ver consola: "finalizó
+    // el período de baja de Firebase Dynamic Links"). `false` evita que
+    // intente generar un deep link a una app móvil, que tampoco existe.
+    handleCodeInApp: false,
+  };
+}
 
 /** Implementación real — nunca se ejecuta en los tests de este repo (se inyecta un mock en su lugar). */
 export const gestioUsuarisFirebase: GestioUsuarisFirebase = {
@@ -187,7 +207,7 @@ export const gestioUsuarisFirebase: GestioUsuarisFirebase = {
   async generarLinkEstabliment(email) {
     const { getAuth } = await import('firebase-admin/auth');
     const app = await obtenerAppFirebaseAdmin();
-    return getAuth(app).generatePasswordResetLink(email, ACTION_CODE_SETTINGS_ESTABLIMENT);
+    return getAuth(app).generatePasswordResetLink(email, construirActionCodeSettingsEstabliment());
   },
 };
 

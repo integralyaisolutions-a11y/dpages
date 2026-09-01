@@ -147,3 +147,85 @@ describe('rutas fuera del scope de /api/v1: no pasan por este middleware', () =>
     await fastify.close();
   });
 });
+
+/**
+ * Capa 47 — la URL del link de alta de usuario se arma con el mismo
+ * criterio de entorno que opcionsCors() en cors.ts (ver cors.test.ts, del
+ * que se copia el patrón: fijar process.env ANTES de vi.resetModules() +
+ * reimportar, un describe por escenario). Se testea la función pura
+ * exportada, no generarLinkEstabliment — ese sí llama a Firebase real y
+ * nunca corre en los tests de este repo.
+ */
+describe('construirActionCodeSettingsEstabliment — fuera de producción', () => {
+  let construirActionCodeSettingsEstabliment: () => { url: string; handleCodeInApp: boolean };
+
+  beforeAll(async () => {
+    process.env.NODE_ENV = 'test';
+    vi.resetModules();
+    ({ construirActionCodeSettingsEstabliment } = await import('./auth-firebase.js'));
+  });
+
+  afterAll(() => {
+    vi.resetModules();
+  });
+
+  it('usa el origen fijo de desarrollo (localhost:3000), sin leer CORS_ORIGIN', () => {
+    const settings = construirActionCodeSettingsEstabliment();
+
+    expect(settings).toEqual({
+      url: 'http://localhost:3000/login?passwordReset=success',
+      handleCodeInApp: false,
+    });
+  });
+});
+
+describe('construirActionCodeSettingsEstabliment — producción sin CORS_ORIGIN configurado', () => {
+  let construirActionCodeSettingsEstabliment: () => { url: string; handleCodeInApp: boolean };
+
+  beforeAll(async () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.AUTH_DISABLED; // production + AUTH_DISABLED=true no arranca (ADR-021)
+    delete process.env.CORS_ORIGIN; // exactamente el caso que se está probando: sin configurar
+    vi.resetModules();
+    ({ construirActionCodeSettingsEstabliment } = await import('./auth-firebase.js'));
+  });
+
+  afterAll(() => {
+    process.env.NODE_ENV = 'test';
+    process.env.AUTH_DISABLED = 'false';
+    vi.resetModules();
+  });
+
+  it('falla explícito en vez de generar una URL con el origen vacío', () => {
+    expect(() => construirActionCodeSettingsEstabliment()).toThrow(/CORS_ORIGIN/);
+  });
+});
+
+describe('construirActionCodeSettingsEstabliment — producción con CORS_ORIGIN configurado', () => {
+  let construirActionCodeSettingsEstabliment: () => { url: string; handleCodeInApp: boolean };
+  const ORIGEN_PRODUCCIO = 'https://app.dpages.cat';
+
+  beforeAll(async () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.AUTH_DISABLED;
+    process.env.CORS_ORIGIN = ORIGEN_PRODUCCIO;
+    vi.resetModules();
+    ({ construirActionCodeSettingsEstabliment } = await import('./auth-firebase.js'));
+  });
+
+  afterAll(() => {
+    process.env.NODE_ENV = 'test';
+    process.env.AUTH_DISABLED = 'false';
+    delete process.env.CORS_ORIGIN;
+    vi.resetModules();
+  });
+
+  it('usa CORS_ORIGIN como origen del link', () => {
+    const settings = construirActionCodeSettingsEstabliment();
+
+    expect(settings).toEqual({
+      url: 'https://app.dpages.cat/login?passwordReset=success',
+      handleCodeInApp: false,
+    });
+  });
+});
