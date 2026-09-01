@@ -170,7 +170,7 @@ function RateProductRow({
             isDirty && !isSaving ? "bg-ink text-white hover:opacity-90" : "cursor-not-allowed bg-gray-200 text-gray-400"
           }`}
         >
-          {isSaving ? "Guardant..." : "Guardar"}
+          {isSaving ? "Desant..." : "Desar"}
         </button>
       </td>
     </tr>
@@ -266,7 +266,7 @@ export default function RatesPage() {
     <div>
       <PageHeader
         title="Llistat de Tarifes"
-        subtitle="Preus dels productes per cada tarifa. Edita les cel·les i prem Guardar a la fila."
+        subtitle="Preus dels productes per cada tarifa. Edita les cel·les i prem Desar a la fila."
         action={{ label: "Nova tarifa", onClick: () => setIsModalOpen(true) }}
       />
 
@@ -285,7 +285,7 @@ export default function RatesPage() {
             onClick={refetch}
             className="shrink-0 rounded-full border border-red-300 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
           >
-            Reintentar
+            Torna-ho a provar
           </button>
         </div>
       )}
@@ -325,7 +325,7 @@ export default function RatesPage() {
                     className="px-2 py-2 text-center font-medium text-gray-500 break-words"
                     style={{ width: GUARDAR_WIDTH }}
                   >
-                    Guardar
+                    Desar
                   </th>
                 </tr>
               </thead>

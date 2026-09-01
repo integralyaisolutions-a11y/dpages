@@ -125,7 +125,7 @@ function PackagingRow({
             isDirty && !isSaving ? "bg-ink text-white hover:opacity-90" : "cursor-not-allowed bg-gray-200 text-gray-400"
           }`}
         >
-          {isSaving ? "Guardant..." : "Guardar"}
+          {isSaving ? "Desant..." : "Desar"}
         </button>
         {generalError && <p className="mt-1 max-w-[140px] text-xs text-red-600">{generalError}</p>}
       </td>
@@ -223,7 +223,7 @@ function PackagingCard({
             isDirty && !isSaving ? "bg-ink text-white hover:opacity-90" : "cursor-not-allowed bg-gray-200 text-gray-400"
           }`}
         >
-          {isSaving ? "Guardant..." : "Guardar"}
+          {isSaving ? "Desant..." : "Desar"}
         </button>
       </DataCardActions>
       {generalError && <p className="mt-2 text-xs text-red-600">{generalError}</p>}
@@ -339,7 +339,7 @@ export default function PackagingPage() {
             onClick={refetch}
             className="shrink-0 rounded-full border border-red-300 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
           >
-            Reintentar
+            Torna-ho a provar
           </button>
         </div>
       )}
@@ -380,7 +380,7 @@ export default function PackagingPage() {
                   <th className="w-[8%] px-3 py-2 text-right font-medium text-gray-500 break-words">
                     Kilos lliurats
                   </th>
-                  <th className="w-[10%] px-3 py-2 text-center font-medium text-gray-500 break-words">Guardar</th>
+                  <th className="w-[10%] px-3 py-2 text-center font-medium text-gray-500 break-words">Desar</th>
                 </tr>
               </thead>
               <tbody>

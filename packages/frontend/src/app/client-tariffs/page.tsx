@@ -109,7 +109,7 @@ export default function ClientTariffsPage() {
             onClick={refetch}
             className="shrink-0 rounded-full border border-red-300 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
           >
-            Reintentar
+            Torna-ho a provar
           </button>
         </div>
       )}

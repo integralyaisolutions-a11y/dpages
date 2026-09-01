@@ -93,7 +93,7 @@ function PigYieldRow({
               isDirty && !isSaving ? "bg-ink text-white hover:opacity-90" : "cursor-not-allowed bg-gray-200 text-gray-400"
             }`}
           >
-            {isSaving ? "Guardant..." : "Guardar"}
+            {isSaving ? "Desant..." : "Desar"}
           </button>
           <IconButton variant="delete" label="Suprimeix línia" onClick={() => onDelete(item)} />
         </div>
@@ -178,7 +178,7 @@ function PigYieldCard({
             isDirty && !isSaving ? "bg-ink text-white hover:opacity-90" : "cursor-not-allowed bg-gray-200 text-gray-400"
           }`}
         >
-          {isSaving ? "Guardant..." : "Guardar"}
+          {isSaving ? "Desant..." : "Desar"}
         </button>
         <IconButton variant="delete" label="Suprimeix línia" onClick={() => onDelete(item)} />
       </DataCardActions>
@@ -225,7 +225,7 @@ export default function PigYieldsPage() {
     <div>
       <PageHeader
         title="Rendiments Porcs"
-        subtitle="Edita les cel·les i prem Guardar a la fila per confirmar els canvis."
+        subtitle="Edita les cel·les i prem Desar a la fila per confirmar els canvis."
         action={{
           label: "Nova línia",
           icon: <Plus className="h-4 w-4" />,
@@ -252,7 +252,7 @@ export default function PigYieldsPage() {
             onClick={refetch}
             className="shrink-0 rounded-full border border-red-300 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
           >
-            Reintentar
+            Torna-ho a provar
           </button>
         </div>
       )}
