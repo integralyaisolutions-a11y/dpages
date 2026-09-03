@@ -30,6 +30,178 @@ esquema y de la integración — ver los ADRs correspondientes en
   este motivo — ver el comentario en `credencialsWoo()` para el detalle y
   la redacción obligatoria en logs/errores que esto exige.
 
+- **Capa 49 (2026-09-02) — incidente real de producción: sync-comandes y
+  sync-cataleg fallando de forma sostenida, cursores de `orders` Y
+  `products` congelados varios días, con cientos de intentos fallidos
+  consecutivos.**
+
+  **Síntoma**: `cursor_sincronitzacio` de ambos recursos sin avanzar desde
+  el 2026-08-31, `ultim_error` = `"Sin respuesta de WooCommerce en [...]
+tras 5 reintentos: fetch failed"` en los dos. Cloud Scheduler
+  (`sync-comandes` cada 5 min, `sync-cataleg` cada 30 min) devolviendo 500
+  de forma consistente.
+
+  **Causa probable**: no fue backlog acumulado (el catálogo son ~111
+  artículos — un backlog de `products` nunca justificaría por sí solo
+  varias páginas) sino que **una sola página de resultados** quedaba al
+  límite o por encima de `TIMEOUT_PETICION_MS` (20s) en el hosting real.
+  Prueba manual con curl directo (mismas credenciales, fuera del backend):
+  una página de 50 pedidos con los parámetros reales del sync tardó ~8s —
+  bastante más que los "~3 segundos por consulta" observados en la
+  evaluación original (ver arriba); con `PER_PAGE` real de 100 (el doble),
+  es plausible que una página completa superara los 20s en un hosting que
+  ya venía lento. El texto exacto `"fetch failed"` (en vez de un
+  `TimeoutError`/`AbortError` limpio) apunta más a un corte de conexión del
+  lado del servidor/hosting que a nuestro propio `AbortSignal`
+  disparándose — pero el código de esta capa hacia atrás **descartaba
+  `err.cause`** por completo, así que no había forma de confirmarlo con los
+  logs disponibles; hubo que reconstruir la investigación con pruebas
+  manuales fuera del backend.
+
+  **Cambios aplicados** (`woocommerce/cliente.ts`):
+  1. `PER_PAGE`: `100` → `30` — páginas más chicas y rápidas.
+  2. `TIMEOUT_PETICION_MS`: `20_000` → `45_000` — colchón si el hosting
+     sigue lento incluso con páginas más chicas.
+  3. Captura de `err.cause` (antes descartado) en el log de cada reintento
+     y en el mensaje final de `ErrorWooCommerce`, para poder distinguir la
+     próxima vez un abort propio de un corte de conexión real sin repetir
+     esta investigación desde cero.
+
+  Mitigación inmediata mientras se aplicaba el fix: los dos jobs de Cloud
+  Scheduler se pausaron manualmente (fuera de este repo, a nivel de
+  infraestructura) para no seguir cargando el hosting con reintentos
+  fallidos mientras se diagnosticaba.
+
+  **Corrección (2026-09-02, mismo día, tras desplegar la captura de
+  `err.cause` de arriba) — el diagnóstico de "página lenta/timeout de
+  lectura" era PARCIALMENTE INCORRECTO.** Con `err.cause` ya visible en
+  los logs reales, el error de fondo resultó ser:
+
+  ```
+  ConnectTimeoutError: Connect Timeout Error (attempted address: dpages.cat:443, timeout: 10000ms)
+  ```
+
+  Es un **timeout de CONEXIÓN** (el handshake TCP/TLS nunca llega a
+  completarse), no un timeout de lectura/respuesta lenta — y el límite es
+  de **10 segundos**, un valor que no configuramos nosotros en ningún
+  lado: es el `connectTimeout` **por defecto de undici** (la librería
+  detrás del `fetch` nativo de Node), completamente independiente de
+  `TIMEOUT_PETICION_MS`/`AbortSignal.timeout()`. Confirmado y reproducido
+  localmente contra `192.0.2.1` (TEST-NET-1, RFC 5737 — dirección
+  reservada que nadie responde, ideal para simular esto sin tocar nada
+  real): el error reproducido fue carácter por carácter idéntico al de
+  producción, y ocurrió a los ~10s pese a tener un `AbortSignal` de 20s —
+  confirmando que el `AbortSignal` nunca llegó a intervenir.
+
+  **Por qué el primer diagnóstico pareció encajar igual**: subir
+  `PER_PAGE`→30 y `TIMEOUT_PETICION_MS`→45s no estaba mal por sí solo (son
+  cambios razonables igual), pero no atacaba la causa real — el síntoma
+  visible (`"fetch failed"` tras agotar reintentos, en ambos recursos) es
+  compatible con las dos hipótesis, y sin `err.cause` no había forma de
+  distinguirlas. Es exactamente el motivo por el que ese mismo cambio
+  (capturar la causa) fue el primero en aplicarse: permitió pasar de
+  especular a confirmar en el siguiente incidente real, en vez de tener
+  que reproducir todo el diagnóstico a mano otra vez.
+
+  **Fix real (capa 49bis, aplicado)**: el `connectTimeout` de undici se
+  configura a nivel de `Agent`/dispatcher global (`setGlobalDispatcher`
+  del paquete `undici`), no vía el `AbortSignal` del `fetch` — son dos
+  mecanismos independientes, en capas distintas.
+
+  Antes de aplicarlo se verificó empíricamente (local, sin tocar nada
+  real) que el mecanismo funciona: `setGlobalDispatcher(new Agent({
+connectTimeout: 45_000 }))` contra `192.0.2.1` cambió el error de
+  `ConnectTimeoutError [...] timeout: 10000ms` a un timeout nativo del
+  sistema operativo bastante más tardío — confirmando que (a) el paquete
+  `undici` de npm SÍ controla también el `fetch` nativo de Node (comparten
+  el dispatcher global por diseño), y (b) el techo artificial de 10s
+  desaparece. Probado igual con `undici@6` y `undici@8.10.1` (la versión
+  finalmente instalada).
+
+  `packages/backend/src/woocommerce/cliente.ts` ahora llama a
+  `setGlobalDispatcher(new Agent({ connectTimeout: TIMEOUT_PETICION_MS }))`
+  una sola vez, al cargar el módulo — reusa la misma constante que ya
+  regula el `AbortSignal`, para que ambos límites (conexión y
+  lectura/respuesta) se muevan juntos si algún día hay que ajustarlos. Se
+  agregó `undici` como dependencia directa (antes no era ni siquiera
+  transitiva).
+
+  **Pendiente de revisar por separado, a nivel de infraestructura (no es
+  un cambio de código)**: un timeout de CONEXIÓN (nunca se completa el
+  handshake) es distinto de "el servidor responde lento" — sugiere
+  intermitencia de red entre Cloud Run (europe-west1) y el hosting real, o
+  algo del lado del hosting descartando el SYN en silencio (no
+  rechazándolo activamente). Cloud Run sale por defecto con un pool
+  compartido y rotativo de IPs de Google — si el WAF/firewall del hosting
+  bloquea/limita rangos conocidos de proveedores cloud, produciría
+  exactamente este síntoma sin que ningún timeout del lado del cliente lo
+  resuelva. Vale la pena confirmar si Cloud Run tiene IP de salida fija
+  configurada, y si esa IP está permitida en el hosting.
+
+  **Ajuste fino (capa 49ter, mismo día) — el fix de la 49bis funcionó para
+  su síntoma específico, pero destapó un problema de diseño en los
+  valores elegidos.** Ya en producción con el `connectTimeout` corregido,
+  `sync-comandes` dejó de mostrar `ConnectTimeoutError` — pero siguió
+  fallando, ahora con `"The operation was aborted due to timeout"` (el
+  `AbortSignal`, no undici).
+
+  **Validación matemática del peor caso, con la config de la 49bis**
+  (`TIMEOUT_PETICION_MS = 45_000`, `REINTENTOS_MAXIMOS = 5`, backoff
+  `500·2^(intento-1)` con tope 10s):
+
+  ```
+  Tiempo = (REINTENTOS_MAXIMOS + 1) × TIMEOUT_PETICION_MS + backoff acumulado
+  Backoff = 500 + 1000 + 2000 + 4000 + 8000 = 15.500 ms
+  Tiempo = 6 × 45.000 + 15.500 = 285.500 ms
+  ```
+
+  Un caso real de producción dio `responseTime: 285568ms` — **285,5s
+  calculados contra 285,568s observados, prácticamente exactos.** Esto
+  probó que los 6 intentos de una sola página tardaron el máximo permitido
+  cada uno, de punta a punta — no "algunos rápidos, algunos lentos": la
+  ventana completa de esa ejecución estuvo bloqueada de forma sostenida.
+  Con sólo dos páginas fallando así (`2 × 195,5s = 391s`), el request
+  entero excede inevitablemente los ~300s de Cloud Run, sin importar qué
+  tan generosos sean los timeouts individuales — bajar sólo los timeouts
+  no alcanza si no se toca también cuántas veces se reintenta.
+
+  **El error de diseño de la 49bis, más allá del rendimiento**: usar el
+  MISMO valor para `connectTimeout` y para el `AbortSignal` (ambos
+  `TIMEOUT_PETICION_MS`) hace que, ante una conexión colgada, cuál de los
+  dos dispara primero pase a depender de detalles internos de scheduling
+  de Node, no de en qué fase falló de verdad — rompiendo justo la
+  capacidad de diagnóstico que la captura de `err.cause` (capa 49) vino a
+  dar. Que en producción volviera a aparecer el mensaje genérico del
+  `AbortSignal` no implicaba necesariamente que el problema hubiera
+  cambiado de fase — podía ser el mismo problema de conexión, disfrazado
+  por el empate de relojes.
+
+  **Valores nuevos** (`packages/backend/src/woocommerce/cliente.ts`):
+  - `TIMEOUT_CONEXIO_MS = 15_000` (nuevo, antes no existía separado) — sólo
+    para la fase de conectar (TCP/TLS).
+  - `TIMEOUT_PETICION_MS`: `45_000` → `30_000` — la evidencia real (pruebas
+    manuales aisladas contra el mismo endpoint/parámetros) nunca mostró más
+    de ~24,4s en el peor caso (típico 2,2-2,8s); 45s no aportaba margen
+    real, sólo alargaba cada intento fallido.
+  - `REINTENTOS_MAXIMOS`: `5` → `2` — con la nueva config, una página que
+    falla los 3 intentos completos consume `3 × 30.000 + 1.500 = 91.500ms`;
+    incluso 3 páginas fallando así (`274,5s`) entran en el presupuesto de
+    Cloud Run, dejando margen para las páginas que sí funcionan y para la
+    transformación posterior.
+
+  **Decisión de fondo, no sólo ajuste de números**: los reintentos de
+  `peticionGet` son una defensa contra baches cortos (milisegundos a pocos
+  segundos), no contra degradación sostenida de varios minutos — para eso
+  ya existe el próximo disparo de Cloud Scheduler, 5 minutos después
+  (`sync-comandes`), y los endpoints de tarea ya son idempotentes entre
+  corridas (ADR-009). Insistir 5-6 veces seguidas dentro de una misma
+  ejecución contra un host que ya viene mal no ayuda — sólo agota el
+  presupuesto de tiempo sin, aparentemente, mejorar la chance de éxito (los
+  6 intentos del caso real tardaron todos lo mismo, sin señal de que
+  insistir estuviera funcionando). Fallar rápido y dejar que la próxima
+  corrida programada sea el reintento real es la elección consciente acá,
+  no un efecto secundario de "menos es más rápido".
+
 ## Catálogo (253 registros, ~111 artículos reales)
 
 - **Crítico — catálogo duplicado por idioma (Polylang).** Cada artículo

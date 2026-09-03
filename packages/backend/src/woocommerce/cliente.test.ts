@@ -57,7 +57,9 @@ describe('parámetros obligatorios', () => {
     expect(url.searchParams.get('dates_are_gmt')).toBe('true');
     expect(url.searchParams.get('orderby')).toBe('modified');
     expect(url.searchParams.get('order')).toBe('asc');
-    expect(url.searchParams.get('per_page')).toBe('100');
+    // Capa 49 — bajado de 100 a 30 tras el incidente real de "fetch failed"
+    // sostenido (ver docs/hallazgos-woocommerce.md).
+    expect(url.searchParams.get('per_page')).toBe('30');
   });
 
   it('listarPedidos siempre manda status=any, sin que se pueda evitar', async () => {
@@ -189,8 +191,8 @@ describe('reintentos', () => {
     expect(errorWoo.recurso).toBe('products');
     expect(errorWoo.status).toBe(429);
     expect(errorWoo.message).not.toContain('dato sensible');
-    // 1 intento inicial + REINTENTOS_MAXIMOS reintentos
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    // 1 intento inicial + REINTENTOS_MAXIMOS reintentos (capa 49ter: bajado a 2)
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
 
@@ -231,7 +233,7 @@ describe('capa 41 — credenciales por query string, nunca por header Authorizat
     // (500ms, 1s, 2s, 4s, 8s) — de ahí el timeout largo de este test,
     // no hay retry-after que lo acorte.
     const urlConCredenciales =
-      'https://dpages.cat/wp-json/wc/v3/products?consumer_key=ck_test&consumer_secret=cs_test&per_page=100';
+      'https://dpages.cat/wp-json/wc/v3/products?consumer_key=ck_test&consumer_secret=cs_test&per_page=30';
     fetchMock.mockRejectedValue(new TypeError(`fetch failed: ${urlConCredenciales}`));
 
     let error: unknown;
@@ -279,4 +281,79 @@ describe('respuestas no-JSON (WAF/Cloudflare)', () => {
 
     await expect(listarProductos()).rejects.toThrow(/no es JSON válido/);
   });
+});
+
+/**
+ * Capa 49 — incidente real de producción: "fetch failed" sostenido en
+ * orders Y products, cursores congelados varios días (ver
+ * docs/hallazgos-woocommerce.md). PER_PAGE bajado a 30, TIMEOUT_PETICION_MS
+ * subido a 45s, y se captura err.cause (antes descartado por completo) para
+ * poder distinguir la próxima vez un AbortSignal propio de un corte de
+ * conexión real del otro lado, sin reconstruir la investigación desde cero.
+ */
+describe('capa 49 — incidente real: PER_PAGE, TIMEOUT_PETICION_MS y captura de err.cause', () => {
+  it('PER_PAGE real es 30, reflejado en la URL de cada petición', async () => {
+    fetchMock.mockResolvedValueOnce(respuestaPagina([producteCa], 1));
+
+    await listarProductos();
+
+    expect(urlDeLaLlamada().searchParams.get('per_page')).toBe('30');
+  });
+
+  it('el AbortSignal de cada petición usa TIMEOUT_PETICION_MS = 30_000 (capa 49ter: bajado de 45_000)', async () => {
+    const espia = vi.spyOn(AbortSignal, 'timeout');
+    fetchMock.mockResolvedValueOnce(respuestaPagina([producteCa], 1));
+
+    await listarProductos();
+
+    expect(espia).toHaveBeenCalledWith(30_000);
+
+    espia.mockRestore();
+  });
+
+  it('un error de red CON cause: la causa aparece en el log de reintento Y en el mensaje final', async () => {
+    const espia = vi.spyOn(logger, 'warn');
+    fetchMock.mockRejectedValue(new TypeError('fetch failed', { cause: new Error('ECONNRESET') }));
+
+    let error: unknown;
+    try {
+      await listarProductos();
+    } catch (err) {
+      error = err;
+    }
+
+    expect(error).toBeInstanceOf(ErrorWooCommerce);
+    expect((error as ErrorWooCommerce).message).toContain('ECONNRESET');
+
+    const logsDeReintento = espia.mock.calls.filter(
+      (llamada) => llamada[1] === 'Fallo de red hacia WooCommerce, reintentando',
+    );
+    expect(logsDeReintento.length).toBeGreaterThan(0);
+    expect(logsDeReintento[0]?.[0]).toMatchObject({ causa: 'ECONNRESET' });
+
+    espia.mockRestore();
+  }, 20_000);
+
+  it('un error de red SIN cause: no rompe nada, no aparece "undefined" ni en el mensaje ni en el log', async () => {
+    const espia = vi.spyOn(logger, 'warn');
+    fetchMock.mockRejectedValue(new TypeError('fetch failed'));
+
+    let error: unknown;
+    try {
+      await listarProductos();
+    } catch (err) {
+      error = err;
+    }
+
+    expect(error).toBeInstanceOf(ErrorWooCommerce);
+    const errorWoo = error as ErrorWooCommerce;
+    expect(errorWoo.message).not.toContain('undefined');
+    expect(errorWoo.message).toContain('fetch failed');
+
+    for (const llamada of espia.mock.calls) {
+      expect(JSON.stringify(llamada)).not.toContain('undefined');
+    }
+
+    espia.mockRestore();
+  }, 20_000);
 });

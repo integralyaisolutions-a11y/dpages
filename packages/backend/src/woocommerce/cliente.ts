@@ -1,5 +1,7 @@
 import { setTimeout as esperar } from 'node:timers/promises';
+import { inspect } from 'node:util';
 import type { WooOrder, WooProduct, WooProductVariation } from '@dpages/shared';
+import { Agent, setGlobalDispatcher } from 'undici';
 import { env } from '../config/env.js';
 import { logger } from '../lib/logger.js';
 
@@ -16,11 +18,73 @@ import { logger } from '../lib/logger.js';
  * nadie tenga que acordarse de repetirlas.
  */
 
-const PER_PAGE = 100;
-const REINTENTOS_MAXIMOS = 5;
+// Capa 49 — incidente real de producción (ver docs/hallazgos-woocommerce.md):
+// PER_PAGE=100 dejaba páginas reales (con line items/meta por pedido) más
+// pesadas de lo necesario en el hosting real de dpages.cat. Bajado a 30
+// (peticiones más chicas y rápidas) — este valor no cambió en capas
+// posteriores, el problema real resultó estar en los timeouts, no acá.
+const PER_PAGE = 30;
+
+/**
+ * Capa 49ter — REINTENTOS_MAXIMOS bajado de 5 a 2 (ver
+ * docs/hallazgos-woocommerce.md para el detalle completo). Con 5
+ * reintentos, una sola página que falla los 6 intentos completos consume
+ * casi todo el presupuesto de Cloud Run (300s) ella sola — confirmado con
+ * un caso real: 6 × 45s + 15,5s de backoff = 285,5s calculados contra
+ * 285.568ms observados. Con más de una página fallando así, el request
+ * completo excede los 300s inevitablemente, sin importar qué tan generosos
+ * sean los timeouts individuales. Menos reintentos = falla rápido = deja
+ * presupuesto para las páginas que sí funcionan — y el reintento "real"
+ * no es este, es el próximo disparo de Cloud Scheduler 5 minutos después
+ * (ADR-009: los endpoints de tarea son idempotentes entre corridas). Los
+ * reintentos de acá adentro son una defensa contra baches cortos de
+ * milisegundos/segundos, no contra degradación sostenida de varios
+ * minutos — para eso ya existe el próximo disparo del scheduler.
+ */
+const REINTENTOS_MAXIMOS = 2;
 const ESPERA_BASE_MS = 500;
 const ESPERA_MAXIMA_MS = 10_000;
-const TIMEOUT_PETICION_MS = 20_000;
+
+/**
+ * Capa 49bis — el diagnóstico original (página lenta) era parcialmente
+ * incorrecto: con err.cause ya visible en los logs reales, el error de
+ * fondo resultó ser un `ConnectTimeoutError` de undici a los 10_000ms — el
+ * `connectTimeout` POR DEFECTO de undici, que `AbortSignal.timeout()` NO
+ * controla (son dos mecanismos independientes: el AbortSignal cubre toda
+ * la petición desde que se llama a `fetch`, pero undici corta la fase de
+ * CONEXIÓN por su cuenta antes de que el AbortSignal tenga oportunidad de
+ * intervenir).
+ *
+ * Capa 49ter — usar el MISMO valor para las dos cosas (como se hizo en la
+ * 49bis) fue un error de diseño, no sólo de rendimiento: con
+ * connectTimeout y AbortSignal corriendo la misma carrera de 45s, cuál de
+ * los dos dispara primero ante una conexión colgada pasa a depender de
+ * detalles internos de scheduling de Node, no de en qué fase falló de
+ * verdad — rompiendo exactamente la capacidad de diagnóstico que
+ * buscábamos al capturar err.cause en la capa 49 (confirmado: en
+ * producción volvió a aparecer el mensaje genérico del AbortSignal, no
+ * ConnectTimeoutError, sin que eso implicara que el problema hubiera
+ * cambiado de fase). TIMEOUT_CONEXIO_MS ahora es un valor propio y
+ * MENOR que TIMEOUT_PETICION_MS — la fase de conectar (TCP/TLS) no
+ * debería competir por el mismo presupuesto que la espera de una
+ * respuesta completa. TIMEOUT_PETICION_MS bajado de 45s a 30s: la
+ * evidencia real (pruebas manuales aisladas) nunca mostró más de ~24s en
+ * el peor caso — 45s no aportaba margen real, sólo alargaba cada intento
+ * fallido innecesariamente.
+ */
+const TIMEOUT_CONEXIO_MS = 15_000;
+const TIMEOUT_PETICION_MS = 30_000;
+
+/**
+ * `setGlobalDispatcher` afecta también al fetch NATIVO de Node (comparten
+ * el dispatcher global por diseño de undici), no sólo a llamadas hechas
+ * directamente con este paquete — no hace falta (ni se puede) pasarlo por
+ * `peticionGet`. Se corre una sola vez, al cargar este módulo — este es el
+ * único módulo del backend que usa `fetch` (ver comentario de cabecera),
+ * así que mutar el dispatcher global acá no interfiere con ningún otro
+ * caller hoy.
+ */
+setGlobalDispatcher(new Agent({ connectTimeout: TIMEOUT_CONEXIO_MS }));
 
 /**
  * dates_are_gmt, orderby, order y per_page: van último en la URL para que
@@ -86,6 +150,32 @@ function redactarUrlEnTexto(texto: string): string {
   return texto.replace(/\?\S*/g, '?[redactat]');
 }
 
+/**
+ * Capa 49 — incidente real: "fetch failed" es el mensaje genérico que usa
+ * undici para fallos de conexión de bajo nivel (reset, DNS, TLS, socket
+ * cerrado del otro lado) — el motivo real queda en `err.cause`, que hasta
+ * esta capa se descartaba por completo. Sin esto, no había forma de
+ * distinguir en los logs "se disparó nuestro AbortSignal" de "algo cortó la
+ * conexión del otro lado" — exactamente lo que costó reconstruir a mano
+ * durante la investigación de este incidente. `undefined` si no hay causa
+ * (la mayoría de los errores no la tienen) — no se agrega nada a los logs
+ * ni al mensaje en ese caso. Redactada igual que el mensaje principal: la
+ * causa también puede traer texto armado por Node/undici que no controlamos.
+ *
+ * `err.cause` no está garantizado a ser un `Error` — puede ser cualquier
+ * valor (spec de `Error.cause`). Si es un `Error`, usamos `.message` (corto
+ * y limpio, sin stack). Si NO lo es, `String(valor)` convertiría cualquier
+ * objeto plano en el string literal `"[object Object]"` — inútil para
+ * diagnosticar, y exactamente el tipo de cosa que esta función existe para
+ * evitar. `util.inspect()` nunca tira ("[object Object]" ni excepciones,
+ * incluso con referencias circulares) y muestra la forma real del valor.
+ */
+function obtenerCausaComoTexto(err: unknown): string | undefined {
+  if (!(err instanceof Error) || err.cause === undefined) return undefined;
+  const texto = err.cause instanceof Error ? err.cause.message : inspect(err.cause, { depth: 2 });
+  return redactarUrlEnTexto(texto);
+}
+
 function construirUrl(recurso: string, params: Record<string, string>): URL {
   const base = env.WC_BASE_URL.replace(/\/+$/, '') + '/wp-json/wc/v3/';
   const url = new URL(recurso, base);
@@ -131,6 +221,8 @@ async function peticionGet(recurso: string, params: Record<string, string>): Pro
         signal: AbortSignal.timeout(TIMEOUT_PETICION_MS),
       });
     } catch (err) {
+      const causa = obtenerCausaComoTexto(err);
+
       if (intento > REINTENTOS_MAXIMOS) {
         // redactarUrlEnTexto: err.message puede traer la URL completa —
         // con credenciales en el query string desde esta capa — armada por
@@ -139,10 +231,11 @@ async function peticionGet(recurso: string, params: Record<string, string>): Pro
         throw new ErrorWooCommerce(
           recurso,
           null,
-          `Sin respuesta de WooCommerce en "${recurso}" tras ${REINTENTOS_MAXIMOS} reintentos: ${redactarUrlEnTexto(mensaje)}`,
+          `Sin respuesta de WooCommerce en "${recurso}" tras ${REINTENTOS_MAXIMOS} reintentos: ${redactarUrlEnTexto(mensaje)}` +
+            (causa !== undefined ? ` (causa: ${causa})` : ''),
         );
       }
-      logger.warn({ recurso, intento }, 'Fallo de red hacia WooCommerce, reintentando');
+      logger.warn({ recurso, intento, causa }, 'Fallo de red hacia WooCommerce, reintentando');
       await esperar(calcularEspera(intento, null));
       continue;
     }
