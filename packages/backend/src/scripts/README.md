@@ -32,6 +32,66 @@ No son parte del servicio, no se despliegan a Cloud Run. Sin script de
   tsx --env-file-if-exists=../../.env src/scripts/netejar-historic-desenvolupament.ts [fecha ISO]
   ```
 
+- **`poblar-alies-comanda-linia.ts`** (capa 50) — vincula `alias_producte`
+  faltantes para líneas de pedido reales cuyo `producte_id` quedó en NULL
+  aunque el `producte` (mismo `codi` que el `woo_sku`) ya existe hoy —
+  típicamente porque la línea se transformó antes de que ese `producte`
+  existiera, y nunca se volvió a reprocesar (el pedido no se tocó de nuevo
+  en WooCommerce). Reusa `resolverArticle` (el mismo mecanismo del sync
+  normal) para reprocesar las líneas después de crear los alias. Nunca crea
+  un `producte` nuevo. **Dry-run por defecto** — sin flags, sólo imprime el
+  informe (match exacto / aproximado / sin producto / sin idioma
+  resoluble), no escribe nada. `--aplicar` aplica los matches EXACTOS;
+  `--incluir-fuzzy` (además de `--aplicar`) aplica también los aproximados
+  (case/trim) — pensado para revisarlos primero en el informe, un SKU
+  parecido puede ser un producto distinto.
+
+  ```
+  tsx --env-file-if-exists=../../.env src/scripts/poblar-alies-comanda-linia.ts [--aplicar] [--incluir-fuzzy]
+  ```
+
+- **`carga-completa-cataleg.ts`** (capa 51) — carga COMPLETA del catálogo
+  real de WooCommerce (no incremental), a diferencia de `sync-cataleg`
+  (cursor). Paso previo a un reset controlado de producción en fase
+  pre-productiva (ADR-007). Reusa sin cambios `listarProductos()` (sin
+  `modifiedAfter` ya trae todo), `ingerirCataleg()` (con
+  `modifiedAfterForcat` a una fecha anterior a que la tienda exista —
+  funcionalmente "sin filtro", y de paso avanza el cursor de `'products'`
+  para que el incremental normal siga funcionando después) y
+  `transformarCataleg()` (ya procesa el catálogo completo aterrizado y
+  maneja el duplicado por idioma, ADR-008). **Dry-run por defecto** — sólo
+  lee de WooCommerce real, reporta cuántos productos y de qué categorías,
+  no escribe nada. `--aplicar` aterriza y transforma de verdad.
+
+  **Requiere `NODE_ENV=production` explícito en la invocación** —
+  `config/env.ts` exige un host de prueba para `WC_BASE_URL` fuera de
+  producción (guarda deliberada contra pegarle por accidente a la tienda
+  real); para traer el catálogo real hace falta ese env var. No es un
+  workaround del guard, es para lo que existe.
+
+  ```
+  NODE_ENV=production tsx --env-file-if-exists=../../.env src/scripts/carga-completa-cataleg.ts [--aplicar]
+  ```
+
+- **`reset-comandes-i-cataleg.ts`** (capa 51, parte 2) — reset COMPLETO de
+  pedidos y catálogo (`incidencia_comanda`, `comanda_linia`, `comanda`,
+  `alias_producte`, `rendiments_porcs`, `tarifa_preu`, `producte`,
+  `categoria_producte`, `incidencia_cataleg` — las 9, sin excepción), paso
+  previo a reconstruir todo desde cero con `carga-completa-cataleg.ts`.
+  Fase pre-productiva (ADR-007). **Distinto de `reset-carga-inicial.ts`**
+  (auditado, no reutilizable acá): ese script PROTEGE lo que ya tiene un
+  pedido real; este hace lo opuesto a propósito, sin ninguna protección —
+  borra todo, pedidos incluidos. No toca `client`/`tarifa`/`transportista`/
+  `usuari`/`rol`/`origen_comanda`/`aterratge_woocommerce`/
+  `esdeveniment_webhook`. **Dry-run por defecto** — cuenta filas, no
+  escribe nada. `--aplicar` pide confirmación explícita (`CONFIRMAR`) antes
+  de borrar. `--permitir-produccio` obligatorio si `NODE_ENV=production`
+  (mismo criterio que `reset-carga-inicial.ts`).
+
+  ```
+  tsx --env-file-if-exists=../../.env src/scripts/reset-comandes-i-cataleg.ts [--aplicar] [--permitir-produccio]
+  ```
+
 - **`seed-arranque.ts`** — carga (UPSERT, correrlo de nuevo no duplica)
   las 8 categorías y los 2 orígenes de pedido de arranque, autorizados por
   el cliente (Francesc) el 18/08/2026 para no esperar los datos reales
