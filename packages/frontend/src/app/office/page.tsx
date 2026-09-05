@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { AsyncCombobox, type ComboboxOption } from '@/components/ui/AsyncCombobox';
 import { Badge } from '@/components/ui/Badge';
 import { DataCard, DataCardField, DataCardGrid } from '@/components/ui/DataCard';
 import { DateRangeInput } from '@/components/ui/DateRangeInput';
@@ -11,10 +12,9 @@ import { Pagination } from '@/components/ui/Pagination';
 import { SelectFilter } from '@/components/ui/SelectFilter';
 import { StatCard } from '@/components/ui/StatCard';
 import { useCarriers } from '@/hooks/useCarriers';
-import { useClientTariffs } from '@/hooks/useClientTariffs';
 import { usePanellOficina } from '@/hooks/usePanellOficina';
 import { useRates } from '@/hooks/useRates';
-import type { ClientApi, FilaPanellOficinaApi } from '@/lib/api';
+import { api, type ClientApi, type FilaPanellOficinaApi, type RespostaPaginada } from '@/lib/api';
 import { formatData } from '@/lib/dates';
 import { formatDecimal } from '@/lib/decimals';
 
@@ -92,12 +92,15 @@ function OfficeOrderCard({ order, onClick }: { order: FilaPanellOficinaApi; onCl
 
 export default function OfficePage() {
   const router = useRouter();
-  const { data: clients } = useClientTariffs();
   const { tariffColumns } = useRates();
   const { data: carriers } = useCarriers();
 
   // Capa 35 — els 8 filtres reals de GET /panells/oficina, tots connectats.
-  const [clientFilter, setClientFilter] = useState(ALL);
+  // Client ja no ve d'un <select> amb els 200 clients carregats de cop
+  // (useClientTariffs()) — AsyncCombobox el resol via GET /clients?cerca=,
+  // per això acá es guarda l'opció sencera (id+label), no només l'id: no
+  // hi ha cap array complet per resoldre l'etiqueta a mostrar després.
+  const [selectedClient, setSelectedClient] = useState<ComboboxOption | null>(null);
   const [statusFilter, setStatusFilter] = useState(ALL);
   const [carrierFilter, setCarrierFilter] = useState(ALL);
   const [tariffFilter, setTariffFilter] = useState(ALL_FEM);
@@ -118,13 +121,6 @@ export default function OfficePage() {
       carrierFilter !== ALL ? carriers.find((item) => item.nom === carrierFilter)?.id : undefined,
     [carrierFilter, carriers],
   );
-  const clientId = useMemo(
-    () =>
-      clientFilter !== ALL
-        ? clients.find((item) => clientLabel(item) === clientFilter)?.id
-        : undefined,
-    [clientFilter, clients],
-  );
   const tariffId = useMemo(
     () =>
       tariffFilter !== ALL_FEM
@@ -137,7 +133,7 @@ export default function OfficePage() {
     () => ({
       ...(statusCode ? { estat: statusCode } : {}),
       ...(carrierId !== undefined ? { transportistaId: carrierId } : {}),
-      ...(clientId !== undefined ? { clientId } : {}),
+      ...(selectedClient !== null ? { clientId: selectedClient.id } : {}),
       ...(tariffId !== undefined ? { tarifaId: tariffId } : {}),
       ...(destinationFilter !== ALL_FEM ? { poblacioDesti: destinationFilter } : {}),
       ...(orderDateFrom ? { dataComandaDes: orderDateFrom } : {}),
@@ -150,7 +146,7 @@ export default function OfficePage() {
     [
       statusCode,
       carrierId,
-      clientId,
+      selectedClient,
       tariffId,
       destinationFilter,
       orderDateFrom,
@@ -213,11 +209,22 @@ export default function OfficePage() {
 
       <FilterBar>
         <div className="flex w-full flex-wrap gap-4">
-          <SelectFilter
+          <AsyncCombobox
             label="Client"
-            options={[ALL, ...clients.map((item) => clientLabel(item))]}
-            value={clientFilter}
-            onChange={setClientFilter}
+            value={selectedClient?.id ?? null}
+            displayValue={selectedClient?.label ?? ''}
+            placeholder="Cercar client..."
+            onChange={setSelectedClient}
+            loadOptions={async (query) => {
+              const resposta = await api.get<RespostaPaginada<ClientApi>>('/clients', {
+                cerca: query,
+                mida: 8,
+              });
+              return resposta.dades.map((client) => ({
+                id: client.id,
+                label: clientLabel(client),
+              }));
+            }}
           />
           <SelectFilter
             label="Estat"

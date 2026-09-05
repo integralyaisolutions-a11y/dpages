@@ -1,35 +1,38 @@
-"use client";
+'use client';
 
-import { Plus } from "lucide-react";
-import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
-import { Badge } from "@/components/ui/Badge";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { DataCard, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
-import { DecimalInput } from "@/components/ui/DecimalInput";
-import { IconButton } from "@/components/ui/IconButton";
-import { SelectFilter } from "@/components/ui/SelectFilter";
-import { TextField } from "@/components/ui/TextField";
-import type { OrderFormValues, OrderLineChanges } from "@/hooks/useOrders";
-import type {
-  ClientApi,
-  ComandaDetallApi,
-  ComandaLiniaApi,
-  LiniaCreacioApi,
-  LiniaEdicioApi,
-  OrigenComandaApi,
-  ProducteApi,
-  TarifaResumApi,
-  TransportistaApi,
-} from "@/lib/api";
-import { origenBadgeVariant } from "@/lib/comandaOrigen";
-import { formatDecimal } from "@/lib/decimals";
-import { calculateOrderedWeightKg } from "@/lib/orderCalculations";
+import { Plus } from 'lucide-react';
+import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import { AsyncCombobox, type ComboboxOption } from '@/components/ui/AsyncCombobox';
+import { Badge } from '@/components/ui/Badge';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { DataCard, DataCardField, DataCardGrid } from '@/components/ui/DataCard';
+import { DecimalInput } from '@/components/ui/DecimalInput';
+import { IconButton } from '@/components/ui/IconButton';
+import { SelectFilter } from '@/components/ui/SelectFilter';
+import { TextField } from '@/components/ui/TextField';
+import type { OrderFormValues, OrderLineChanges } from '@/hooks/useOrders';
+import {
+  api,
+  type ClientApi,
+  type ComandaDetallApi,
+  type ComandaLiniaApi,
+  type LiniaCreacioApi,
+  type LiniaEdicioApi,
+  type OrigenComandaApi,
+  type ProducteApi,
+  type RespostaPaginada,
+  type TarifaResumApi,
+  type TransportistaApi,
+} from '@/lib/api';
+import { origenBadgeVariant } from '@/lib/comandaOrigen';
+import { formatDecimal } from '@/lib/decimals';
+import { calculateOrderedWeightKg } from '@/lib/orderCalculations';
 
-const NO_CLIENT = "Selecciona client...";
-const NO_TARIFF = "Sense tarifa";
-const NO_CARRIER = "Selecciona transportista...";
-const NO_PRODUCT = "Selecciona producte...";
-const NO_ORIGIN = "Selecciona origen...";
+const NO_CLIENT = 'Selecciona client...';
+const NO_TARIFF = 'Sense tarifa';
+const NO_CARRIER = 'Selecciona transportista...';
+const NO_PRODUCT = 'Selecciona producte...';
+const NO_ORIGIN = 'Selecciona origen...';
 
 // Capa 43 — un pedido NUEVO sólo puede cargarse manualmente por estos 3
 // canales (whatsapp/telefon/correu, ver origen_comanda). "manual" y
@@ -37,7 +40,7 @@ const NO_ORIGIN = "Selecciona origen...";
 // ya los tienen), pero nunca se ofrecen como opción al crear uno desde acá
 // — por eso el filtro es explícito por código, no "todo lo que devuelva
 // GET /origens-comanda".
-const CODIS_ORIGEN_ELEGIBLES = ["whatsapp", "telefon", "correu"];
+const CODIS_ORIGEN_ELEGIBLES = ['whatsapp', 'telefon', 'correu'];
 
 // amb_incidencia queda FORA d'aquesta llista a propòsit (capa 31, decisió
 // de UX confirmada): el selector de capçalera només serveix per triar
@@ -47,16 +50,16 @@ const CODIS_ORIGEN_ELEGIBLES = ["whatsapp", "telefon", "correu"];
 // el formulari, es reafegeix dinàmicament a les opcions (ver estatOptions
 // més avall) només perquè el <select> mostri l'estat real — mai perquè es
 // pugui triar cap a ella des d'acá.
-const ESTAT_OPTIONS_SELECCIONABLES: string[] = ["oberta", "en_proces", "tancada"];
+const ESTAT_OPTIONS_SELECCIONABLES: string[] = ['oberta', 'en_proces', 'tancada'];
 const ESTAT_LABELS: Record<string, string> = {
-  oberta: "Oberta",
-  en_proces: "En procés",
-  tancada: "Tancada",
-  amb_incidencia: "Amb incidència",
+  oberta: 'Oberta',
+  en_proces: 'En procés',
+  tancada: 'Tancada',
+  amb_incidencia: 'Amb incidència',
 };
 
 function clientLabel(client: ClientApi) {
-  return `${client.codi ?? client.id} · ${client.nom ?? ""}`;
+  return `${client.codi ?? client.id} · ${client.nom ?? ''}`;
 }
 
 function tariffLabel(tariff: TarifaResumApi) {
@@ -71,6 +74,39 @@ function productLabel(product: ProducteApi) {
   return `${product.codi ?? product.id} · ${product.descripcio}`;
 }
 
+// GET /clients?cerca= es substring case-insensitive real (confirmat amb
+// curl real) — a diferència de GET /productes?cerca=, que fa coincidència
+// EXACTA a propòsit (regla 3.1: "lomo" no ha de portar "cabeza de lomo").
+// Per això Client usa mode servidor (AsyncCombobox pegant a l'API) i
+// Producte usa mode local (filtrant l'array `products` ja carregat).
+async function loadClientOptions(query: string): Promise<ComboboxOption[]> {
+  const resposta = await api.get<RespostaPaginada<ClientApi>>('/clients', {
+    cerca: query,
+    mida: 8,
+  });
+  return resposta.dades.map((client) => ({ id: client.id, label: clientLabel(client) }));
+}
+
+const MAX_LOCAL_COMBOBOX_RESULTS = 8;
+
+function matchesProductQuery(product: ProducteApi, query: string): boolean {
+  const normalized = query.trim().toLowerCase();
+  return (
+    product.descripcio.toLowerCase().includes(normalized) ||
+    (product.codi ?? '').toLowerCase().includes(normalized)
+  );
+}
+
+function loadLocalProductOptions(products: ProducteApi[]) {
+  return (query: string): Promise<ComboboxOption[]> =>
+    Promise.resolve(
+      products
+        .filter((product) => matchesProductQuery(product, query))
+        .slice(0, MAX_LOCAL_COMBOBOX_RESULTS)
+        .map((product) => ({ id: product.id, label: productLabel(product) })),
+    );
+}
+
 type LineDraft = ComandaLiniaApi;
 
 let tempLineId = -1;
@@ -83,20 +119,20 @@ function createEmptyLine(ordinal: number): LineDraft {
     categoria: null,
     format: null,
     envasat: null,
-    unitatsDemanades: "0",
-    kgDemanats: "0.000",
+    unitatsDemanades: '0',
+    kgDemanats: '0.000',
     kgEditable: true,
-    unitatsLliurades: "0",
-    kgLliurats: "0.000",
+    unitatsLliurades: '0',
+    kgLliurats: '0.000',
     confirmatA: null,
     // El backend calcula preuUnitari/totalLinia al crear la línia
     // (resolverPreuLinia: cascada tarifa→preu base→incidència, ver
     // investigación) — nunca se precalculan acá, quedan en "0.00" hasta
     // que la respuesta real del backend los complete.
-    preuUnitari: "0.00",
-    totalLinia: "0.00",
+    preuUnitari: '0.00',
+    totalLinia: '0.00',
     dataProduccio: null,
-    obsProduccio: "",
+    obsProduccio: '',
     esborrat: false,
   };
 }
@@ -138,12 +174,12 @@ function toLiniaEdicio(line: LineDraft): LiniaEdicioApi {
  * explícitament aquest cas límit com a resolt (no com un buit).
  */
 function isDateAfter(a: string, b: string): boolean {
-  return a !== "" && b !== "" && a > b;
+  return a !== '' && b !== '' && a > b;
 }
 
 /** `ComandaLiniaApi.dataProduccio` viatja amb hora ("...T00:00:00Z"); les dates de capçalera no — normalitza abans de comparar. */
 function dateOnly(value: string | null): string {
-  return value ? value.slice(0, 10) : "";
+  return value ? value.slice(0, 10) : '';
 }
 
 /**
@@ -162,12 +198,12 @@ function validateHeaderDates(
 ): { dataLliurament?: string; dataExpedicio?: string } {
   const errors: { dataLliurament?: string; dataExpedicio?: string } = {};
   if (isDateAfter(dataProduccio, dataLliurament)) {
-    errors.dataLliurament = "Aquesta data no pot ser anterior a la Data de producció.";
+    errors.dataLliurament = 'Aquesta data no pot ser anterior a la Data de producció.';
   }
   if (isDateAfter(dataProduccio, dataExpedicio)) {
-    errors.dataExpedicio = "Aquesta data no pot ser anterior a la Data de producció.";
+    errors.dataExpedicio = 'Aquesta data no pot ser anterior a la Data de producció.';
   } else if (isDateAfter(dataExpedicio, dataLliurament)) {
-    errors.dataExpedicio = "Aquesta data no pot ser posterior a la Data de lliurament.";
+    errors.dataExpedicio = 'Aquesta data no pot ser posterior a la Data de lliurament.';
   }
   return errors;
 }
@@ -180,12 +216,12 @@ function validateLineDate(
   headerDataExpedicio: string,
 ): string | undefined {
   const lineDate = dateOnly(lineDataProduccio);
-  if (lineDate === "") return undefined;
+  if (lineDate === '') return undefined;
   if (isDateAfter(headerDataProduccio, lineDate)) {
-    return "Aquesta data no pot ser anterior a la Data de producció de la comanda.";
+    return 'Aquesta data no pot ser anterior a la Data de producció de la comanda.';
   }
   if (isDateAfter(lineDate, headerDataLliurament)) {
-    return "Aquesta data no pot ser posterior a la Data de lliurament.";
+    return 'Aquesta data no pot ser posterior a la Data de lliurament.';
   }
   if (isDateAfter(lineDate, headerDataExpedicio)) {
     return "Aquesta data no pot ser posterior a la Data d'expedició.";
@@ -195,7 +231,14 @@ function validateLineDate(
 
 function applyProduct(line: LineDraft, product: ProducteApi | undefined): LineDraft {
   if (!product) {
-    return { ...line, producte: null, categoria: null, format: null, envasat: null, kgEditable: true };
+    return {
+      ...line,
+      producte: null,
+      categoria: null,
+      format: null,
+      envasat: null,
+      kgEditable: true,
+    };
   }
   const orderedWeight = calculateOrderedWeightKg(Number(line.unitatsDemanades), product);
   return {
@@ -240,29 +283,34 @@ function LineFormCard({
   return (
     <DataCard>
       <div className="flex items-start gap-3">
-        <select
-          value={line.producte ? productLabel(line.producte as ProducteApi) : NO_PRODUCT}
-          disabled={disabled || productLocked}
-          onChange={(event) => {
-            const selected = products.find((p) => productLabel(p) === event.target.value);
-            onUpdate(applyProduct({ ...line }, selected));
-          }}
-          className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
-        >
-          {[NO_PRODUCT, ...products.map((p) => productLabel(p))].map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-        <IconButton variant="delete" label="Eliminar línia" onClick={onRemove} disabled={disabled} className="shrink-0" />
+        <div className="flex-1">
+          <AsyncCombobox
+            value={line.producte?.id ?? null}
+            displayValue={line.producte ? productLabel(line.producte as ProducteApi) : ''}
+            placeholder={NO_PRODUCT}
+            disabled={disabled || productLocked}
+            debounceMs={0}
+            loadOptions={loadLocalProductOptions(products)}
+            onChange={(option) => {
+              const selected = option ? products.find((p) => p.id === option.id) : undefined;
+              onUpdate(applyProduct({ ...line }, selected));
+            }}
+          />
+        </div>
+        <IconButton
+          variant="delete"
+          label="Eliminar línia"
+          onClick={onRemove}
+          disabled={disabled}
+          className="shrink-0"
+        />
       </div>
 
       <div className="mt-3">
         <DataCardGrid>
-          <DataCardField label="Categoria">{line.categoria ?? "—"}</DataCardField>
-          <DataCardField label="Format">{line.format ?? "—"}</DataCardField>
-          <DataCardField label="Envasat">{line.envasat ?? "—"}</DataCardField>
+          <DataCardField label="Categoria">{line.categoria ?? '—'}</DataCardField>
+          <DataCardField label="Format">{line.format ?? '—'}</DataCardField>
+          <DataCardField label="Envasat">{line.envasat ?? '—'}</DataCardField>
         </DataCardGrid>
       </div>
 
@@ -272,9 +320,11 @@ function LineFormCard({
           <input
             type="date"
             disabled={disabled}
-            value={line.dataProduccio ? line.dataProduccio.slice(0, 10) : ""}
+            value={line.dataProduccio ? line.dataProduccio.slice(0, 10) : ''}
             onChange={(event) =>
-              onUpdate({ dataProduccio: event.target.value ? `${event.target.value}T00:00:00Z` : null })
+              onUpdate({
+                dataProduccio: event.target.value ? `${event.target.value}T00:00:00Z` : null,
+              })
             }
             className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
           />
@@ -290,7 +340,9 @@ function LineFormCard({
               onUpdate({
                 unitatsDemanades: value,
                 kgDemanats:
-                  !line.kgEditable && recalculated.isCalculated ? recalculated.value.toFixed(3) : line.kgDemanats,
+                  !line.kgEditable && recalculated.isCalculated
+                    ? recalculated.value.toFixed(3)
+                    : line.kgDemanats,
               });
             }}
             className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
@@ -314,7 +366,7 @@ function LineFormCard({
           {!line.kgEditable ? (
             <input
               type="text"
-              value={Number(line.kgDemanats).toFixed(3).replace(".", ",")}
+              value={Number(line.kgDemanats).toFixed(3).replace('.', ',')}
               disabled
               className="w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-right text-sm text-gray-400"
             />
@@ -338,7 +390,7 @@ function LineFormCard({
       <label className="mt-3 flex flex-col gap-1 text-sm">
         <span className="text-xs text-gray-500">Obs. producció</span>
         <textarea
-          value={line.obsProduccio ?? ""}
+          value={line.obsProduccio ?? ''}
           disabled={disabled}
           onChange={(event) => onUpdate({ obsProduccio: event.target.value })}
           rows={2}
@@ -356,7 +408,7 @@ export type OrderFormHandle = {
 export const OrderForm = forwardRef<
   OrderFormHandle,
   {
-    mode: "create" | "edit";
+    mode: 'create' | 'edit';
     initialData?: ComandaDetallApi;
     isFrozen?: boolean;
     clients: ClientApi[];
@@ -391,20 +443,28 @@ export const OrderForm = forwardRef<
   },
   ref,
 ) {
-  const [estat, setEstat] = useState<string>(initialData?.estat ?? "oberta");
+  const [estat, setEstat] = useState<string>(initialData?.estat ?? 'oberta');
   const [origenCodi, setOrigenCodi] = useState<string | null>(null);
   const [clientId, setClientId] = useState<number | null>(initialData?.client?.id ?? null);
-  const [poblacioDesti, setPoblacioDesti] = useState(initialData?.poblacioDesti ?? "");
+  const [poblacioDesti, setPoblacioDesti] = useState(initialData?.poblacioDesti ?? '');
   const [tarifaId, setTarifaId] = useState<number | null>(initialData?.tarifa?.id ?? null);
   const [tariffTouched, setTariffTouched] = useState(false);
-  const [transportistaId, setTransportistaId] = useState<number | null>(initialData?.transportista?.id ?? null);
-  const [dataProduccio, setDataProduccio] = useState(initialData?.dataProduccio?.slice(0, 10) ?? "");
-  const [dataLliurament, setDataLliurament] = useState(initialData?.dataLliurament?.slice(0, 10) ?? "");
-  const [dataExpedicio, setDataExpedicio] = useState(initialData?.dataExpedicio?.slice(0, 10) ?? "");
+  const [transportistaId, setTransportistaId] = useState<number | null>(
+    initialData?.transportista?.id ?? null,
+  );
+  const [dataProduccio, setDataProduccio] = useState(
+    initialData?.dataProduccio?.slice(0, 10) ?? '',
+  );
+  const [dataLliurament, setDataLliurament] = useState(
+    initialData?.dataLliurament?.slice(0, 10) ?? '',
+  );
+  const [dataExpedicio, setDataExpedicio] = useState(
+    initialData?.dataExpedicio?.slice(0, 10) ?? '',
+  );
   const [bultos, setBultos] = useState(initialData?.bultos ?? 1);
-  const [adrecaLliurament, setAdrecaLliurament] = useState(initialData?.adrecaLliurament ?? "");
-  const [obsProduccio, setObsProduccio] = useState(initialData?.obsProduccio ?? "");
-  const [obsLliurament, setObsLliurament] = useState(initialData?.obsLliurament ?? "");
+  const [adrecaLliurament, setAdrecaLliurament] = useState(initialData?.adrecaLliurament ?? '');
+  const [obsProduccio, setObsProduccio] = useState(initialData?.obsProduccio ?? '');
+  const [obsLliurament, setObsLliurament] = useState(initialData?.obsLliurament ?? '');
   const [lines, setLines] = useState<LineDraft[]>(initialData?.linies ?? []);
   // Qué líneas tiene "tocadas" el usuario en esta sesión de edición — se
   // marca EXPLÍCITAMENTE en el momento de la acción (updateLine/afegir
@@ -439,7 +499,7 @@ export const OrderForm = forwardRef<
   function removeLine(line: LineDraft) {
     // Línia nova (nunca persistida): sólo se saca del borrador local, no
     // hay nada que borrar en el backend.
-    if (mode === "create" || line.id < 0) {
+    if (mode === 'create' || line.id < 0) {
       setLines((current) => current.filter((item) => item.id !== line.id));
       setDirtyLineIds((current) => {
         if (!current.has(line.id)) return current;
@@ -463,7 +523,9 @@ export const OrderForm = forwardRef<
       setLines((current) => current.filter((item) => item.id !== lineToDelete.id));
       setLineToDelete(null);
     } catch (caught) {
-      setLineDeleteError(caught instanceof Error ? caught.message : "No s'ha pogut eliminar la línia.");
+      setLineDeleteError(
+        caught instanceof Error ? caught.message : "No s'ha pogut eliminar la línia.",
+      );
     } finally {
       setIsDeletingLine(false);
     }
@@ -479,7 +541,9 @@ export const OrderForm = forwardRef<
   // desincronització entre el que es pinta i el que es valida).
   const headerDateErrors = validateHeaderDates(dataProduccio, dataLliurament, dataExpedicio);
   const hasLineDateErrors = lines.some(
-    (line) => validateLineDate(line.dataProduccio, dataProduccio, dataLliurament, dataExpedicio) !== undefined,
+    (line) =>
+      validateLineDate(line.dataProduccio, dataProduccio, dataLliurament, dataExpedicio) !==
+      undefined,
   );
   const hasDateErrors = Object.keys(headerDateErrors).length > 0 || hasLineDateErrors;
 
@@ -493,32 +557,38 @@ export const OrderForm = forwardRef<
   useImperativeHandle(ref, () => ({
     submit: () => {
       if (!clientId) {
-        setError("Cal seleccionar un client.");
+        setError('Cal seleccionar un client.');
         return;
       }
 
-      if (mode === "create" && !origenCodi) {
-        setError("Cal seleccionar un origen.");
+      if (mode === 'create' && !origenCodi) {
+        setError('Cal seleccionar un origen.');
         return;
       }
 
       if (hasDateErrors) {
-        setError("Hi ha dates inconsistents al formulari — revisa els missatges marcats en vermell abans de desar.");
+        setError(
+          'Hi ha dates inconsistents al formulari — revisa els missatges marcats en vermell abans de desar.',
+        );
         return;
       }
 
       setError(null);
 
-      const validLines = lines.filter((line) => line.producte !== null && Number(line.unitatsDemanades) > 0);
+      const validLines = lines.filter(
+        (line) => line.producte !== null && Number(line.unitatsDemanades) > 0,
+      );
 
       // Capa 30 — en edición, las línias nuevas/editadas se guardan por su
       // propio endpoint (POST/PATCH .../linies), nunca embebidas en el
       // PATCH de cabecera. En creación siguen viajando dentro de
       // ComandaCreacioApi.linies (embed original), lineChanges queda vacío.
       const lineChanges: OrderLineChanges =
-        mode === "edit"
+        mode === 'edit'
           ? {
-              novaLinies: validLines.filter((line) => dirtyLineIds.has(line.id) && line.id < 0).map(toLiniaCreacio),
+              novaLinies: validLines
+                .filter((line) => dirtyLineIds.has(line.id) && line.id < 0)
+                .map(toLiniaCreacio),
               liniesEditades: validLines
                 .filter((line) => dirtyLineIds.has(line.id) && line.id > 0)
                 .map((line) => ({ liniaId: line.id, patch: toLiniaEdicio(line) })),
@@ -532,7 +602,7 @@ export const OrderForm = forwardRef<
           // acepta, ver comentari a useOrders.ts) — se manda el que ya
           // tenía el pedido, sin pasar por `origenCodi` (que en edició ni
           // es toca, el camp queda de sòl lectura).
-          origen: mode === "create" ? origenCodi : (initialData?.origen ?? null),
+          origen: mode === 'create' ? origenCodi : (initialData?.origen ?? null),
           tarifaId,
           transportistaId,
           dataProduccio: dataProduccio ? `${dataProduccio}T00:00:00Z` : null,
@@ -544,30 +614,31 @@ export const OrderForm = forwardRef<
           poblacioDesti: poblacioDesti || null,
           adrecaLliurament: adrecaLliurament || null,
           estat,
-          linies: mode === "create" ? validLines.map(toLiniaCreacio) : [],
+          linies: mode === 'create' ? validLines.map(toLiniaCreacio) : [],
         },
         lineChanges,
       );
     },
   }));
 
-  const clientOptions = [NO_CLIENT, ...clients.map((item) => clientLabel(item))];
-  const clientValue = clientId
-    ? (clients.find((item) => item.id === clientId) && clientLabel(clients.find((item) => item.id === clientId)!)) ??
-      NO_CLIENT
-    : NO_CLIENT;
+  const clientDisplayValue = clientId
+    ? ((clients.find((item) => item.id === clientId) &&
+        clientLabel(clients.find((item) => item.id === clientId)!)) ??
+      '')
+    : '';
 
   const tariffOptions = [NO_TARIFF, ...tariffs.map((item) => tariffLabel(item))];
   const tariffValue = tarifaId
-    ? (tariffs.find((item) => item.id === tarifaId) && tariffLabel(tariffs.find((item) => item.id === tarifaId)!)) ??
-      NO_TARIFF
+    ? ((tariffs.find((item) => item.id === tarifaId) &&
+        tariffLabel(tariffs.find((item) => item.id === tarifaId)!)) ??
+      NO_TARIFF)
     : NO_TARIFF;
 
   const carrierOptions = [NO_CARRIER, ...carriers.map((item) => carrierLabel(item))];
   const carrierValue = transportistaId
-    ? (carriers.find((item) => item.id === transportistaId) &&
+    ? ((carriers.find((item) => item.id === transportistaId) &&
         carrierLabel(carriers.find((item) => item.id === transportistaId)!)) ??
-      NO_CARRIER
+      NO_CARRIER)
     : NO_CARRIER;
 
   // Manté visible l'estat real quan ja és amb_incidencia (no forma part de
@@ -591,7 +662,7 @@ export const OrderForm = forwardRef<
   // "woocommerce" (no estan a `eligibleOrigins`, però sí a `origins` sencer).
   const existingOriginLabel = initialData?.origen
     ? (origins.find((origin) => origin.codi === initialData.origen)?.nom ?? initialData.origen)
-    : "—";
+    : '—';
 
   return (
     <div className="flex flex-col gap-6">
@@ -600,21 +671,20 @@ export const OrderForm = forwardRef<
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <TextField
             label="Núm. comanda"
-            value={mode === "edit" ? (initialData?.num ?? "") : ""}
-            placeholder={mode === "create" ? "(es generarà en desar)" : undefined}
+            value={mode === 'edit' ? (initialData?.num ?? '') : ''}
+            placeholder={mode === 'create' ? '(es generarà en desar)' : undefined}
             disabled
           />
-          <SelectFilter
+          <AsyncCombobox
             label="Client"
-            options={clientOptions}
-            value={clientValue}
-            onChange={(label) => {
-              if (isFrozen) return;
-              const client = clients.find((item) => clientLabel(item) === label);
-              handleClientChange(client?.id ?? null);
-            }}
+            value={clientId}
+            displayValue={clientDisplayValue}
+            placeholder={NO_CLIENT}
+            disabled={isFrozen}
+            loadOptions={loadClientOptions}
+            onChange={(option) => handleClientChange(option?.id ?? null)}
           />
-          {mode === "create" ? (
+          {mode === 'create' ? (
             <SelectFilter
               label="Origen"
               options={originOptions}
@@ -632,7 +702,9 @@ export const OrderForm = forwardRef<
             <div className="flex flex-col gap-1.5 text-sm">
               <span className="font-medium text-gray-900">Origen</span>
               <div>
-                <Badge variant={origenBadgeVariant(initialData?.origen ?? "")}>{existingOriginLabel}</Badge>
+                <Badge variant={origenBadgeVariant(initialData?.origen ?? '')}>
+                  {existingOriginLabel}
+                </Badge>
               </div>
             </div>
           )}
@@ -770,7 +842,7 @@ export const OrderForm = forwardRef<
             />
           ))}
           <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-right text-sm font-semibold text-gray-900">
-            Total pes demanat (kg): {totalOrderedWeightKg.toFixed(3).replace(".", ",")}
+            Total pes demanat (kg): {totalOrderedWeightKg.toFixed(3).replace('.', ',')}
           </div>
         </div>
 
@@ -778,59 +850,90 @@ export const OrderForm = forwardRef<
           <table className="w-full table-fixed text-sm">
             <thead className="border-b border-gray-200">
               <tr>
-                <th className="w-[13%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">Producte</th>
-                <th className="w-[9%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">Categoria</th>
-                <th className="w-[9%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">Format</th>
-                <th className="w-[8%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">Envasat</th>
-                <th className="w-[13%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">Data producció</th>
-                <th className="w-[9%] px-1.5 py-2 text-right font-medium text-gray-500 break-words">Unitats demanades</th>
-                <th className="w-[9%] px-1.5 py-2 text-right font-medium text-gray-500 break-words">Unitats lliurades</th>
-                <th className="w-[8%] px-1.5 py-2 text-right font-medium text-gray-500 break-words">Pes demanat (kg)</th>
-                <th className="w-[7%] px-1.5 py-2 text-right font-medium text-gray-500 break-words">Pes lliurat (kg)</th>
-                <th className="w-[7%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">Obs. producció</th>
+                <th className="w-[13%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">
+                  Producte
+                </th>
+                <th className="w-[9%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">
+                  Categoria
+                </th>
+                <th className="w-[9%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">
+                  Format
+                </th>
+                <th className="w-[8%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">
+                  Envasat
+                </th>
+                <th className="w-[13%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">
+                  Data producció
+                </th>
+                <th className="w-[9%] px-1.5 py-2 text-right font-medium text-gray-500 break-words">
+                  Unitats demanades
+                </th>
+                <th className="w-[9%] px-1.5 py-2 text-right font-medium text-gray-500 break-words">
+                  Unitats lliurades
+                </th>
+                <th className="w-[8%] px-1.5 py-2 text-right font-medium text-gray-500 break-words">
+                  Pes demanat (kg)
+                </th>
+                <th className="w-[7%] px-1.5 py-2 text-right font-medium text-gray-500 break-words">
+                  Pes lliurat (kg)
+                </th>
+                <th className="w-[7%] px-1.5 py-2 text-left font-medium text-gray-500 break-words">
+                  Obs. producció
+                </th>
                 <th className="w-[8%] px-1.5 py-2" />
               </tr>
             </thead>
             <tbody>
               {lines.map((line) => {
                 const product = products.find((p) => p.id === line.producte?.id);
-                const productValue = line.producte ? productLabel(line.producte as ProducteApi) : NO_PRODUCT;
-                const lineDateError = validateLineDate(line.dataProduccio, dataProduccio, dataLliurament, dataExpedicio);
+                const lineDateError = validateLineDate(
+                  line.dataProduccio,
+                  dataProduccio,
+                  dataLliurament,
+                  dataExpedicio,
+                );
                 return (
                   <tr key={line.id} className="border-b border-gray-100 last:border-0">
                     <td className="px-1.5 py-2">
-                      <select
-                        value={productValue}
+                      <AsyncCombobox
+                        value={line.producte?.id ?? null}
+                        displayValue={
+                          line.producte ? productLabel(line.producte as ProducteApi) : ''
+                        }
+                        placeholder={NO_PRODUCT}
                         disabled={isFrozen || line.id > 0}
-                        onChange={(event) => {
-                          const selected = products.find((p) => productLabel(p) === event.target.value);
+                        debounceMs={0}
+                        loadOptions={loadLocalProductOptions(products)}
+                        onChange={(option) => {
+                          const selected = option
+                            ? products.find((p) => p.id === option.id)
+                            : undefined;
                           updateLine(line.id, applyProduct({ ...line }, selected));
                         }}
-                        className="w-full rounded-md border border-gray-300 px-1.5 py-1 text-sm text-gray-900 focus:border-gray-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
-                      >
-                        {[NO_PRODUCT, ...products.map((p) => productLabel(p))].map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </td>
-                    <td className="px-1.5 py-2 break-words text-gray-500">{line.categoria ?? "—"}</td>
-                    <td className="px-1.5 py-2 break-words text-gray-500">{line.format ?? "—"}</td>
-                    <td className="px-1.5 py-2 break-words text-gray-500">{line.envasat ?? "—"}</td>
+                    <td className="px-1.5 py-2 break-words text-gray-500">
+                      {line.categoria ?? '—'}
+                    </td>
+                    <td className="px-1.5 py-2 break-words text-gray-500">{line.format ?? '—'}</td>
+                    <td className="px-1.5 py-2 break-words text-gray-500">{line.envasat ?? '—'}</td>
                     <td className="px-1.5 py-2">
                       <input
                         type="date"
                         disabled={isFrozen}
-                        value={line.dataProduccio ? line.dataProduccio.slice(0, 10) : ""}
+                        value={line.dataProduccio ? line.dataProduccio.slice(0, 10) : ''}
                         onChange={(event) =>
                           updateLine(line.id, {
-                            dataProduccio: event.target.value ? `${event.target.value}T00:00:00Z` : null,
+                            dataProduccio: event.target.value
+                              ? `${event.target.value}T00:00:00Z`
+                              : null,
                           })
                         }
                         className="w-full rounded-md border border-gray-300 px-1.5 py-1 text-sm text-gray-900 focus:border-gray-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
                       />
-                      {lineDateError && <p className="mt-1 text-xs text-red-600">{lineDateError}</p>}
+                      {lineDateError && (
+                        <p className="mt-1 text-xs text-red-600">{lineDateError}</p>
+                      )}
                     </td>
                     <td className="px-1.5 py-2">
                       <DecimalInput
@@ -850,12 +953,14 @@ export const OrderForm = forwardRef<
                       />
                     </td>
                     {/* Sólo lectura: ver nota de Unitats/Pes lliurades en LineFormCard. */}
-                    <td className="px-1.5 py-2 text-right text-gray-500">{formatDecimal(line.unitatsLliurades, 2)}</td>
+                    <td className="px-1.5 py-2 text-right text-gray-500">
+                      {formatDecimal(line.unitatsLliurades, 2)}
+                    </td>
                     <td className="px-1.5 py-2">
                       {!line.kgEditable ? (
                         <input
                           type="text"
-                          value={Number(line.kgDemanats).toFixed(3).replace(".", ",")}
+                          value={Number(line.kgDemanats).toFixed(3).replace('.', ',')}
                           disabled
                           className="w-full rounded-md border border-gray-200 bg-gray-50 px-1.5 py-1 text-right text-sm text-gray-400"
                         />
@@ -863,7 +968,9 @@ export const OrderForm = forwardRef<
                         <DecimalInput
                           disabled={isFrozen}
                           value={line.kgDemanats}
-                          onChange={(value) => updateLine(line.id, { kgDemanats: Number(value).toFixed(3) })}
+                          onChange={(value) =>
+                            updateLine(line.id, { kgDemanats: Number(value).toFixed(3) })
+                          }
                           className="w-full rounded-md border border-gray-300 px-1.5 py-1 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
                         />
                       )}
@@ -871,15 +978,22 @@ export const OrderForm = forwardRef<
                     <td className="px-1.5 py-2 text-right text-gray-500">{line.kgLliurats}</td>
                     <td className="px-1.5 py-2">
                       <textarea
-                        value={line.obsProduccio ?? ""}
+                        value={line.obsProduccio ?? ''}
                         disabled={isFrozen}
-                        onChange={(event) => updateLine(line.id, { obsProduccio: event.target.value })}
+                        onChange={(event) =>
+                          updateLine(line.id, { obsProduccio: event.target.value })
+                        }
                         rows={1}
                         className="w-full rounded-md border border-gray-300 px-1.5 py-1 text-sm text-gray-900 focus:border-gray-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
                       />
                     </td>
                     <td className="px-1.5 py-2">
-                      <IconButton variant="delete" label="Eliminar línia" onClick={() => removeLine(line)} disabled={isFrozen} />
+                      <IconButton
+                        variant="delete"
+                        label="Eliminar línia"
+                        onClick={() => removeLine(line)}
+                        disabled={isFrozen}
+                      />
                     </td>
                   </tr>
                 );
@@ -887,20 +1001,26 @@ export const OrderForm = forwardRef<
             </tbody>
             <tfoot>
               <tr className="border-t border-gray-200 bg-gray-50">
-                <td colSpan={11} className="px-2 py-3 text-right text-sm font-semibold text-gray-900">
-                  Total pes demanat (kg): {totalOrderedWeightKg.toFixed(3).replace(".", ",")}
+                <td
+                  colSpan={11}
+                  className="px-2 py-3 text-right text-sm font-semibold text-gray-900"
+                >
+                  Total pes demanat (kg): {totalOrderedWeightKg.toFixed(3).replace('.', ',')}
                 </td>
               </tr>
             </tfoot>
           </table>
         </div>
-
       </div>
 
       <ConfirmDialog
         isOpen={lineToDelete !== null}
         title="Eliminar línia"
-        message={lineToDelete ? `Vols eliminar la línia de "${lineToDelete.producte?.descripcio ?? "—"}"?` : ""}
+        message={
+          lineToDelete
+            ? `Vols eliminar la línia de "${lineToDelete.producte?.descripcio ?? '—'}"?`
+            : ''
+        }
         confirmLabel="Eliminar"
         cancelLabel="Cancel·lar"
         errorMessage={lineDeleteError}
