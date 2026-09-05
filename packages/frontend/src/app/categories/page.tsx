@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import { Plus } from "lucide-react";
-import { useState } from "react";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { DataCard, DataCardActions, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
-import { IconButton } from "@/components/ui/IconButton";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { Pagination } from "@/components/ui/Pagination";
-import { useCategories, type CategoryFormValues } from "@/hooks/useCategories";
-import { ApiError, type CategoriaApi } from "@/lib/api";
-import { CategoryFormModal } from "./CategoryFormModal";
+import { Plus } from 'lucide-react';
+import { useState } from 'react';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { DataCard, DataCardActions, DataCardField, DataCardGrid } from '@/components/ui/DataCard';
+import { IconButton } from '@/components/ui/IconButton';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Pagination } from '@/components/ui/Pagination';
+import { useCategories, type CategoryFormValues } from '@/hooks/useCategories';
+import { ApiError, type CategoriaApi } from '@/lib/api';
+import { CategoryFormModal } from './CategoryFormModal';
 
 function CategoryCard({
   category,
@@ -26,8 +26,10 @@ function CategoryCard({
 
       <div className="mt-3">
         <DataCardGrid>
-          <DataCardField label="Elaborat Porc">{category.elaboratPorc ? "Sí" : "No"}</DataCardField>
-          <DataCardField label="Agrupació Rendiment">{category.agrupacioRendiment ?? "—"}</DataCardField>
+          <DataCardField label="Elaborat Porc">{category.elaboratPorc ? 'Sí' : 'No'}</DataCardField>
+          <DataCardField label="Agrupació Rendiment">
+            {category.agrupacioRendiment ?? '—'}
+          </DataCardField>
         </DataCardGrid>
       </div>
 
@@ -46,15 +48,27 @@ function CategoryCard({
 }
 
 export default function CategoriesPage() {
-  const { data, paginacio, setPagina, isLoading, error, refetch, createCategory, editCategory, deleteCategory } =
-    useCategories({ mida: 20 });
-  const [formState, setFormState] = useState<{ mode: "create" | "edit"; category?: CategoriaApi } | null>(null);
+  const {
+    data,
+    paginacio,
+    setPagina,
+    isLoading,
+    error,
+    refetch,
+    createCategory,
+    editCategory,
+    deleteCategory,
+  } = useCategories({ mida: 20 });
+  const [formState, setFormState] = useState<{
+    mode: 'create' | 'edit';
+    category?: CategoriaApi;
+  } | null>(null);
   const [categoryToDelete, setCategoryToDelete] = useState<CategoriaApi | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   async function handleSave(values: CategoryFormValues) {
-    if (formState?.mode === "edit" && formState.category) {
+    if (formState?.mode === 'edit' && formState.category) {
       await editCategory(formState.category.id, values);
     } else {
       await createCategory(values);
@@ -84,16 +98,18 @@ export default function CategoriesPage() {
         title="Categories de producte"
         subtitle="Manteniment de les categories, l'indicador Elaborat Porc i l'Agrupació de Rendiment."
         action={{
-          label: "Nova categoria",
+          label: 'Nova categoria',
           icon: <Plus className="h-4 w-4" />,
-          onClick: () => setFormState({ mode: "create" }),
+          onClick: () => setFormState({ mode: 'create' }),
         }}
       />
 
       {isLoading && <p className="text-sm text-gray-500">Carregant...</p>}
       {error && (
         <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-          <p className="text-sm text-red-600">No s&apos;han pogut carregar les categories: {error.message}</p>
+          <p className="text-sm text-red-600">
+            No s&apos;han pogut carregar les categories: {error.message}
+          </p>
           <button
             type="button"
             onClick={refetch}
@@ -106,12 +122,12 @@ export default function CategoriesPage() {
 
       {!isLoading && !error && (
         <>
-          <div className="flex flex-col gap-3 xl:hidden">
+          <div className="flex flex-col gap-3 md:hidden">
             {data.map((category) => (
               <CategoryCard
                 key={category.id}
                 category={category}
-                onEdit={() => setFormState({ mode: "edit", category })}
+                onEdit={() => setFormState({ mode: 'edit', category })}
                 onDelete={() => {
                   setDeleteError(null);
                   setCategoryToDelete(category);
@@ -120,16 +136,22 @@ export default function CategoriesPage() {
             ))}
           </div>
 
-          <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white xl:block">
+          <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white md:block">
             <table className="w-full table-fixed text-sm">
               <thead className="border-b border-gray-200">
                 <tr>
-                  <th className="w-[35%] px-3 py-2 text-left font-medium text-gray-500 break-words">Categoria</th>
-                  <th className="w-[20%] px-3 py-2 text-left font-medium text-gray-500 break-words">Elaborat Porc</th>
+                  <th className="w-[35%] px-3 py-2 text-left font-medium text-gray-500 break-words">
+                    Categoria
+                  </th>
+                  <th className="w-[20%] px-3 py-2 text-left font-medium text-gray-500 break-words">
+                    Elaborat Porc
+                  </th>
                   <th className="w-[25%] px-3 py-2 text-left font-medium text-gray-500 break-words">
                     Agrupació Rendiment
                   </th>
-                  <th className="w-[20%] px-3 py-2 text-right font-medium text-gray-500 break-words">Accions</th>
+                  <th className="w-[20%] px-3 py-2 text-right font-medium text-gray-500 break-words">
+                    Accions
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -138,14 +160,18 @@ export default function CategoriesPage() {
                     <td className="px-3 py-3 break-words">
                       <span className="font-semibold text-gray-900">{category.nom}</span>
                     </td>
-                    <td className="px-3 py-3 break-words text-gray-900">{category.elaboratPorc ? "Sí" : "No"}</td>
-                    <td className="px-3 py-3 break-words text-gray-900">{category.agrupacioRendiment ?? "—"}</td>
+                    <td className="px-3 py-3 break-words text-gray-900">
+                      {category.elaboratPorc ? 'Sí' : 'No'}
+                    </td>
+                    <td className="px-3 py-3 break-words text-gray-900">
+                      {category.agrupacioRendiment ?? '—'}
+                    </td>
                     <td className="px-3 py-3 text-right">
                       <div className="flex justify-end gap-1">
                         <IconButton
                           variant="edit"
                           label="Editar categoria"
-                          onClick={() => setFormState({ mode: "edit", category })}
+                          onClick={() => setFormState({ mode: 'edit', category })}
                         />
                         <IconButton
                           variant="delete"
@@ -168,8 +194,8 @@ export default function CategoriesPage() {
       )}
 
       <CategoryFormModal
-        key={formState ? (formState.category?.id ?? "create") : "closed"}
-        mode={formState?.mode ?? "create"}
+        key={formState ? (formState.category?.id ?? 'create') : 'closed'}
+        mode={formState?.mode ?? 'create'}
         initialData={formState?.category}
         isOpen={formState !== null}
         onClose={() => setFormState(null)}
@@ -182,7 +208,7 @@ export default function CategoriesPage() {
         message={
           categoryToDelete
             ? `Estàs segur que vols suprimir la categoria "${categoryToDelete.nom}"? Aquesta acció no es pot desfer.`
-            : ""
+            : ''
         }
         confirmLabel="Eliminar"
         cancelLabel="Cancel·lar"

@@ -1,21 +1,21 @@
-"use client";
+'use client';
 
-import { Plus } from "lucide-react";
-import { useMemo, useState } from "react";
-import { Badge } from "@/components/ui/Badge";
-import { DataCard, DataCardActions, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
-import { FilterBar } from "@/components/ui/FilterBar";
-import { IconButton } from "@/components/ui/IconButton";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { Pagination } from "@/components/ui/Pagination";
-import { SearchInput } from "@/components/ui/SearchInput";
-import { SelectFilter } from "@/components/ui/SelectFilter";
-import { useClientTariffs, type ClientFormValues } from "@/hooks/useClientTariffs";
-import { useRates } from "@/hooks/useRates";
-import type { ClientApi } from "@/lib/api";
-import { ClientFormModal } from "./ClientFormModal";
+import { Plus } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Badge } from '@/components/ui/Badge';
+import { DataCard, DataCardActions, DataCardField, DataCardGrid } from '@/components/ui/DataCard';
+import { FilterBar } from '@/components/ui/FilterBar';
+import { IconButton } from '@/components/ui/IconButton';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Pagination } from '@/components/ui/Pagination';
+import { SearchInput } from '@/components/ui/SearchInput';
+import { SelectFilter } from '@/components/ui/SelectFilter';
+import { useClientTariffs, type ClientFormValues } from '@/hooks/useClientTariffs';
+import { useRates } from '@/hooks/useRates';
+import type { ClientApi } from '@/lib/api';
+import { ClientFormModal } from './ClientFormModal';
 
-const ALL_FEM = "Totes";
+const ALL_FEM = 'Totes';
 
 function ClientTariffCard({ client, onEdit }: { client: ClientApi; onEdit: () => void }) {
   return (
@@ -25,9 +25,9 @@ function ClientTariffCard({ client, onEdit }: { client: ClientApi; onEdit: () =>
 
       <div className="mt-3">
         <DataCardGrid>
-          <DataCardField label="Població">{client.poblacio ?? "—"}</DataCardField>
+          <DataCardField label="Població">{client.poblacio ?? '—'}</DataCardField>
           <DataCardField label="Tarifa assignada">
-            {client.tarifa ? <Badge>{client.tarifa.nom}</Badge> : "—"}
+            {client.tarifa ? <Badge>{client.tarifa.nom}</Badge> : '—'}
           </DataCardField>
         </DataCardGrid>
       </div>
@@ -46,23 +46,27 @@ function ClientTariffCard({ client, onEdit }: { client: ClientApi; onEdit: () =>
 }
 
 export default function ClientTariffsPage() {
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState('');
   const [tariffFilter, setTariffFilter] = useState(ALL_FEM);
-  const [formState, setFormState] = useState<{ mode: "create" | "edit"; client?: ClientApi } | null>(null);
+  const [formState, setFormState] = useState<{
+    mode: 'create' | 'edit';
+    client?: ClientApi;
+  } | null>(null);
 
   // Cerca migrada a server-side (paginació real 2026-08-30): GET /clients ja
   // accepta `cerca` (ILIKE sobre nom/codi, confirmat contra clients.ts) —
   // abans es filtrava client-side sobre els 200 ja carregats.
   const clientFilters = useMemo(() => (search.trim() ? { cerca: search.trim() } : {}), [search]);
-  const { data, paginacio, setPagina, isLoading, error, refetch, createClient, editClient } = useClientTariffs(
-    clientFilters,
-    { mida: 20 },
-  );
+  const { data, paginacio, setPagina, isLoading, error, refetch, createClient, editClient } =
+    useClientTariffs(clientFilters, { mida: 20 });
   // useRates() només per `tariffColumns` (llista completa, no paginada —
   // ver comentari a useRates.ts), no es toca `data` d'acá.
   const { tariffColumns } = useRates();
 
-  const tariffFilterOptions = useMemo(() => [ALL_FEM, ...tariffColumns.map((tariff) => tariff.nom)], [tariffColumns]);
+  const tariffFilterOptions = useMemo(
+    () => [ALL_FEM, ...tariffColumns.map((tariff) => tariff.nom)],
+    [tariffColumns],
+  );
 
   // `search` ja no es filtra acá: viatja com a `cerca` server-side.
   // `tariffFilter` es manté client-side sobre la pàgina actual, fora de
@@ -75,7 +79,7 @@ export default function ClientTariffsPage() {
   });
 
   async function handleSave(values: ClientFormValues) {
-    if (formState?.mode === "edit" && formState.client) {
+    if (formState?.mode === 'edit' && formState.client) {
       await editClient(formState.client.id, values);
     } else {
       await createClient(values);
@@ -89,21 +93,28 @@ export default function ClientTariffsPage() {
         title="Tarifes per client"
         subtitle="Assignació de tarifes als clients."
         action={{
-          label: "Nou client",
+          label: 'Nou client',
           icon: <Plus className="h-4 w-4" />,
-          onClick: () => setFormState({ mode: "create" }),
+          onClick: () => setFormState({ mode: 'create' }),
         }}
       />
 
       <FilterBar>
         <SearchInput label="Cerca client (codi o nom)" value={search} onChange={setSearch} />
-        <SelectFilter label="Tarifa" options={tariffFilterOptions} value={tariffFilter} onChange={setTariffFilter} />
+        <SelectFilter
+          label="Tarifa"
+          options={tariffFilterOptions}
+          value={tariffFilter}
+          onChange={setTariffFilter}
+        />
       </FilterBar>
 
       {isLoading && <p className="text-sm text-gray-500">Carregant...</p>}
       {error && (
         <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-          <p className="text-sm text-red-600">No s&apos;han pogut carregar els clients: {error.message}</p>
+          <p className="text-sm text-red-600">
+            No s&apos;han pogut carregar els clients: {error.message}
+          </p>
           <button
             type="button"
             onClick={refetch}
@@ -116,27 +127,35 @@ export default function ClientTariffsPage() {
 
       {!isLoading && !error && (
         <>
-          <div className="flex flex-col gap-3 xl:hidden">
+          <div className="flex flex-col gap-3 md:hidden">
             {filtered.map((client) => (
               <ClientTariffCard
                 key={client.id}
                 client={client}
-                onEdit={() => setFormState({ mode: "edit", client })}
+                onEdit={() => setFormState({ mode: 'edit', client })}
               />
             ))}
           </div>
 
-          <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white xl:block">
+          <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white md:block">
             <table className="w-full table-fixed text-sm">
               <thead className="border-b border-gray-200">
                 <tr>
-                  <th className="w-[15%] px-2 py-2 text-left font-medium text-gray-500 break-words">Codi</th>
-                  <th className="w-[28%] px-2 py-2 text-left font-medium text-gray-500 break-words">Client</th>
-                  <th className="w-[20%] px-2 py-2 text-left font-medium text-gray-500 break-words">Població</th>
+                  <th className="w-[15%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                    Codi
+                  </th>
+                  <th className="w-[28%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                    Client
+                  </th>
+                  <th className="w-[20%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                    Població
+                  </th>
                   <th className="w-[22%] px-2 py-2 text-left font-medium text-gray-500 break-words">
                     Tarifa assignada
                   </th>
-                  <th className="w-[15%] px-2 py-2 text-right font-medium text-gray-500 break-words">Accions</th>
+                  <th className="w-[15%] px-2 py-2 text-right font-medium text-gray-500 break-words">
+                    Accions
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -146,16 +165,18 @@ export default function ClientTariffsPage() {
                       <span className="font-semibold text-gray-900">{client.codi}</span>
                     </td>
                     <td className="px-2 py-3 break-words text-gray-900">{client.nom}</td>
-                    <td className="px-2 py-3 break-words text-gray-900">{client.poblacio ?? "—"}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">
+                      {client.poblacio ?? '—'}
+                    </td>
                     <td className="px-2 py-3 break-words">
-                      {client.tarifa ? <Badge>{client.tarifa.nom}</Badge> : "—"}
+                      {client.tarifa ? <Badge>{client.tarifa.nom}</Badge> : '—'}
                     </td>
                     <td className="px-2 py-3 text-right">
                       <div className="flex justify-end">
                         <IconButton
                           variant="edit"
                           label="Editar client"
-                          onClick={() => setFormState({ mode: "edit", client })}
+                          onClick={() => setFormState({ mode: 'edit', client })}
                         />
                       </div>
                     </td>
@@ -170,8 +191,8 @@ export default function ClientTariffsPage() {
       )}
 
       <ClientFormModal
-        key={formState ? (formState.client?.id ?? "create") : "closed"}
-        mode={formState?.mode ?? "create"}
+        key={formState ? (formState.client?.id ?? 'create') : 'closed'}
+        mode={formState?.mode ?? 'create'}
         initialData={formState?.client}
         tariffColumns={tariffColumns}
         isOpen={formState !== null}

@@ -1,20 +1,20 @@
-"use client";
+'use client';
 
-import { useMemo, useState } from "react";
-import { ClearFiltersButton, FilterBar } from "@/components/ui/FilterBar";
-import { DataCard, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
-import { DateInput } from "@/components/ui/DateInput";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { Pagination } from "@/components/ui/Pagination";
-import { SelectFilter } from "@/components/ui/SelectFilter";
-import { StatCard } from "@/components/ui/StatCard";
-import { useCatalog } from "@/hooks/useCatalog";
-import { useProductionPanell } from "@/hooks/useProductionPanell";
-import type { PanellProduccioFilaApi } from "@/lib/api";
-import { formatDecimal } from "@/lib/decimals";
+import { useMemo, useState } from 'react';
+import { ClearFiltersButton, FilterBar } from '@/components/ui/FilterBar';
+import { DataCard, DataCardField, DataCardGrid } from '@/components/ui/DataCard';
+import { DateInput } from '@/components/ui/DateInput';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Pagination } from '@/components/ui/Pagination';
+import { SelectFilter } from '@/components/ui/SelectFilter';
+import { StatCard } from '@/components/ui/StatCard';
+import { useCatalog } from '@/hooks/useCatalog';
+import { useProductionPanell } from '@/hooks/useProductionPanell';
+import type { PanellProduccioFilaApi } from '@/lib/api';
+import { formatDecimal } from '@/lib/decimals';
 
-const ALL = "Totes";
-const AGRUPACIONS_RENDIMENT = ["KG", "MAGRE", "PAQ"];
+const ALL = 'Totes';
+const AGRUPACIONS_RENDIMENT = ['KG', 'MAGRE', 'PAQ'];
 
 /**
  * Mateix càlcul EXACTE que `dataIsoAmbOffset` del backend (panells.ts) —
@@ -38,7 +38,7 @@ function dataIsoAmbOffset(diesOffset: number): string {
  * reparseja/redondeja de nou.
  */
 function formatBackendDecimal(value: string | null): string {
-  return value !== null ? value.replace(".", ",") : "—";
+  return value !== null ? value.replace('.', ',') : '—';
 }
 
 function isNegative(value: string | null): boolean {
@@ -57,7 +57,7 @@ function ProductionRow({ row }: { row: PanellProduccioFilaApi }) {
       <td className="px-3 py-3 text-right text-gray-900">{formatBackendDecimal(row.rendiment)}</td>
       <td
         className={`px-3 py-3 text-right ${
-          isNegative(row.diferencia) ? "bg-red-600 font-medium text-white" : "text-gray-900"
+          isNegative(row.diferencia) ? 'bg-red-600 font-medium text-white' : 'text-gray-900'
         }`}
       >
         {formatBackendDecimal(row.diferencia)}
@@ -77,7 +77,10 @@ function ProductionCard({ row }: { row: PanellProduccioFilaApi }) {
           <DataCardField label="Paq. Comanda">{formatBackendDecimal(row.paqPedido)}</DataCardField>
           <DataCardField label="Kg a Elaborar">{formatDecimal(row.kgAElaborar, 3)}</DataCardField>
           <DataCardField label="Rendiment">{formatBackendDecimal(row.rendiment)}</DataCardField>
-          <DataCardField label="Diferència" tone={isNegative(row.diferencia) ? "negative" : "default"}>
+          <DataCardField
+            label="Diferència"
+            tone={isNegative(row.diferencia) ? 'negative' : 'default'}
+          >
             {formatBackendDecimal(row.diferencia)}
           </DataCardField>
         </DataCardGrid>
@@ -89,7 +92,7 @@ function ProductionCard({ row }: { row: PanellProduccioFilaApi }) {
 export default function ProductionPage() {
   const { data: catalog } = useCatalog();
 
-  const [nombrePorcsInput, setNombrePorcsInput] = useState("1");
+  const [nombrePorcsInput, setNombrePorcsInput] = useState('1');
   const [agrupacioFilter, setAgrupacioFilter] = useState(ALL);
   const [productFilter, setProductFilter] = useState(ALL);
   // Es precarreguen amb el mateix default que aplica el backend, però
@@ -109,13 +112,13 @@ export default function ProductionPage() {
   // un default inventat des del frontend (el "12" del mockup no tenia cap
   // suport real, ver informe d'investigació). Mentre el camp estigui buit
   // o no sigui > 0, el hook no dispara cap fetch (isReady).
-  const nombrePorcs = nombrePorcsInput.trim() === "" ? null : Number(nombrePorcsInput);
+  const nombrePorcs = nombrePorcsInput.trim() === '' ? null : Number(nombrePorcsInput);
   const nombrePorcsValid = nombrePorcs !== null && Number.isFinite(nombrePorcs) && nombrePorcs > 0;
   // El backend ja rebutja ≤0 amb 400 — acá es talla abans de disparar cap
   // fetch i es mostra un missatge concret vora el camp, en comptes de
   // deixar que arribi l'error genèric del backend. El camp buit es tracta
   // exactament igual que 0/negatiu: sense fetch, mateix missatge.
-  const nombrePorcsError = !nombrePorcsValid ? "El mínim és 1." : null;
+  const nombrePorcsError = !nombrePorcsValid ? 'El mínim és 1.' : null;
 
   const filters = useMemo(
     () => ({
@@ -128,10 +131,20 @@ export default function ProductionPage() {
       ...(dateFromTouched ? { dataDes: dateFrom } : {}),
       ...(dateToTouched ? { dataFins: dateTo } : {}),
     }),
-    [nombrePorcsValid, nombrePorcs, agrupacioFilter, productFilter, dateFrom, dateFromTouched, dateTo, dateToTouched],
+    [
+      nombrePorcsValid,
+      nombrePorcs,
+      agrupacioFilter,
+      productFilter,
+      dateFrom,
+      dateFromTouched,
+      dateTo,
+      dateToTouched,
+    ],
   );
 
-  const { data, totals, paginacio, setPagina, isLoading, error, refetch, isReady } = useProductionPanell(filters);
+  const { data, totals, paginacio, setPagina, isLoading, error, refetch, isReady } =
+    useProductionPanell(filters);
 
   function clearFilters() {
     setAgrupacioFilter(ALL);
@@ -144,7 +157,10 @@ export default function ProductionPage() {
 
   return (
     <div>
-      <PageHeader title="Panell Producció" subtitle="Kg a elaborar per producte segons els porcs previstos." />
+      <PageHeader
+        title="Panell Producció"
+        subtitle="Kg a elaborar per producte segons els porcs previstos."
+      />
 
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-xl border border-gray-200 bg-white p-6">
@@ -163,23 +179,35 @@ export default function ProductionPage() {
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
               <p className="text-xs font-medium text-gray-500">KG Rendiment Pernil</p>
-              <p className="mt-1 text-lg font-bold text-gray-900">{formatDecimal(totals?.kgJamon ?? null, 3)}</p>
+              <p className="mt-1 text-lg font-bold text-gray-900">
+                {formatDecimal(totals?.kgJamon ?? null, 3)}
+              </p>
             </div>
             <div>
               <p className="text-xs font-medium text-gray-500">KG Retalls</p>
-              <p className="mt-1 text-lg font-bold text-gray-900">{formatDecimal(totals?.kgRecortes ?? null, 3)}</p>
+              <p className="mt-1 text-lg font-bold text-gray-900">
+                {formatDecimal(totals?.kgRecortes ?? null, 3)}
+              </p>
             </div>
             <div>
               <p className="text-xs font-medium text-gray-500">KG Espatlles</p>
-              <p className="mt-1 text-lg font-bold text-gray-900">{formatDecimal(totals?.kgPaletillas ?? null, 3)}</p>
+              <p className="mt-1 text-lg font-bold text-gray-900">
+                {formatDecimal(totals?.kgPaletillas ?? null, 3)}
+              </p>
             </div>
           </div>
         </div>
 
         <div className="rounded-xl border border-gray-200 bg-white p-6">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <StatCard label="TOTAL KG A ELABORAR" value={formatDecimal(totals?.totalKgAElaborar ?? null, 3)} />
-            <StatCard label="TOTAL KG MAGRE" value={formatDecimal(totals?.totalKgMagro ?? null, 3)} />
+            <StatCard
+              label="TOTAL KG A ELABORAR"
+              value={formatDecimal(totals?.totalKgAElaborar ?? null, 3)}
+            />
+            <StatCard
+              label="TOTAL KG MAGRE"
+              value={formatDecimal(totals?.totalKgMagro ?? null, 3)}
+            />
             <StatCard
               label="DIFERÈNCIA"
               value={formatDecimal(totals?.diferencia ?? null, 3)}
@@ -196,7 +224,12 @@ export default function ProductionPage() {
           value={agrupacioFilter}
           onChange={setAgrupacioFilter}
         />
-        <SelectFilter label="Producte" options={productOptions} value={productFilter} onChange={setProductFilter} />
+        <SelectFilter
+          label="Producte"
+          options={productOptions}
+          value={productFilter}
+          onChange={setProductFilter}
+        />
         <DateInput
           label="Data producció des de"
           value={dateFrom}
@@ -224,7 +257,9 @@ export default function ProductionPage() {
       {isReady && isLoading && <p className="text-sm text-gray-500">Carregant...</p>}
       {isReady && error && (
         <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-          <p className="text-sm text-red-600">No s&apos;han pogut carregar les dades: {error.message}</p>
+          <p className="text-sm text-red-600">
+            No s&apos;han pogut carregar les dades: {error.message}
+          </p>
           <button
             type="button"
             onClick={refetch}
@@ -237,13 +272,16 @@ export default function ProductionPage() {
 
       {isReady && !isLoading && !error && (
         <>
-          <div className="flex flex-col gap-3 xl:hidden">
+          <div className="flex flex-col gap-3 md:hidden">
             {data.map((row) => (
-              <ProductionCard key={`${row.agrupacioProduccio}-${row.agrupacioRendiment}`} row={row} />
+              <ProductionCard
+                key={`${row.agrupacioProduccio}-${row.agrupacioRendiment}`}
+                row={row}
+              />
             ))}
           </div>
 
-          <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white xl:block">
+          <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white md:block">
             <table className="w-full table-fixed text-sm">
               <thead className="border-b border-gray-200">
                 <tr>
@@ -259,13 +297,20 @@ export default function ProductionPage() {
                   <th className="w-[16%] px-3 py-2 text-right font-medium text-gray-500 break-words">
                     Kg a Elaborar
                   </th>
-                  <th className="w-[16%] px-3 py-2 text-right font-medium text-gray-500 break-words">Rendiment</th>
-                  <th className="w-[17%] px-3 py-2 text-right font-medium text-gray-500 break-words">Diferència</th>
+                  <th className="w-[16%] px-3 py-2 text-right font-medium text-gray-500 break-words">
+                    Rendiment
+                  </th>
+                  <th className="w-[17%] px-3 py-2 text-right font-medium text-gray-500 break-words">
+                    Diferència
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {data.map((row) => (
-                  <ProductionRow key={`${row.agrupacioProduccio}-${row.agrupacioRendiment}`} row={row} />
+                  <ProductionRow
+                    key={`${row.agrupacioProduccio}-${row.agrupacioRendiment}`}
+                    row={row}
+                  />
                 ))}
               </tbody>
             </table>

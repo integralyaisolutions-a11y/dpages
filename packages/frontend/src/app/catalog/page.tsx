@@ -1,35 +1,35 @@
-"use client";
+'use client';
 
-import { Plus } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-import { Badge } from "@/components/ui/Badge";
-import { DataCard, DataCardActions, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
-import { FilterBar } from "@/components/ui/FilterBar";
-import { IconButton } from "@/components/ui/IconButton";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { Pagination } from "@/components/ui/Pagination";
-import { SearchInput } from "@/components/ui/SearchInput";
-import { SelectFilter } from "@/components/ui/SelectFilter";
-import { useCatalog } from "@/hooks/useCatalog";
-import { useCategories } from "@/hooks/useCategories";
-import type { ProducteApi } from "@/lib/api";
-import { formatDecimal } from "@/lib/decimals";
+import { Plus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';
+import { Badge } from '@/components/ui/Badge';
+import { DataCard, DataCardActions, DataCardField, DataCardGrid } from '@/components/ui/DataCard';
+import { FilterBar } from '@/components/ui/FilterBar';
+import { IconButton } from '@/components/ui/IconButton';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Pagination } from '@/components/ui/Pagination';
+import { SearchInput } from '@/components/ui/SearchInput';
+import { SelectFilter } from '@/components/ui/SelectFilter';
+import { useCatalog } from '@/hooks/useCatalog';
+import { useCategories } from '@/hooks/useCategories';
+import type { ProducteApi } from '@/lib/api';
+import { formatDecimal } from '@/lib/decimals';
 
-const ALL = "Tots";
-const ALL_FEM = "Totes";
+const ALL = 'Tots';
+const ALL_FEM = 'Totes';
 
 // Valors fixos del enum real (CHECK constraint, migració 0011) — mateix
 // criteri que workshop/page.tsx: no es deriven de `data` perquè amb
 // paginació real (20/pàgina) la pàgina actual pot no contenir tots els
 // valors possibles.
-const FORMAT_OPTIONS = ["SENCER", "TALLAT", "LLESCAT"];
-const PACKAGING_OPTIONS = ["NORMAL", "NORMAL (pes)", "NORMAL (web)", "ESPECIAL"];
-const STATUS_OPTIONS = ["Actiu", "Inactiu"];
+const FORMAT_OPTIONS = ['SENCER', 'TALLAT', 'LLESCAT'];
+const PACKAGING_OPTIONS = ['NORMAL', 'NORMAL (pes)', 'NORMAL (web)', 'ESPECIAL'];
+const STATUS_OPTIONS = ['Actiu', 'Inactiu'];
 
 function formatPrice(value: string | null) {
   const formatted = formatDecimal(value, 2);
-  return formatted === "—" ? formatted : `${formatted} €`;
+  return formatted === '—' ? formatted : `${formatted} €`;
 }
 
 function formatWeight(value: string | null) {
@@ -48,15 +48,19 @@ function CatalogCard({ product, onEdit }: { product: ProducteApi; onEdit: () => 
           <p className="font-semibold text-gray-900">{product.codi}</p>
           <p className="text-sm text-gray-500">{product.descripcio}</p>
         </div>
-        <Badge variant={product.actiu ? "positive" : "neutral"}>{product.actiu ? "Actiu" : "Inactiu"}</Badge>
+        <Badge variant={product.actiu ? 'positive' : 'neutral'}>
+          {product.actiu ? 'Actiu' : 'Inactiu'}
+        </Badge>
       </div>
 
       <div className="mt-3">
         <DataCardGrid>
-          <DataCardField label="Categoria">{product.categoria?.nom ?? "—"}</DataCardField>
-          <DataCardField label="Agrupació producció">{product.agrupacioProduccio ?? "—"}</DataCardField>
-          <DataCardField label="Format">{product.format ?? "—"}</DataCardField>
-          <DataCardField label="Envasat">{product.envasat ?? "—"}</DataCardField>
+          <DataCardField label="Categoria">{product.categoria?.nom ?? '—'}</DataCardField>
+          <DataCardField label="Agrupació producció">
+            {product.agrupacioProduccio ?? '—'}
+          </DataCardField>
+          <DataCardField label="Format">{product.format ?? '—'}</DataCardField>
+          <DataCardField label="Envasat">{product.envasat ?? '—'}</DataCardField>
           <DataCardField label="Pes (kg)">{formatWeight(product.pesKg)}</DataCardField>
           <DataCardField label="Preu base">{formatPrice(product.preuVenda)}</DataCardField>
         </DataCardGrid>
@@ -78,7 +82,7 @@ function CatalogCard({ product, onEdit }: { product: ProducteApi; onEdit: () => 
 export default function CatalogPage() {
   const router = useRouter();
 
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState('');
   const [category, setCategory] = useState(ALL_FEM);
   const [productionGroup, setProductionGroup] = useState(ALL);
   const [format, setFormat] = useState(ALL);
@@ -91,7 +95,9 @@ export default function CatalogPage() {
   // els 200 ja carregats, cosa que amb paginació de 20 només hauria trobat
   // resultats dins la pàgina actual.
   const filters = useMemo(() => (search.trim() ? { cerca: search.trim() } : {}), [search]);
-  const { data, paginacio, setPagina, isLoading, error, refetch } = useCatalog(filters, { mida: 20 });
+  const { data, paginacio, setPagina, isLoading, error, refetch } = useCatalog(filters, {
+    mida: 20,
+  });
 
   // Efecte col·lateral de la paginació (2026-08-30) resolt: Categoria i
   // Agrupació producció ja no deriven de `data` (paginat a 20) — es
@@ -107,7 +113,7 @@ export default function CatalogPage() {
     [allCategories],
   );
   const productionGroupOptions = useMemo(
-    () => [ALL, ...distinct(allProducts.map((product) => product.agrupacioProduccio ?? "—"))],
+    () => [ALL, ...distinct(allProducts.map((product) => product.agrupacioProduccio ?? '—'))],
     [allProducts],
   );
 
@@ -115,11 +121,12 @@ export default function CatalogPage() {
   // criteri d'abans (fora de l'abast d'aquesta tasca migrar-los a
   // server-side, tot i que /productes ja els accepta com a query param).
   const filtered = data.filter((product) => {
-    if (category !== ALL_FEM && (product.categoria?.nom ?? "—") !== category) return false;
-    if (productionGroup !== ALL && (product.agrupacioProduccio ?? "—") !== productionGroup) return false;
-    if (format !== ALL && (product.format ?? "—") !== format) return false;
-    if (packaging !== ALL && (product.envasat ?? "—") !== packaging) return false;
-    if (status !== ALL && (product.actiu ? "Actiu" : "Inactiu") !== status) return false;
+    if (category !== ALL_FEM && (product.categoria?.nom ?? '—') !== category) return false;
+    if (productionGroup !== ALL && (product.agrupacioProduccio ?? '—') !== productionGroup)
+      return false;
+    if (format !== ALL && (product.format ?? '—') !== format) return false;
+    if (packaging !== ALL && (product.envasat ?? '—') !== packaging) return false;
+    if (status !== ALL && (product.actiu ? 'Actiu' : 'Inactiu') !== status) return false;
     return true;
   });
 
@@ -129,30 +136,52 @@ export default function CatalogPage() {
         title="Catàleg"
         subtitle="Manteniment del catàleg de productes."
         action={{
-          label: "Nou producte",
+          label: 'Nou producte',
           icon: <Plus className="h-4 w-4" />,
-          onClick: () => router.push("/catalog/new"),
+          onClick: () => router.push('/catalog/new'),
         }}
       />
 
       <FilterBar>
         <SearchInput label="Cerca descripció" value={search} onChange={setSearch} />
-        <SelectFilter label="Categoria" options={categoryOptions} value={category} onChange={setCategory} />
+        <SelectFilter
+          label="Categoria"
+          options={categoryOptions}
+          value={category}
+          onChange={setCategory}
+        />
         <SelectFilter
           label="Agrupació producció"
           options={productionGroupOptions}
           value={productionGroup}
           onChange={setProductionGroup}
         />
-        <SelectFilter label="Format" options={[ALL, ...FORMAT_OPTIONS]} value={format} onChange={setFormat} />
-        <SelectFilter label="Envasat" options={[ALL, ...PACKAGING_OPTIONS]} value={packaging} onChange={setPackaging} />
-        <SelectFilter label="Estat" options={[ALL, ...STATUS_OPTIONS]} value={status} onChange={setStatus} />
+        <SelectFilter
+          label="Format"
+          options={[ALL, ...FORMAT_OPTIONS]}
+          value={format}
+          onChange={setFormat}
+        />
+        <SelectFilter
+          label="Envasat"
+          options={[ALL, ...PACKAGING_OPTIONS]}
+          value={packaging}
+          onChange={setPackaging}
+        />
+        <SelectFilter
+          label="Estat"
+          options={[ALL, ...STATUS_OPTIONS]}
+          value={status}
+          onChange={setStatus}
+        />
       </FilterBar>
 
       {isLoading && <p className="text-sm text-gray-500">Carregant...</p>}
       {error && (
         <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-          <p className="text-sm text-red-600">No s&apos;ha pogut carregar el catàleg: {error.message}</p>
+          <p className="text-sm text-red-600">
+            No s&apos;ha pogut carregar el catàleg: {error.message}
+          </p>
           <button
             type="button"
             onClick={refetch}
@@ -165,7 +194,7 @@ export default function CatalogPage() {
 
       {!isLoading && !error && (
         <>
-          <div className="flex flex-col gap-3 xl:hidden">
+          <div className="flex flex-col gap-3 md:hidden">
             {filtered.map((product) => (
               <CatalogCard
                 key={product.id}
@@ -175,40 +204,70 @@ export default function CatalogPage() {
             ))}
           </div>
 
-          <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white xl:block">
+          <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white md:block">
             <table className="w-full table-fixed text-sm">
               <thead className="border-b border-gray-200">
                 <tr>
-                  <th className="w-[11%] px-2 py-2 text-left font-medium text-gray-500 break-words">Categoria</th>
-                  <th className="w-[12%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                  <th className="w-[11%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                    Categoria
+                  </th>
+                  <th className="hidden w-[12%] px-2 py-2 text-left font-medium text-gray-500 break-words xl:table-cell">
                     Agrupació producció
                   </th>
-                  <th className="w-[10%] px-2 py-2 text-left font-medium text-gray-500 break-words">Codi</th>
-                  <th className="w-[18%] px-2 py-2 text-left font-medium text-gray-500 break-words">Descripció</th>
-                  <th className="w-[8%] px-2 py-2 text-left font-medium text-gray-500 break-words">Format</th>
-                  <th className="w-[9%] px-2 py-2 text-left font-medium text-gray-500 break-words">Envasat</th>
-                  <th className="w-[8%] px-2 py-2 text-right font-medium text-gray-500 break-words">Pes (kg)</th>
-                  <th className="w-[9%] px-2 py-2 text-right font-medium text-gray-500 break-words">Preu base</th>
-                  <th className="w-[7%] px-2 py-2 text-left font-medium text-gray-500 break-words">Estat</th>
-                  <th className="w-[8%] px-2 py-2 text-right font-medium text-gray-500 break-words">Accions</th>
+                  <th className="w-[10%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                    Codi
+                  </th>
+                  <th className="w-[18%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                    Descripció
+                  </th>
+                  <th className="hidden w-[8%] px-2 py-2 text-left font-medium text-gray-500 break-words xl:table-cell">
+                    Format
+                  </th>
+                  <th className="w-[9%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                    Envasat
+                  </th>
+                  <th className="w-[8%] px-2 py-2 text-right font-medium text-gray-500 break-words">
+                    Pes (kg)
+                  </th>
+                  <th className="w-[9%] px-2 py-2 text-right font-medium text-gray-500 break-words">
+                    Preu base
+                  </th>
+                  <th className="w-[7%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                    Estat
+                  </th>
+                  <th className="w-[8%] px-2 py-2 text-right font-medium text-gray-500 break-words">
+                    Accions
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((product) => (
                   <tr key={product.id} className="border-b border-gray-100 last:border-0">
-                    <td className="px-2 py-3 break-words text-gray-900">{product.categoria?.nom ?? "—"}</td>
-                    <td className="px-2 py-3 break-words text-gray-900">{product.agrupacioProduccio ?? "—"}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">
+                      {product.categoria?.nom ?? '—'}
+                    </td>
+                    <td className="hidden px-2 py-3 break-words text-gray-900 xl:table-cell">
+                      {product.agrupacioProduccio ?? '—'}
+                    </td>
                     <td className="px-2 py-3 break-words">
                       <span className="font-semibold text-gray-900">{product.codi}</span>
                     </td>
                     <td className="px-2 py-3 break-words text-gray-900">{product.descripcio}</td>
-                    <td className="px-2 py-3 break-words text-gray-900">{product.format ?? "—"}</td>
-                    <td className="px-2 py-3 break-words text-gray-900">{product.envasat ?? "—"}</td>
-                    <td className="px-2 py-3 text-right text-gray-900">{formatWeight(product.pesKg)}</td>
-                    <td className="px-2 py-3 text-right text-gray-900">{formatPrice(product.preuVenda)}</td>
+                    <td className="hidden px-2 py-3 break-words text-gray-900 xl:table-cell">
+                      {product.format ?? '—'}
+                    </td>
+                    <td className="px-2 py-3 break-words text-gray-900">
+                      {product.envasat ?? '—'}
+                    </td>
+                    <td className="px-2 py-3 text-right text-gray-900">
+                      {formatWeight(product.pesKg)}
+                    </td>
+                    <td className="px-2 py-3 text-right text-gray-900">
+                      {formatPrice(product.preuVenda)}
+                    </td>
                     <td className="px-2 py-3 break-words">
-                      <Badge variant={product.actiu ? "positive" : "neutral"}>
-                        {product.actiu ? "Actiu" : "Inactiu"}
+                      <Badge variant={product.actiu ? 'positive' : 'neutral'}>
+                        {product.actiu ? 'Actiu' : 'Inactiu'}
                       </Badge>
                     </td>
                     <td className="px-2 py-3 text-right">

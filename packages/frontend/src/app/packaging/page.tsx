@@ -1,28 +1,28 @@
-"use client";
+'use client';
 
-import { useMemo, useState } from "react";
-import { ClearFiltersButton, FilterBar } from "@/components/ui/FilterBar";
-import { DataCard, DataCardActions, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
-import { DateInput } from "@/components/ui/DateInput";
-import { DecimalInput } from "@/components/ui/DecimalInput";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { Pagination } from "@/components/ui/Pagination";
-import { SelectFilter } from "@/components/ui/SelectFilter";
-import { StatCard } from "@/components/ui/StatCard";
-import { useCarriers } from "@/hooks/useCarriers";
-import { useCatalog } from "@/hooks/useCatalog";
-import { useClientTariffs } from "@/hooks/useClientTariffs";
-import { useEditableRow } from "@/hooks/useEditableRow";
-import { type LliuramentSaveResult, usePanellEmpaquetat } from "@/hooks/usePanellEmpaquetat";
-import type { ClientApi, FilaPanellEmpaquetatApi } from "@/lib/api";
-import { formatData } from "@/lib/dates";
-import { formatDecimal, parseDecimalInput } from "@/lib/decimals";
+import { useMemo, useState } from 'react';
+import { ClearFiltersButton, FilterBar } from '@/components/ui/FilterBar';
+import { DataCard, DataCardActions, DataCardField, DataCardGrid } from '@/components/ui/DataCard';
+import { DateInput } from '@/components/ui/DateInput';
+import { DecimalInput } from '@/components/ui/DecimalInput';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Pagination } from '@/components/ui/Pagination';
+import { SelectFilter } from '@/components/ui/SelectFilter';
+import { StatCard } from '@/components/ui/StatCard';
+import { useCarriers } from '@/hooks/useCarriers';
+import { useCatalog } from '@/hooks/useCatalog';
+import { useClientTariffs } from '@/hooks/useClientTariffs';
+import { useEditableRow } from '@/hooks/useEditableRow';
+import { type LliuramentSaveResult, usePanellEmpaquetat } from '@/hooks/usePanellEmpaquetat';
+import type { ClientApi, FilaPanellEmpaquetatApi } from '@/lib/api';
+import { formatData } from '@/lib/dates';
+import { formatDecimal, parseDecimalInput } from '@/lib/decimals';
 
-const ALL = "Tots";
-const ALL_FEM = "Totes";
+const ALL = 'Tots';
+const ALL_FEM = 'Totes';
 
 function clientLabel(client: ClientApi) {
-  return `${client.codi ?? client.id} · ${client.nom ?? ""}`;
+  return `${client.codi ?? client.id} · ${client.nom ?? ''}`;
 }
 
 // De sólo lectura — l'únic camí real per marcar-la és carregar unitats/kg i
@@ -35,14 +35,26 @@ function WorkedCheckbox({ confirmatA }: { confirmatA: string | null }) {
       type="checkbox"
       checked={confirmatA !== null}
       disabled
-      aria-label={confirmatA !== null ? "Línia treballada" : "Línia pendent"}
+      aria-label={confirmatA !== null ? 'Línia treballada' : 'Línia pendent'}
       className="h-4 w-4 rounded border-gray-300 text-ink"
     />
   );
 }
 
 function leftBorderClass(confirmatA: string | null) {
-  return confirmatA !== null ? "border-l-4 border-l-green-500" : "border-l-4 border-l-gray-200";
+  return confirmatA !== null ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-gray-200';
+}
+
+// La cel·la de "Treballada" (amb leftBorderClass) queda hidden xl:table-cell
+// en tablet — sense això, l'indicador de color desapareix del tot en aquest
+// rang, no només el checkbox. `max-xl:` (variant natiu de Tailwind, sense
+// plugin) reprodueix la mateixa franja a la primera cel·la visible en
+// tablet (Producte) i es retira sola en desktop complet, on ja hi és a
+// Treballada — mai les dues alhora.
+function leftBorderClassTablet(confirmatA: string | null) {
+  return confirmatA !== null
+    ? 'max-xl:border-l-4 max-xl:border-l-green-500'
+    : 'max-xl:border-l-4 max-xl:border-l-gray-200';
 }
 
 type Draft = { unitatsLliurades: string; kgLliurats: string };
@@ -52,7 +64,12 @@ function PackagingRow({
   onSave,
 }: {
   line: FilaPanellEmpaquetatApi;
-  onSave: (comandaId: number, liniaId: number, unitatsLliurades: number, kgLliurats: string) => Promise<LliuramentSaveResult>;
+  onSave: (
+    comandaId: number,
+    liniaId: number,
+    unitatsLliurades: number,
+    kgLliurats: string,
+  ) => Promise<LliuramentSaveResult>;
 }) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -84,37 +101,49 @@ function PackagingRow({
 
   return (
     <tr className="border-b border-gray-100 last:border-0">
-      <td className={`${leftBorderClass(line.confirmatA)} px-3 py-3 text-center`}>
+      <td
+        className={`${leftBorderClass(line.confirmatA)} hidden px-3 py-3 text-center xl:table-cell`}
+      >
         <WorkedCheckbox confirmatA={line.confirmatA} />
       </td>
-      <td className="px-3 py-3 break-words text-gray-900">
-        {line.dataExpedicio ? formatData(line.dataExpedicio, false) : "—"}
+      <td className="hidden px-3 py-3 break-words text-gray-900 xl:table-cell">
+        {line.dataExpedicio ? formatData(line.dataExpedicio, false) : '—'}
       </td>
-      <td className="px-3 py-3 break-words text-gray-900">
-        {line.dataLliurament ? formatData(line.dataLliurament, false) : "—"}
+      <td className="hidden px-3 py-3 break-words text-gray-900 xl:table-cell">
+        {line.dataLliurament ? formatData(line.dataLliurament, false) : '—'}
       </td>
-      <td className="px-3 py-3 break-words text-gray-900">{line.transportista ?? "—"}</td>
-      <td className="px-3 py-3 break-words">
+      <td className="hidden px-3 py-3 break-words text-gray-900 xl:table-cell">
+        {line.transportista ?? '—'}
+      </td>
+      <td className={`${leftBorderClassTablet(line.confirmatA)} px-3 py-3 break-words`}>
         <span className="font-semibold text-gray-900">{line.producte}</span>
       </td>
-      <td className="px-3 py-3 break-words text-gray-900">{line.client ?? "—"}</td>
-      <td className="px-3 py-3 text-right text-gray-900">{formatDecimal(line.unitatsDemanades, 2)}</td>
+      <td className="hidden px-3 py-3 break-words text-gray-900 xl:table-cell">
+        {line.client ?? '—'}
+      </td>
+      <td className="px-3 py-3 text-right text-gray-900">
+        {formatDecimal(line.unitatsDemanades, 2)}
+      </td>
       <td className="px-3 py-3">
         <DecimalInput
           value={draft.unitatsLliurades}
-          onChange={(value) => setField("unitatsLliurades", value)}
+          onChange={(value) => setField('unitatsLliurades', value)}
           className="w-full rounded-md border border-gray-300 px-2 py-1 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
         />
-        {fieldErrors.unitatsLliurades && <p className="mt-1 text-xs text-red-600">{fieldErrors.unitatsLliurades}</p>}
+        {fieldErrors.unitatsLliurades && (
+          <p className="mt-1 text-xs text-red-600">{fieldErrors.unitatsLliurades}</p>
+        )}
       </td>
       <td className="px-3 py-3 text-right text-gray-900">{formatDecimal(line.kgDemanats, 3)}</td>
       <td className="px-3 py-3">
         <DecimalInput
           value={draft.kgLliurats}
-          onChange={(value) => setField("kgLliurats", value)}
+          onChange={(value) => setField('kgLliurats', value)}
           className="w-full rounded-md border border-gray-300 px-2 py-1 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
         />
-        {fieldErrors.kgLliurats && <p className="mt-1 text-xs text-red-600">{fieldErrors.kgLliurats}</p>}
+        {fieldErrors.kgLliurats && (
+          <p className="mt-1 text-xs text-red-600">{fieldErrors.kgLliurats}</p>
+        )}
       </td>
       <td className="px-3 py-3 text-center align-top">
         <button
@@ -122,10 +151,12 @@ function PackagingRow({
           onClick={save}
           disabled={!isDirty || isSaving}
           className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-            isDirty && !isSaving ? "bg-ink text-white hover:opacity-90" : "cursor-not-allowed bg-gray-200 text-gray-400"
+            isDirty && !isSaving
+              ? 'bg-ink text-white hover:opacity-90'
+              : 'cursor-not-allowed bg-gray-200 text-gray-400'
           }`}
         >
-          {isSaving ? "Desant..." : "Desar"}
+          {isSaving ? 'Desant...' : 'Desar'}
         </button>
         {generalError && <p className="mt-1 max-w-[140px] text-xs text-red-600">{generalError}</p>}
       </td>
@@ -138,7 +169,12 @@ function PackagingCard({
   onSave,
 }: {
   line: FilaPanellEmpaquetatApi;
-  onSave: (comandaId: number, liniaId: number, unitatsLliurades: number, kgLliurats: string) => Promise<LliuramentSaveResult>;
+  onSave: (
+    comandaId: number,
+    liniaId: number,
+    unitatsLliurades: number,
+    kgLliurats: string,
+  ) => Promise<LliuramentSaveResult>;
 }) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -168,65 +204,75 @@ function PackagingCard({
   return (
     <div className="relative overflow-hidden rounded-xl">
       <div
-        className={`absolute inset-y-0 left-0 w-1 ${line.confirmatA !== null ? "bg-green-500" : "bg-gray-200"}`}
+        className={`absolute inset-y-0 left-0 w-1 ${line.confirmatA !== null ? 'bg-green-500' : 'bg-gray-200'}`}
       />
       <DataCard>
         <div className="flex items-start justify-between gap-2">
           <div>
             <p className="font-semibold text-gray-900">{line.producte}</p>
-            <p className="text-sm text-gray-500">{line.client ?? "—"}</p>
+            <p className="text-sm text-gray-500">{line.client ?? '—'}</p>
           </div>
           <WorkedCheckbox confirmatA={line.confirmatA} />
         </div>
 
-      <div className="mt-3">
-        <DataCardGrid>
-          <DataCardField label="Data d'expedició">
-            {line.dataExpedicio ? formatData(line.dataExpedicio, false) : "—"}
-          </DataCardField>
-          <DataCardField label="Data de lliurament">
-            {line.dataLliurament ? formatData(line.dataLliurament, false) : "—"}
-          </DataCardField>
-          <DataCardField label="Transportista">{line.transportista ?? "—"}</DataCardField>
-          <DataCardField label="Unitats demanades">{formatDecimal(line.unitatsDemanades, 2)}</DataCardField>
-          <DataCardField label="Kilos demanats">{formatDecimal(line.kgDemanats, 3)}</DataCardField>
-        </DataCardGrid>
-      </div>
+        <div className="mt-3">
+          <DataCardGrid>
+            <DataCardField label="Data d'expedició">
+              {line.dataExpedicio ? formatData(line.dataExpedicio, false) : '—'}
+            </DataCardField>
+            <DataCardField label="Data de lliurament">
+              {line.dataLliurament ? formatData(line.dataLliurament, false) : '—'}
+            </DataCardField>
+            <DataCardField label="Transportista">{line.transportista ?? '—'}</DataCardField>
+            <DataCardField label="Unitats demanades">
+              {formatDecimal(line.unitatsDemanades, 2)}
+            </DataCardField>
+            <DataCardField label="Kilos demanats">
+              {formatDecimal(line.kgDemanats, 3)}
+            </DataCardField>
+          </DataCardGrid>
+        </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-xs text-gray-500">Unitats lliurades</span>
-          <DecimalInput
-            value={draft.unitatsLliurades}
-            onChange={(value) => setField("unitatsLliurades", value)}
-            className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
-          />
-          {fieldErrors.unitatsLliurades && <p className="text-xs text-red-600">{fieldErrors.unitatsLliurades}</p>}
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-xs text-gray-500">Kilos lliurats</span>
-          <DecimalInput
-            value={draft.kgLliurats}
-            onChange={(value) => setField("kgLliurats", value)}
-            className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
-          />
-          {fieldErrors.kgLliurats && <p className="text-xs text-red-600">{fieldErrors.kgLliurats}</p>}
-        </label>
-      </div>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-xs text-gray-500">Unitats lliurades</span>
+            <DecimalInput
+              value={draft.unitatsLliurades}
+              onChange={(value) => setField('unitatsLliurades', value)}
+              className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
+            />
+            {fieldErrors.unitatsLliurades && (
+              <p className="text-xs text-red-600">{fieldErrors.unitatsLliurades}</p>
+            )}
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-xs text-gray-500">Kilos lliurats</span>
+            <DecimalInput
+              value={draft.kgLliurats}
+              onChange={(value) => setField('kgLliurats', value)}
+              className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
+            />
+            {fieldErrors.kgLliurats && (
+              <p className="text-xs text-red-600">{fieldErrors.kgLliurats}</p>
+            )}
+          </label>
+        </div>
 
-      <DataCardActions>
-        <button
-          type="button"
-          onClick={save}
-          disabled={!isDirty || isSaving}
-          className={`w-full rounded-full px-3 py-2 text-sm font-semibold ${
-            isDirty && !isSaving ? "bg-ink text-white hover:opacity-90" : "cursor-not-allowed bg-gray-200 text-gray-400"
-          }`}
-        >
-          {isSaving ? "Desant..." : "Desar"}
-        </button>
-      </DataCardActions>
-      {generalError && <p className="mt-2 text-xs text-red-600">{generalError}</p>}
+        <DataCardActions>
+          <button
+            type="button"
+            onClick={save}
+            disabled={!isDirty || isSaving}
+            className={`w-full rounded-full px-3 py-2 text-sm font-semibold ${
+              isDirty && !isSaving
+                ? 'bg-ink text-white hover:opacity-90'
+                : 'cursor-not-allowed bg-gray-200 text-gray-400'
+            }`}
+          >
+            {isSaving ? 'Desant...' : 'Desar'}
+          </button>
+        </DataCardActions>
+        {generalError && <p className="mt-2 text-xs text-red-600">{generalError}</p>}
       </DataCard>
     </div>
   );
@@ -237,7 +283,7 @@ export default function PackagingPage() {
   const { data: carriers } = useCarriers();
   const { data: catalog } = useCatalog();
 
-  const [shippingDateFilter, setShippingDateFilter] = useState("");
+  const [shippingDateFilter, setShippingDateFilter] = useState('');
   const [carrierFilter, setCarrierFilter] = useState(ALL);
   const [clientFilter, setClientFilter] = useState(ALL);
   // Capa 37 — dataLliuramentDes/Fins (rang) i producte (exacte,
@@ -246,15 +292,19 @@ export default function PackagingPage() {
   // que el select de producte d'Obrador/Producció (exacte, no substring —
   // per això és un SelectFilter i no el SearchInput de lupa del mockup
   // original).
-  const [deliveryDateFilter, setDeliveryDateFilter] = useState("");
+  const [deliveryDateFilter, setDeliveryDateFilter] = useState('');
   const [productFilter, setProductFilter] = useState(ALL);
 
   const carrierId = useMemo(
-    () => (carrierFilter !== ALL ? carriers.find((item) => item.nom === carrierFilter)?.id : undefined),
+    () =>
+      carrierFilter !== ALL ? carriers.find((item) => item.nom === carrierFilter)?.id : undefined,
     [carrierFilter, carriers],
   );
   const clientId = useMemo(
-    () => (clientFilter !== ALL ? clients.find((item) => clientLabel(item) === clientFilter)?.id : undefined),
+    () =>
+      clientFilter !== ALL
+        ? clients.find((item) => clientLabel(item) === clientFilter)?.id
+        : undefined,
     [clientFilter, clients],
   );
   const productOptions = useMemo(
@@ -264,7 +314,9 @@ export default function PackagingPage() {
 
   const filters = useMemo(
     () => ({
-      ...(shippingDateFilter ? { dataExpedicioDes: shippingDateFilter, dataExpedicioFins: shippingDateFilter } : {}),
+      ...(shippingDateFilter
+        ? { dataExpedicioDes: shippingDateFilter, dataExpedicioFins: shippingDateFilter }
+        : {}),
       ...(carrierId !== undefined ? { transportistaId: carrierId } : {}),
       ...(clientId !== undefined ? { clientId } : {}),
       ...(deliveryDateFilter
@@ -283,14 +335,19 @@ export default function PackagingPage() {
     usePanellEmpaquetat(filters);
 
   function clearFilters() {
-    setShippingDateFilter("");
+    setShippingDateFilter('');
     setCarrierFilter(ALL);
     setClientFilter(ALL);
-    setDeliveryDateFilter("");
+    setDeliveryDateFilter('');
     setProductFilter(ALL);
   }
 
-  async function handleSave(comandaId: number, liniaId: number, unitatsLliurades: number, kgLliurats: string) {
+  async function handleSave(
+    comandaId: number,
+    liniaId: number,
+    unitatsLliurades: number,
+    kgLliurats: string,
+  ) {
     return saveLliurament(comandaId, liniaId, { unitatsLliurades, kgLliurats });
   }
 
@@ -301,7 +358,10 @@ export default function PackagingPage() {
         subtitle="Línies de comanda per a la planificació d'empaquetat."
         right={
           <div className="flex flex-wrap gap-3">
-            <StatCard label="TOTAL UNITATS VISIBLES" value={formatDecimal(totals?.unitatsDemanades ?? null, 2)} />
+            <StatCard
+              label="TOTAL UNITATS VISIBLES"
+              value={formatDecimal(totals?.unitatsDemanades ?? null, 2)}
+            />
             <StatCard
               label="TOTAL LÍNIES"
               value={totals?.linies ?? 0}
@@ -312,15 +372,28 @@ export default function PackagingPage() {
       />
 
       <FilterBar>
-        <DateInput label="Data d'expedició" value={shippingDateFilter} onChange={setShippingDateFilter} />
-        <DateInput label="Data de lliurament" value={deliveryDateFilter} onChange={setDeliveryDateFilter} />
+        <DateInput
+          label="Data d'expedició"
+          value={shippingDateFilter}
+          onChange={setShippingDateFilter}
+        />
+        <DateInput
+          label="Data de lliurament"
+          value={deliveryDateFilter}
+          onChange={setDeliveryDateFilter}
+        />
         <SelectFilter
           label="Transportista"
           options={[ALL, ...carriers.map((item) => item.nom)]}
           value={carrierFilter}
           onChange={setCarrierFilter}
         />
-        <SelectFilter label="Producte" options={productOptions} value={productFilter} onChange={setProductFilter} />
+        <SelectFilter
+          label="Producte"
+          options={productOptions}
+          value={productFilter}
+          onChange={setProductFilter}
+        />
         <SelectFilter
           label="Client"
           options={[ALL, ...clients.map((item) => clientLabel(item))]}
@@ -333,7 +406,9 @@ export default function PackagingPage() {
       {isLoading && <p className="text-sm text-gray-500">Carregant...</p>}
       {error && (
         <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-          <p className="text-sm text-red-600">No s&apos;han pogut carregar les línies: {error.message}</p>
+          <p className="text-sm text-red-600">
+            No s&apos;han pogut carregar les línies: {error.message}
+          </p>
           <button
             type="button"
             onClick={refetch}
@@ -346,28 +421,34 @@ export default function PackagingPage() {
 
       {!isLoading && !error && (
         <>
-          <div className="flex flex-col gap-3 xl:hidden">
+          <div className="flex flex-col gap-3 md:hidden">
             {data.map((line) => (
               <PackagingCard key={line.liniaId} line={line} onSave={handleSave} />
             ))}
           </div>
 
-          <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white xl:block">
+          <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white md:block">
             <table className="w-full table-fixed text-sm">
               <thead className="border-b border-gray-200">
                 <tr>
-                  <th className="w-[5%] px-3 py-2 text-center font-medium text-gray-500 break-words">
+                  <th className="hidden w-[5%] px-3 py-2 text-center font-medium text-gray-500 break-words xl:table-cell">
                     <span className="sr-only">Treballada</span>
                   </th>
-                  <th className="w-[10%] px-3 py-2 text-left font-medium text-gray-500 break-words">
+                  <th className="hidden w-[10%] px-3 py-2 text-left font-medium text-gray-500 break-words xl:table-cell">
                     Data d&apos;expedició
                   </th>
-                  <th className="w-[8%] px-3 py-2 text-left font-medium text-gray-500 break-words">
+                  <th className="hidden w-[8%] px-3 py-2 text-left font-medium text-gray-500 break-words xl:table-cell">
                     Data de lliurament
                   </th>
-                  <th className="w-[12%] px-3 py-2 text-left font-medium text-gray-500 break-words">Transportista</th>
-                  <th className="w-[12%] px-3 py-2 text-left font-medium text-gray-500 break-words">Producte</th>
-                  <th className="w-[9%] px-3 py-2 text-left font-medium text-gray-500 break-words">Client</th>
+                  <th className="hidden w-[12%] px-3 py-2 text-left font-medium text-gray-500 break-words xl:table-cell">
+                    Transportista
+                  </th>
+                  <th className="w-[12%] px-3 py-2 text-left font-medium text-gray-500 break-words">
+                    Producte
+                  </th>
+                  <th className="hidden w-[9%] px-3 py-2 text-left font-medium text-gray-500 break-words xl:table-cell">
+                    Client
+                  </th>
                   <th className="w-[10%] px-3 py-2 text-right font-medium text-gray-500 break-words">
                     Unitats demanades
                   </th>
@@ -380,7 +461,9 @@ export default function PackagingPage() {
                   <th className="w-[8%] px-3 py-2 text-right font-medium text-gray-500 break-words">
                     Kilos lliurats
                   </th>
-                  <th className="w-[10%] px-3 py-2 text-center font-medium text-gray-500 break-words">Desar</th>
+                  <th className="w-[10%] px-3 py-2 text-center font-medium text-gray-500 break-words">
+                    Desar
+                  </th>
                 </tr>
               </thead>
               <tbody>

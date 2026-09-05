@@ -1,21 +1,21 @@
-"use client";
+'use client';
 
-import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
-import { Badge } from "@/components/ui/Badge";
-import { DataCard, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
-import { api, ApiError, type ComandaDetallApi, type ComandaLiniaApi } from "@/lib/api";
-import { formatData } from "@/lib/dates";
-import { formatDecimal } from "@/lib/decimals";
+import { ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
+import { Badge } from '@/components/ui/Badge';
+import { DataCard, DataCardField, DataCardGrid } from '@/components/ui/DataCard';
+import { api, ApiError, type ComandaDetallApi, type ComandaLiniaApi } from '@/lib/api';
+import { formatData } from '@/lib/dates';
+import { formatDecimal } from '@/lib/decimals';
 
 const ESTAT_LABELS: Record<string, string> = {
-  oberta: "Oberta",
-  en_proces: "En procés",
-  tancada: "Tancada",
-  amb_incidencia: "Amb incidència",
+  oberta: 'Oberta',
+  en_proces: 'En procés',
+  tancada: 'Tancada',
+  amb_incidencia: 'Amb incidència',
 };
 
 function formatPrice(value: string) {
@@ -39,14 +39,20 @@ function OrderLineCard({ line }: { line: ComandaLiniaApi }) {
   return (
     <DataCard>
       <p className="font-semibold text-gray-900">
-        {line.producte ? `${line.producte.codi ?? line.producte.id} · ${line.producte.descripcio}` : "—"}
+        {line.producte
+          ? `${line.producte.codi ?? line.producte.id} · ${line.producte.descripcio}`
+          : '—'}
       </p>
-      <p className="text-sm text-gray-500">{line.format ?? "—"}</p>
+      <p className="text-sm text-gray-500">{line.format ?? '—'}</p>
 
       <div className="mt-3">
         <DataCardGrid>
-          <DataCardField label="Unitats demanades">{formatDecimal(line.unitatsDemanades, 2)}</DataCardField>
-          <DataCardField label="Unitats lliurades">{formatDecimal(line.unitatsLliurades, 2)}</DataCardField>
+          <DataCardField label="Unitats demanades">
+            {formatDecimal(line.unitatsDemanades, 2)}
+          </DataCardField>
+          <DataCardField label="Unitats lliurades">
+            {formatDecimal(line.unitatsLliurades, 2)}
+          </DataCardField>
           <DataCardField label="Pes demanat (kg)">{formatKg(line.kgDemanats)}</DataCardField>
           <DataCardField label="Pes lliurat (kg)">{formatKg(line.kgLliurats)}</DataCardField>
           <DataCardField label="Preu unitari">{formatPrice(line.preuUnitari)}</DataCardField>
@@ -59,7 +65,7 @@ function OrderLineCard({ line }: { line: ComandaLiniaApi }) {
       <label className="mt-3 flex items-center gap-2 border-t border-gray-100 pt-3 text-sm text-gray-700">
         <input
           type="checkbox"
-          checked={(line.obsProduccio ?? "").trim().length > 0}
+          checked={(line.obsProduccio ?? '').trim().length > 0}
           disabled
           className="h-4 w-4 rounded border-gray-300 text-ink"
         />
@@ -94,7 +100,9 @@ export default function OfficeOrderDetailPage() {
       .catch((caught) => {
         if (!cancelled) {
           setLoadError(
-            caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
+            caught instanceof ApiError
+              ? caught
+              : new ApiError('ERROR_XARXA', 'Error desconegut.', null),
           );
         }
       })
@@ -117,13 +125,17 @@ export default function OfficeOrderDetailPage() {
           <ArrowLeft className="h-4 w-4" />
           Tornar
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900 lg:text-3xl">Comanda {order?.num ?? params.id}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 lg:text-3xl">
+          Comanda {order?.num ?? params.id}
+        </h1>
       </div>
 
       {isLoading && <p className="text-sm text-gray-500">Carregant...</p>}
       {loadError && (
         <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-          <p className="text-sm text-red-600">No s&apos;ha pogut carregar la comanda: {loadError.message}</p>
+          <p className="text-sm text-red-600">
+            No s&apos;ha pogut carregar la comanda: {loadError.message}
+          </p>
           <button
             type="button"
             onClick={() => setReloadToken((token) => token + 1)}
@@ -143,34 +155,34 @@ export default function OfficeOrderDetailPage() {
               <Field
                 label="Estat"
                 value={
-                  <Badge variant={order.estat === "amb_incidencia" ? "negative" : "info"}>
+                  <Badge variant={order.estat === 'amb_incidencia' ? 'negative' : 'info'}>
                     {ESTAT_LABELS[order.estat] ?? order.estat}
                   </Badge>
                 }
               />
-              <Field label="Client" value={order.client?.nom ?? "—"} />
-              <Field label="Població de destí" value={order.poblacioDesti || "—"} />
-              <Field label="Tarifa" value={order.tarifa?.nom ?? "—"} />
-              <Field label="Transportista" value={order.transportista?.nom ?? "—"} />
-              <Field label="Data comanda" value={formatData(order.dataComanda, true)} />
+              <Field label="Client" value={order.client?.nom ?? '—'} />
+              <Field label="Població de destí" value={order.poblacioDesti || '—'} />
+              <Field label="Tarifa" value={order.tarifa?.nom ?? '—'} />
+              <Field label="Transportista" value={order.transportista?.nom ?? '—'} />
+              <Field label="Data comanda" value={formatData(order.dataComanda, false)} />
               <Field
                 label="Data lliurament"
-                value={order.dataLliurament ? formatData(order.dataLliurament, false) : "—"}
+                value={order.dataLliurament ? formatData(order.dataLliurament, false) : '—'}
               />
               <Field
                 label="Data expedició"
-                value={order.dataExpedicio ? formatData(order.dataExpedicio, false) : "—"}
+                value={order.dataExpedicio ? formatData(order.dataExpedicio, false) : '—'}
               />
-              <Field label="Núm. bultos" value={order.bultos ?? "—"} />
+              <Field label="Núm. bultos" value={order.bultos ?? '—'} />
             </div>
 
             <div className="mt-4">
-              <Field label="Adreça de lliurament" value={order.adrecaLliurament || "—"} />
+              <Field label="Adreça de lliurament" value={order.adrecaLliurament || '—'} />
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Observacions de producció globals" value={order.obsProduccio || "—"} />
-              <Field label="Observacions de lliurament" value={order.obsLliurament || "—"} />
+              <Field label="Observacions de producció globals" value={order.obsProduccio || '—'} />
+              <Field label="Observacions de lliurament" value={order.obsLliurament || '—'} />
             </div>
           </div>
 
@@ -187,36 +199,66 @@ export default function OfficeOrderDetailPage() {
               <table className="w-full text-sm">
                 <thead className="border-b border-gray-200">
                   <tr>
-                    <th className="px-3 py-2 text-left font-medium text-gray-500 break-words">Producte</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-500 break-words">Format</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-500 break-words">Unitats demanades</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-500 break-words">Unitats lliurades</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-500 break-words">Pes demanat (kg)</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-500 break-words">Pes lliurat (kg)</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-500 break-words">Preu unitari</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-500 break-words">Subtotal</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-500 break-words">Obs. producció</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500 break-words">
+                      Producte
+                    </th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500 break-words">
+                      Format
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium text-gray-500 break-words">
+                      Unitats demanades
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium text-gray-500 break-words">
+                      Unitats lliurades
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium text-gray-500 break-words">
+                      Pes demanat (kg)
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium text-gray-500 break-words">
+                      Pes lliurat (kg)
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium text-gray-500 break-words">
+                      Preu unitari
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium text-gray-500 break-words">
+                      Subtotal
+                    </th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500 break-words">
+                      Obs. producció
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {order.linies.map((line) => (
                     <tr key={line.id} className="border-b border-gray-100 last:border-0">
                       <td className="px-3 py-2 break-words text-gray-900">
-                        {line.producte ? `${line.producte.codi ?? line.producte.id} · ${line.producte.descripcio}` : "—"}
+                        {line.producte
+                          ? `${line.producte.codi ?? line.producte.id} · ${line.producte.descripcio}`
+                          : '—'}
                       </td>
-                      <td className="px-3 py-2 break-words text-gray-500">{line.format ?? "—"}</td>
-                      <td className="px-3 py-2 text-right text-gray-900">{formatDecimal(line.unitatsDemanades, 2)}</td>
-                      <td className="px-3 py-2 text-right text-gray-900">{formatDecimal(line.unitatsLliurades, 2)}</td>
-                      <td className="px-3 py-2 text-right text-gray-900">{formatKg(line.kgDemanats)}</td>
-                      <td className="px-3 py-2 text-right text-gray-900">{formatKg(line.kgLliurats)}</td>
-                      <td className="px-3 py-2 text-right text-gray-900">{formatPrice(line.preuUnitari)}</td>
+                      <td className="px-3 py-2 break-words text-gray-500">{line.format ?? '—'}</td>
+                      <td className="px-3 py-2 text-right text-gray-900">
+                        {formatDecimal(line.unitatsDemanades, 2)}
+                      </td>
+                      <td className="px-3 py-2 text-right text-gray-900">
+                        {formatDecimal(line.unitatsLliurades, 2)}
+                      </td>
+                      <td className="px-3 py-2 text-right text-gray-900">
+                        {formatKg(line.kgDemanats)}
+                      </td>
+                      <td className="px-3 py-2 text-right text-gray-900">
+                        {formatKg(line.kgLliurats)}
+                      </td>
+                      <td className="px-3 py-2 text-right text-gray-900">
+                        {formatPrice(line.preuUnitari)}
+                      </td>
                       <td className="px-3 py-2 text-right font-semibold text-gray-900">
                         {formatPrice(line.totalLinia)}
                       </td>
                       <td className="px-3 py-2">
                         <input
                           type="checkbox"
-                          checked={(line.obsProduccio ?? "").trim().length > 0}
+                          checked={(line.obsProduccio ?? '').trim().length > 0}
                           disabled
                           className="h-4 w-4 rounded border-gray-300 text-ink"
                         />

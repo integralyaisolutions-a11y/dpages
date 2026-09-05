@@ -1,35 +1,35 @@
-"use client";
+'use client';
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Badge } from "@/components/ui/Badge";
-import { DataCard, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
-import { DateRangeInput } from "@/components/ui/DateRangeInput";
-import { FilterBar } from "@/components/ui/FilterBar";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { Pagination } from "@/components/ui/Pagination";
-import { SelectFilter } from "@/components/ui/SelectFilter";
-import { StatCard } from "@/components/ui/StatCard";
-import { useCarriers } from "@/hooks/useCarriers";
-import { useClientTariffs } from "@/hooks/useClientTariffs";
-import { usePanellOficina } from "@/hooks/usePanellOficina";
-import { useRates } from "@/hooks/useRates";
-import type { ClientApi, FilaPanellOficinaApi } from "@/lib/api";
-import { formatData } from "@/lib/dates";
-import { formatDecimal } from "@/lib/decimals";
+import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Badge } from '@/components/ui/Badge';
+import { DataCard, DataCardField, DataCardGrid } from '@/components/ui/DataCard';
+import { DateRangeInput } from '@/components/ui/DateRangeInput';
+import { FilterBar } from '@/components/ui/FilterBar';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Pagination } from '@/components/ui/Pagination';
+import { SelectFilter } from '@/components/ui/SelectFilter';
+import { StatCard } from '@/components/ui/StatCard';
+import { useCarriers } from '@/hooks/useCarriers';
+import { useClientTariffs } from '@/hooks/useClientTariffs';
+import { usePanellOficina } from '@/hooks/usePanellOficina';
+import { useRates } from '@/hooks/useRates';
+import type { ClientApi, FilaPanellOficinaApi } from '@/lib/api';
+import { formatData } from '@/lib/dates';
+import { formatDecimal } from '@/lib/decimals';
 
-const ALL = "Tots";
-const ALL_FEM = "Totes";
+const ALL = 'Tots';
+const ALL_FEM = 'Totes';
 
 const ESTAT_LABELS: Record<string, string> = {
-  oberta: "Oberta",
-  en_proces: "En procés",
-  tancada: "Tancada",
-  amb_incidencia: "Amb incidència",
+  oberta: 'Oberta',
+  en_proces: 'En procés',
+  tancada: 'Tancada',
+  amb_incidencia: 'Amb incidència',
 };
 
 function clientLabel(client: ClientApi) {
-  return `${client.codi ?? client.id} · ${client.nom ?? ""}`;
+  return `${client.codi ?? client.id} · ${client.nom ?? ''}`;
 }
 
 function OfficeOrderCard({ order, onClick }: { order: FilaPanellOficinaApi; onClick: () => void }) {
@@ -38,26 +38,26 @@ function OfficeOrderCard({ order, onClick }: { order: FilaPanellOficinaApi; onCl
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-semibold text-gray-900">{order.num}</p>
-          <p className="text-sm text-gray-500">{order.client ?? "—"}</p>
+          <p className="text-sm text-gray-500">{order.client ?? '—'}</p>
         </div>
-        <Badge variant={order.estat === "amb_incidencia" ? "negative" : "info"}>
+        <Badge variant={order.estat === 'amb_incidencia' ? 'negative' : 'info'}>
           {ESTAT_LABELS[order.estat] ?? order.estat}
         </Badge>
       </div>
 
       <div className="mt-3">
         <DataCardGrid>
-          <DataCardField label="Població de destí">{order.poblacioDesti || "—"}</DataCardField>
-          <DataCardField label="Tarifa">{order.tarifa ?? "—"}</DataCardField>
-          <DataCardField label="Transportista">{order.transportista ?? "—"}</DataCardField>
+          <DataCardField label="Població de destí">{order.poblacioDesti || '—'}</DataCardField>
+          <DataCardField label="Tarifa">{order.tarifa ?? '—'}</DataCardField>
+          <DataCardField label="Transportista">{order.transportista ?? '—'}</DataCardField>
           <DataCardField label="Total kg demanats">{formatDecimal(order.totalKg, 3)}</DataCardField>
-          <DataCardField label="Núm. bultos">{order.bultos ?? "—"}</DataCardField>
-          <DataCardField label="Data comanda">{formatData(order.dataComanda, true)}</DataCardField>
+          <DataCardField label="Núm. bultos">{order.bultos ?? '—'}</DataCardField>
+          <DataCardField label="Data comanda">{formatData(order.dataComanda, false)}</DataCardField>
           <DataCardField label="Data expedició">
-            {order.dataExpedicio ? formatData(order.dataExpedicio, false) : "—"}
+            {order.dataExpedicio ? formatData(order.dataExpedicio, false) : '—'}
           </DataCardField>
           <DataCardField label="Data lliurament">
-            {order.dataLliurament ? formatData(order.dataLliurament, false) : "—"}
+            {order.dataLliurament ? formatData(order.dataLliurament, false) : '—'}
           </DataCardField>
         </DataCardGrid>
       </div>
@@ -79,7 +79,7 @@ function OfficeOrderCard({ order, onClick }: { order: FilaPanellOficinaApi; onCl
         <label className="flex items-center gap-2 text-sm text-gray-700">
           <input
             type="checkbox"
-            checked={(order.obsLliurament ?? "").trim().length > 0}
+            checked={(order.obsLliurament ?? '').trim().length > 0}
             disabled
             className="h-4 w-4 rounded border-gray-300 text-ink"
           />
@@ -102,27 +102,34 @@ export default function OfficePage() {
   const [carrierFilter, setCarrierFilter] = useState(ALL);
   const [tariffFilter, setTariffFilter] = useState(ALL_FEM);
   const [destinationFilter, setDestinationFilter] = useState(ALL_FEM);
-  const [orderDateFrom, setOrderDateFrom] = useState("");
-  const [orderDateTo, setOrderDateTo] = useState("");
-  const [shippingDateFrom, setShippingDateFrom] = useState("");
-  const [shippingDateTo, setShippingDateTo] = useState("");
-  const [deliveryDateFrom, setDeliveryDateFrom] = useState("");
-  const [deliveryDateTo, setDeliveryDateTo] = useState("");
+  const [orderDateFrom, setOrderDateFrom] = useState('');
+  const [orderDateTo, setOrderDateTo] = useState('');
+  const [shippingDateFrom, setShippingDateFrom] = useState('');
+  const [shippingDateTo, setShippingDateTo] = useState('');
+  const [deliveryDateFrom, setDeliveryDateFrom] = useState('');
+  const [deliveryDateTo, setDeliveryDateTo] = useState('');
 
   const statusCode = useMemo(
     () => Object.entries(ESTAT_LABELS).find(([, label]) => label === statusFilter)?.[0],
     [statusFilter],
   );
   const carrierId = useMemo(
-    () => (carrierFilter !== ALL ? carriers.find((item) => item.nom === carrierFilter)?.id : undefined),
+    () =>
+      carrierFilter !== ALL ? carriers.find((item) => item.nom === carrierFilter)?.id : undefined,
     [carrierFilter, carriers],
   );
   const clientId = useMemo(
-    () => (clientFilter !== ALL ? clients.find((item) => clientLabel(item) === clientFilter)?.id : undefined),
+    () =>
+      clientFilter !== ALL
+        ? clients.find((item) => clientLabel(item) === clientFilter)?.id
+        : undefined,
     [clientFilter, clients],
   );
   const tariffId = useMemo(
-    () => (tariffFilter !== ALL_FEM ? tariffColumns.find((item) => item.nom === tariffFilter)?.id : undefined),
+    () =>
+      tariffFilter !== ALL_FEM
+        ? tariffColumns.find((item) => item.nom === tariffFilter)?.id
+        : undefined,
     [tariffFilter, tariffColumns],
   );
 
@@ -155,7 +162,8 @@ export default function OfficePage() {
     ],
   );
 
-  const { data, totals, paginacio, setPagina, isLoading, error, refetch } = usePanellOficina(filters);
+  const { data, totals, paginacio, setPagina, isLoading, error, refetch } =
+    usePanellOficina(filters);
 
   // Població de destí no té cap catàleg propi (és text lliure a
   // `comanda.poblacio_desti`, no una entitat com client/tarifa/
@@ -169,7 +177,13 @@ export default function OfficePage() {
   const destinationOptions = useMemo(
     () => [
       ALL_FEM,
-      ...Array.from(new Set(data.map((order) => order.poblacioDesti).filter((value): value is string => value !== null))),
+      ...Array.from(
+        new Set(
+          data
+            .map((order) => order.poblacioDesti)
+            .filter((value): value is string => value !== null),
+        ),
+      ),
     ],
     [data],
   );
@@ -184,7 +198,9 @@ export default function OfficePage() {
 
       {error && (
         <div className="mb-4 flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-          <p className="text-sm text-red-600">No s&apos;han pogut carregar les comandes: {error.message}</p>
+          <p className="text-sm text-red-600">
+            No s&apos;han pogut carregar les comandes: {error.message}
+          </p>
           <button
             type="button"
             onClick={refetch}
@@ -257,7 +273,7 @@ export default function OfficePage() {
 
       {!isLoading && !error && (
         <>
-          <div className="flex flex-col gap-3 xl:hidden">
+          <div className="flex flex-col gap-3 md:hidden">
             {data.map((order) => (
               <OfficeOrderCard
                 key={order.comandaId}
@@ -267,29 +283,47 @@ export default function OfficePage() {
             ))}
           </div>
 
-          <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white xl:block">
+          <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white md:block">
             <table className="w-full table-fixed text-sm">
               <thead className="border-b border-gray-200">
                 <tr>
-                  <th className="w-[7%] px-2 py-2 text-left font-medium text-gray-500 break-words">Núm.</th>
-                  <th className="w-[12%] px-2 py-2 text-left font-medium text-gray-500 break-words">Client</th>
-                  <th className="w-[9%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                  <th className="w-[7%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                    Núm.
+                  </th>
+                  <th className="w-[12%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                    Client
+                  </th>
+                  <th className="hidden w-[9%] px-2 py-2 text-left font-medium text-gray-500 break-words xl:table-cell">
                     Població de destí
                   </th>
-                  <th className="w-[6%] px-2 py-2 text-left font-medium text-gray-500 break-words">Tarifa</th>
-                  <th className="w-[8%] px-2 py-2 text-left font-medium text-gray-500 break-words">Transportista</th>
-                  <th className="w-[8%] px-2 py-2 text-left font-medium text-gray-500 break-words">Estat</th>
-                  <th className="w-[6%] px-2 py-2 text-left font-medium text-gray-500 break-words">Data comanda</th>
-                  <th className="w-[6%] px-2 py-2 text-left font-medium text-gray-500 break-words">Data expedició</th>
-                  <th className="w-[6%] px-2 py-2 text-left font-medium text-gray-500 break-words">Data lliurament</th>
-                  <th className="w-[9%] px-2 py-2 text-right font-medium text-gray-500 break-words">
+                  <th className="hidden w-[6%] px-2 py-2 text-left font-medium text-gray-500 break-words xl:table-cell">
+                    Tarifa
+                  </th>
+                  <th className="hidden w-[8%] px-2 py-2 text-left font-medium text-gray-500 break-words xl:table-cell">
+                    Transportista
+                  </th>
+                  <th className="w-[8%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                    Estat
+                  </th>
+                  <th className="hidden w-[6%] px-2 py-2 text-left font-medium text-gray-500 break-words xl:table-cell">
+                    Data comanda
+                  </th>
+                  <th className="hidden w-[6%] px-2 py-2 text-left font-medium text-gray-500 break-words xl:table-cell">
+                    Data expedició
+                  </th>
+                  <th className="w-[6%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                    Data lliurament
+                  </th>
+                  <th className="hidden w-[9%] px-2 py-2 text-right font-medium text-gray-500 break-words xl:table-cell">
                     Total kg demanats
                   </th>
-                  <th className="w-[6%] px-2 py-2 text-right font-medium text-gray-500 break-words">Núm. bultos</th>
-                  <th className="w-[8%] px-2 py-2 text-center font-medium text-gray-500 break-words">
+                  <th className="hidden w-[6%] px-2 py-2 text-right font-medium text-gray-500 break-words xl:table-cell">
+                    Núm. bultos
+                  </th>
+                  <th className="hidden w-[8%] px-2 py-2 text-center font-medium text-gray-500 break-words xl:table-cell">
                     Obs. producció
                   </th>
-                  <th className="w-[9%] px-2 py-2 text-center font-medium text-gray-500 break-words">
+                  <th className="hidden w-[9%] px-2 py-2 text-center font-medium text-gray-500 break-words xl:table-cell">
                     Obs. lliurament
                   </th>
                 </tr>
@@ -304,25 +338,37 @@ export default function OfficePage() {
                     <td className="px-2 py-3 break-words">
                       <span className="font-semibold text-gray-900">{order.num}</span>
                     </td>
-                    <td className="px-2 py-3 break-words text-gray-900">{order.client ?? "—"}</td>
-                    <td className="px-2 py-3 break-words text-gray-900">{order.poblacioDesti || "—"}</td>
-                    <td className="px-2 py-3 break-words text-gray-900">{order.tarifa ?? "—"}</td>
-                    <td className="px-2 py-3 break-words text-gray-900">{order.transportista ?? "—"}</td>
+                    <td className="px-2 py-3 break-words text-gray-900">{order.client ?? '—'}</td>
+                    <td className="hidden px-2 py-3 break-words text-gray-900 xl:table-cell">
+                      {order.poblacioDesti || '—'}
+                    </td>
+                    <td className="hidden px-2 py-3 break-words text-gray-900 xl:table-cell">
+                      {order.tarifa ?? '—'}
+                    </td>
+                    <td className="hidden px-2 py-3 break-words text-gray-900 xl:table-cell">
+                      {order.transportista ?? '—'}
+                    </td>
                     <td className="px-2 py-3">
-                      <Badge variant={order.estat === "amb_incidencia" ? "negative" : "info"}>
+                      <Badge variant={order.estat === 'amb_incidencia' ? 'negative' : 'info'}>
                         {ESTAT_LABELS[order.estat] ?? order.estat}
                       </Badge>
                     </td>
-                    <td className="px-2 py-3 break-words text-gray-900">{formatData(order.dataComanda, true)}</td>
-                    <td className="px-2 py-3 break-words text-gray-900">
-                      {order.dataExpedicio ? formatData(order.dataExpedicio, false) : "—"}
+                    <td className="hidden px-2 py-3 break-words text-gray-900 xl:table-cell">
+                      {formatData(order.dataComanda, false)}
+                    </td>
+                    <td className="hidden px-2 py-3 break-words text-gray-900 xl:table-cell">
+                      {order.dataExpedicio ? formatData(order.dataExpedicio, false) : '—'}
                     </td>
                     <td className="px-2 py-3 break-words text-gray-900">
-                      {order.dataLliurament ? formatData(order.dataLliurament, false) : "—"}
+                      {order.dataLliurament ? formatData(order.dataLliurament, false) : '—'}
                     </td>
-                    <td className="px-2 py-3 text-right text-gray-900">{formatDecimal(order.totalKg, 3)}</td>
-                    <td className="px-2 py-3 text-right text-gray-900">{order.bultos ?? "—"}</td>
-                    <td className="px-2 py-3 text-center">
+                    <td className="hidden px-2 py-3 text-right text-gray-900 xl:table-cell">
+                      {formatDecimal(order.totalKg, 3)}
+                    </td>
+                    <td className="hidden px-2 py-3 text-right text-gray-900 xl:table-cell">
+                      {order.bultos ?? '—'}
+                    </td>
+                    <td className="hidden px-2 py-3 text-center xl:table-cell">
                       <input
                         type="checkbox"
                         checked={order.obsProduccio}
@@ -330,10 +376,10 @@ export default function OfficePage() {
                         className="h-4 w-4 rounded border-gray-300 text-ink"
                       />
                     </td>
-                    <td className="px-2 py-3 text-center">
+                    <td className="hidden px-2 py-3 text-center xl:table-cell">
                       <input
                         type="checkbox"
-                        checked={(order.obsLliurament ?? "").trim().length > 0}
+                        checked={(order.obsLliurament ?? '').trim().length > 0}
                         disabled
                         className="h-4 w-4 rounded border-gray-300 text-ink"
                       />

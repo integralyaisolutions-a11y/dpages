@@ -1,31 +1,31 @@
-"use client";
+'use client';
 
-import { Plus } from "lucide-react";
-import { useMemo, useState } from "react";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { DataCard, DataCardActions, DataCardField, DataCardGrid } from "@/components/ui/DataCard";
-import { EditableCell } from "@/components/ui/EditableCell";
-import { ClearFiltersButton, FilterBar } from "@/components/ui/FilterBar";
-import { IconButton } from "@/components/ui/IconButton";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { Pagination } from "@/components/ui/Pagination";
-import { SelectFilter } from "@/components/ui/SelectFilter";
-import { useCategories } from "@/hooks/useCategories";
-import { useEditableRow } from "@/hooks/useEditableRow";
-import { usePigYields, type PigYieldPatch } from "@/hooks/usePigYields";
-import { ApiError, type RendimentPorcApi } from "@/lib/api";
-import { parseDecimalInput } from "@/lib/decimals";
-import { calculatePigYieldTotal } from "@/lib/pigYieldCalculations";
-import { PigYieldFormModal } from "./PigYieldFormModal";
+import { Plus } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { DataCard, DataCardActions, DataCardField, DataCardGrid } from '@/components/ui/DataCard';
+import { EditableCell } from '@/components/ui/EditableCell';
+import { ClearFiltersButton, FilterBar } from '@/components/ui/FilterBar';
+import { IconButton } from '@/components/ui/IconButton';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Pagination } from '@/components/ui/Pagination';
+import { SelectFilter } from '@/components/ui/SelectFilter';
+import { useCategories } from '@/hooks/useCategories';
+import { useEditableRow } from '@/hooks/useEditableRow';
+import { usePigYields, type PigYieldPatch } from '@/hooks/usePigYields';
+import { ApiError, type RendimentPorcApi } from '@/lib/api';
+import { parseDecimalInput } from '@/lib/decimals';
+import { calculatePigYieldTotal } from '@/lib/pigYieldCalculations';
+import { PigYieldFormModal } from './PigYieldFormModal';
 
-const ALL_CATEGORIES = "Totes";
+const ALL_CATEGORIES = 'Totes';
 
 function formatUnits(value: number) {
-  return value.toFixed(2).replace(".", ",");
+  return value.toFixed(2).replace('.', ',');
 }
 
 function formatKg(value: number) {
-  return value.toFixed(3).replace(".", ",");
+  return value.toFixed(3).replace('.', ',');
 }
 
 function PigYieldRow({
@@ -63,19 +63,19 @@ function PigYieldRow({
       <td className="px-2 py-3 break-words">
         <span className="font-semibold text-gray-900">{item.categoria}</span>
       </td>
-      <td className="px-2 py-3 break-words text-gray-900">{item.agrupacioProduccio ?? "—"}</td>
+      <td className="px-2 py-3 break-words text-gray-900">{item.agrupacioProduccio ?? '—'}</td>
       <td className="px-2 py-3 text-right">
         <EditableCell
           value={draft.unitsPerPig}
           formatValue={formatUnits}
-          onChange={(value) => setField("unitsPerPig", value ?? 0)}
+          onChange={(value) => setField('unitsPerPig', value ?? 0)}
         />
       </td>
       <td className="px-2 py-3 text-right">
         <EditableCell
           value={draft.kgPerUnit}
           formatValue={formatKg}
-          onChange={(value) => setField("kgPerUnit", value ?? 0)}
+          onChange={(value) => setField('kgPerUnit', value ?? 0)}
         />
       </td>
       <td className="px-2 py-3 text-right">
@@ -90,10 +90,12 @@ function PigYieldRow({
             onClick={save}
             disabled={!isDirty || isSaving}
             className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-              isDirty && !isSaving ? "bg-ink text-white hover:opacity-90" : "cursor-not-allowed bg-gray-200 text-gray-400"
+              isDirty && !isSaving
+                ? 'bg-ink text-white hover:opacity-90'
+                : 'cursor-not-allowed bg-gray-200 text-gray-400'
             }`}
           >
-            {isSaving ? "Desant..." : "Desar"}
+            {isSaving ? 'Desant...' : 'Desar'}
           </button>
           <IconButton variant="delete" label="Suprimeix línia" onClick={() => onDelete(item)} />
         </div>
@@ -136,7 +138,7 @@ function PigYieldCard({
   return (
     <DataCard>
       <p className="font-semibold text-gray-900">{item.categoria}</p>
-      <p className="text-sm text-gray-500">{item.agrupacioProduccio ?? "—"}</p>
+      <p className="text-sm text-gray-500">{item.agrupacioProduccio ?? '—'}</p>
 
       <div className="mt-3 grid grid-cols-2 gap-3">
         <div>
@@ -144,7 +146,7 @@ function PigYieldCard({
           <EditableCell
             value={draft.unitsPerPig}
             formatValue={formatUnits}
-            onChange={(value) => setField("unitsPerPig", value ?? 0)}
+            onChange={(value) => setField('unitsPerPig', value ?? 0)}
           />
         </div>
         <div>
@@ -152,7 +154,7 @@ function PigYieldCard({
           <EditableCell
             value={draft.kgPerUnit}
             formatValue={formatKg}
-            onChange={(value) => setField("kgPerUnit", value ?? 0)}
+            onChange={(value) => setField('kgPerUnit', value ?? 0)}
           />
         </div>
       </div>
@@ -175,10 +177,12 @@ function PigYieldCard({
           onClick={save}
           disabled={!isDirty || isSaving}
           className={`flex-1 rounded-full px-3 py-2 text-sm font-semibold ${
-            isDirty && !isSaving ? "bg-ink text-white hover:opacity-90" : "cursor-not-allowed bg-gray-200 text-gray-400"
+            isDirty && !isSaving
+              ? 'bg-ink text-white hover:opacity-90'
+              : 'cursor-not-allowed bg-gray-200 text-gray-400'
           }`}
         >
-          {isSaving ? "Desant..." : "Desar"}
+          {isSaving ? 'Desant...' : 'Desar'}
         </button>
         <IconButton variant="delete" label="Suprimeix línia" onClick={() => onDelete(item)} />
       </DataCardActions>
@@ -188,8 +192,17 @@ function PigYieldCard({
 
 export default function PigYieldsPage() {
   const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORIES);
-  const { data, paginacio, setPagina, isLoading, error, refetch, createPigYield, updatePigYield, deletePigYield } =
-    usePigYields(categoryFilter === ALL_CATEGORIES ? {} : { categoria: categoryFilter });
+  const {
+    data,
+    paginacio,
+    setPagina,
+    isLoading,
+    error,
+    refetch,
+    createPigYield,
+    updatePigYield,
+    deletePigYield,
+  } = usePigYields(categoryFilter === ALL_CATEGORIES ? {} : { categoria: categoryFilter });
   // El filtre `?categoria=` és real i server-side (GET /rendiments-porcs,
   // confirmat amb curl) — les opcions del desplegable NO poden sortir de
   // `data`, perquè un cop filtrat `data` només conté el subconjunt triat i
@@ -203,7 +216,10 @@ export default function PigYieldsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const categoryOptions = useMemo(
-    () => [ALL_CATEGORIES, ...categories.filter((c) => c.agrupacioRendiment !== null).map((c) => c.nom)],
+    () => [
+      ALL_CATEGORIES,
+      ...categories.filter((c) => c.agrupacioRendiment !== null).map((c) => c.nom),
+    ],
     [categories],
   );
 
@@ -215,7 +231,9 @@ export default function PigYieldsPage() {
       await deletePigYield(pigYieldToDelete.id);
       setPigYieldToDelete(null);
     } catch (caught) {
-      setDeleteError(caught instanceof ApiError ? caught.message : "No s'ha pogut eliminar la línia.");
+      setDeleteError(
+        caught instanceof ApiError ? caught.message : "No s'ha pogut eliminar la línia.",
+      );
     } finally {
       setIsDeleting(false);
     }
@@ -227,7 +245,7 @@ export default function PigYieldsPage() {
         title="Rendiments Porcs"
         subtitle="Edita les cel·les i prem Desar a la fila per confirmar els canvis."
         action={{
-          label: "Nova línia",
+          label: 'Nova línia',
           icon: <Plus className="h-4 w-4" />,
           onClick: () => setIsModalOpen(true),
         }}
@@ -246,7 +264,9 @@ export default function PigYieldsPage() {
       {isLoading && <p className="text-sm text-gray-500">Carregant...</p>}
       {error && (
         <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-          <p className="text-sm text-red-600">No s&apos;han pogut carregar els rendiments: {error.message}</p>
+          <p className="text-sm text-red-600">
+            No s&apos;han pogut carregar els rendiments: {error.message}
+          </p>
           <button
             type="button"
             onClick={refetch}
@@ -259,17 +279,24 @@ export default function PigYieldsPage() {
 
       {!isLoading && !error && (
         <>
-          <div className="flex flex-col gap-3 xl:hidden">
+          <div className="flex flex-col gap-3 md:hidden">
             {data.map((item) => (
-              <PigYieldCard key={item.id} item={item} onSave={updatePigYield} onDelete={setPigYieldToDelete} />
+              <PigYieldCard
+                key={item.id}
+                item={item}
+                onSave={updatePigYield}
+                onDelete={setPigYieldToDelete}
+              />
             ))}
           </div>
 
-          <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white xl:block">
+          <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white md:block">
             <table className="w-full table-fixed text-sm">
               <thead className="border-b border-gray-200">
                 <tr>
-                  <th className="w-[14%] px-2 py-2 text-left font-medium text-gray-500 break-words">Categoria</th>
+                  <th className="w-[14%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                    Categoria
+                  </th>
                   <th className="w-[22%] px-2 py-2 text-left font-medium text-gray-500 break-words">
                     Agrupació Producció
                   </th>
@@ -279,13 +306,22 @@ export default function PigYieldsPage() {
                   <th className="w-[14%] px-2 py-2 text-right font-medium text-gray-500 break-words">
                     Kg per unitat
                   </th>
-                  <th className="w-[14%] px-2 py-2 text-right font-medium text-gray-500 break-words">Pes Total</th>
-                  <th className="w-[22%] px-2 py-2 text-right font-medium text-gray-500 break-words">Accions</th>
+                  <th className="w-[14%] px-2 py-2 text-right font-medium text-gray-500 break-words">
+                    Pes Total
+                  </th>
+                  <th className="w-[22%] px-2 py-2 text-right font-medium text-gray-500 break-words">
+                    Accions
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {data.map((item) => (
-                  <PigYieldRow key={item.id} item={item} onSave={updatePigYield} onDelete={setPigYieldToDelete} />
+                  <PigYieldRow
+                    key={item.id}
+                    item={item}
+                    onSave={updatePigYield}
+                    onDelete={setPigYieldToDelete}
+                  />
                 ))}
               </tbody>
             </table>
@@ -296,7 +332,7 @@ export default function PigYieldsPage() {
       )}
 
       <PigYieldFormModal
-        key={isModalOpen ? "open" : "closed"}
+        key={isModalOpen ? 'open' : 'closed'}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSave={async (values) => {
@@ -310,8 +346,8 @@ export default function PigYieldsPage() {
         title="Suprimeix línia"
         message={
           pigYieldToDelete
-            ? `Estàs segur que vols suprimir la línia "${pigYieldToDelete.categoria} · ${pigYieldToDelete.agrupacioProduccio ?? "—"}"? Aquesta acció no es pot desfer.`
-            : ""
+            ? `Estàs segur que vols suprimir la línia "${pigYieldToDelete.categoria} · ${pigYieldToDelete.agrupacioProduccio ?? '—'}"? Aquesta acció no es pot desfer.`
+            : ''
         }
         confirmLabel="Eliminar"
         cancelLabel="Cancel·lar"
