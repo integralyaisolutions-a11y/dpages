@@ -48,13 +48,28 @@ describe('API negoci — /productes (Postgres real, esquema aislado)', () => {
     await fastify.close();
   });
 
-  it('GET /productes?cerca= filtra por descripció', async () => {
-    const fastify = construirServidor();
-    const res = await fastify.inject({ method: 'GET', url: '/api/v1/productes?cerca=llom' });
+  it('GET /productes?cerca= exige coincidencia EXACTA de descripció, no substring', async () => {
+    // Regla 3.1 transversal (docs/especificacion-funcional-dpages.md):
+    // buscar "llom" no debe traer "Llom fresc de porc" ni "Llom sencer" —
+    // sólo una descripció idéntica (case-insensitive). Producto extra sólo
+    // para este test, no afecta el total=3 de más arriba (ya se verificó).
+    await entorn.poolTest.query(
+      `INSERT INTO producte (codi, descripcio, tipus) VALUES ('LLS01', 'Llom sencer', 'simple')`,
+    );
 
-    const cuerpo = cuerpoJson<RespostaPaginada<ProducteApi>>(res);
-    expect(cuerpo.dades).toHaveLength(1);
-    expect(cuerpo.dades[0]?.codi).toBe('LLF01');
+    const fastify = construirServidor();
+
+    const substring = await fastify.inject({ method: 'GET', url: '/api/v1/productes?cerca=llom' });
+    const cuerpoSubstring = cuerpoJson<RespostaPaginada<ProducteApi>>(substring);
+    expect(cuerpoSubstring.dades).toHaveLength(0);
+
+    const exacte = await fastify.inject({
+      method: 'GET',
+      url: '/api/v1/productes?cerca=LLOM FRESC DE PORC',
+    });
+    const cuerpoExacte = cuerpoJson<RespostaPaginada<ProducteApi>>(exacte);
+    expect(cuerpoExacte.dades).toHaveLength(1);
+    expect(cuerpoExacte.dades[0]?.codi).toBe('LLF01');
 
     await fastify.close();
   });

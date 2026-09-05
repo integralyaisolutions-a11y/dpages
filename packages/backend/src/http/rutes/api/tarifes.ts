@@ -32,10 +32,14 @@ export function registrarRutesTarifes(fastify: FastifyInstance): void {
       valors.push(categoriaUuid ?? '00000000-0000-0000-0000-000000000000');
     }
     if (typeof query.cerca === 'string' && query.cerca.trim() !== '') {
+      // Coincidencia EXACTA, no substring (regla 3.1 transversal —
+      // docs/especificacion-funcional-dpages.md): aplica también acá, la
+      // matriz de tarifas es una pantalla de búsqueda de producto. Mismo
+      // criterio que productes.ts y rendiments-porcs.ts.
       condicions.push(
-        `(p.descripcio ILIKE $${valors.length + 1} OR p.codi ILIKE $${valors.length + 1})`,
+        `(LOWER(p.descripcio) = LOWER($${valors.length + 1}) OR LOWER(p.codi) = LOWER($${valors.length + 1}))`,
       );
-      valors.push(`%${query.cerca.trim()}%`);
+      valors.push(query.cerca.trim());
     }
     const where = condicions.length > 0 ? `WHERE ${condicions.join(' AND ')}` : '';
 
