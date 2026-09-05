@@ -1,9 +1,23 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, type Paginacio, type RespostaPaginada, type TransportistaApi } from "@/lib/api";
+import { useCallback, useEffect, useState } from 'react';
+import {
+  api,
+  ApiError,
+  type Paginacio,
+  type RespostaPaginada,
+  type TransportistaApi,
+} from '@/lib/api';
 
-export type CarrierFormValues = Pick<TransportistaApi, "nom" | "codi">;
+// Decisió de negoci (acordada amb Gerardo): "codi" surt de la UI de
+// Transportistes per complet — ni es demana ni es mostra. El backend NO
+// canvia (POST/PATCH el segueixen acceptant com a opcional), però la
+// clau `codi` s'ha d'ometre del tot al body, no mandar-la com a `null`:
+// el PATCH real (transportistes.ts) fa `codi = CASE WHEN cos.codi !==
+// undefined THEN cos.codi ELSE codi END` — mandar `codi: null` esborraria
+// el codi d'un transportista que ja el tingués carregat d'abans d'aquest
+// canvi; ometre la clau el deixa intacte.
+export type CarrierFormValues = Pick<TransportistaApi, 'nom'>;
 
 /**
  * `mida` per defecte es manté a 200 (no 20): `useCarriers()` es fa servir
@@ -44,7 +58,7 @@ export function useCarriers(params: UseCarriersParams = {}): UseCarriersResult {
     setError(null);
 
     api
-      .get<RespostaPaginada<TransportistaApi>>("/transportistes", { mida, pagina })
+      .get<RespostaPaginada<TransportistaApi>>('/transportistes', { mida, pagina })
       .then((resposta) => {
         if (!cancelled) {
           setData(resposta.dades);
@@ -54,7 +68,9 @@ export function useCarriers(params: UseCarriersParams = {}): UseCarriersResult {
       .catch((caught) => {
         if (!cancelled) {
           setError(
-            caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
+            caught instanceof ApiError
+              ? caught
+              : new ApiError('ERROR_XARXA', 'Error desconegut.', null),
           );
         }
       })
@@ -73,7 +89,7 @@ export function useCarriers(params: UseCarriersParams = {}): UseCarriersResult {
   // devuelve la fila creada/editada, más simple re-pedir la lista.
   const createCarrier = useCallback(
     async (values: CarrierFormValues) => {
-      await api.post<TransportistaApi>("/transportistes", values);
+      await api.post<TransportistaApi>('/transportistes', values);
       refetch();
     },
     [refetch],
@@ -87,5 +103,15 @@ export function useCarriers(params: UseCarriersParams = {}): UseCarriersResult {
     [refetch],
   );
 
-  return { data, paginacio, pagina, setPagina, isLoading, error, refetch, createCarrier, editCarrier };
+  return {
+    data,
+    paginacio,
+    pagina,
+    setPagina,
+    isLoading,
+    error,
+    refetch,
+    createCarrier,
+    editCarrier,
+  };
 }

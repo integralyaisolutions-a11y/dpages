@@ -17,7 +17,6 @@ function CarrierCard({ carrier, onEdit }: { carrier: TransportistaApi; onEdit: (
 
       <div className="mt-3">
         <DataCardGrid>
-          <DataCardField label="Codi">{carrier.codi ?? '—'}</DataCardField>
           <DataCardField label="Actiu">{carrier.actiu ? 'Sí' : 'No'}</DataCardField>
         </DataCardGrid>
       </div>
@@ -45,7 +44,7 @@ export default function TransportistesPage() {
     carrier?: TransportistaApi;
   } | null>(null);
 
-  async function handleSave(values: { nom: string; codi: string | null }) {
+  async function handleSave(values: { nom: string }) {
     if (formState?.mode === 'edit' && formState.carrier) {
       await editCarrier(formState.carrier.id, values);
     } else {
@@ -98,11 +97,8 @@ export default function TransportistesPage() {
             <table className="w-full table-fixed text-sm">
               <thead className="border-b border-gray-200">
                 <tr>
-                  <th className="w-[45%] px-3 py-2 text-left font-medium text-gray-500 break-words">
+                  <th className="w-[70%] px-3 py-2 text-left font-medium text-gray-500 break-words">
                     Nom
-                  </th>
-                  <th className="w-[25%] px-3 py-2 text-left font-medium text-gray-500 break-words">
-                    Codi
                   </th>
                   <th className="w-[15%] px-3 py-2 text-left font-medium text-gray-500 break-words">
                     Actiu
@@ -118,7 +114,6 @@ export default function TransportistesPage() {
                     <td className="px-3 py-3 break-words">
                       <span className="font-semibold text-gray-900">{carrier.nom}</span>
                     </td>
-                    <td className="px-3 py-3 break-words text-gray-900">{carrier.codi ?? '—'}</td>
                     <td className="px-3 py-3 break-words text-gray-900">
                       {carrier.actiu ? 'Sí' : 'No'}
                     </td>
