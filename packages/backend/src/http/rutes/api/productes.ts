@@ -114,10 +114,14 @@ export function registrarRutesProductes(fastify: FastifyInstance): void {
       valors.push(query.agrupacioProduccio.trim());
     }
     if (typeof query.cerca === 'string' && query.cerca.trim() !== '') {
+      // Coincidencia EXACTA, no substring (regla 3.1 transversal —
+      // docs/especificacion-funcional-dpages.md): "lomo" no debe traer
+      // "cabeza de lomo". Case-insensitive, por eso LOWER() en vez de ILIKE
+      // — mismo criterio ya aplicado arriba a agrupacioProduccio.
       condicions.push(
-        `(p.descripcio ILIKE $${valors.length + 1} OR p.descripcio_venda ILIKE $${valors.length + 1} OR p.codi ILIKE $${valors.length + 1})`,
+        `(LOWER(p.descripcio) = LOWER($${valors.length + 1}) OR LOWER(p.descripcio_venda) = LOWER($${valors.length + 1}) OR LOWER(p.codi) = LOWER($${valors.length + 1}))`,
       );
-      valors.push(`%${query.cerca.trim()}%`);
+      valors.push(query.cerca.trim());
     }
 
     const where = condicions.length > 0 ? `WHERE ${condicions.join(' AND ')}` : '';
