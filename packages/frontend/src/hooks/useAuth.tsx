@@ -60,8 +60,16 @@ type AuthContextValue = {
   requestPasswordReset: (email: string) => Promise<PasswordResetResult>;
 };
 
+// handleCodeInApp: true — Firebase ja no mostra la seva pròpia pantalla
+// genèrica (hostejada a firebaseapp.com): redirigeix directe a la nostra
+// pàgina (`/action?mode=resetPassword&oobCode=...`), que és qui crida
+// verifyPasswordResetCode/confirmPasswordReset amb el SDK i, en acabar,
+// torna a portar acá mateix (/login?passwordReset=success — sense tocar).
+// Únic punt on es construeix per als 2 fluxos que controlem des del
+// client (oblidat / canviar des de perfil): tots dos criden
+// requestPasswordReset(), que és qui fa servir aquesta funció.
 function passwordResetActionCodeSettings() {
-  return { url: `${window.location.origin}/login?passwordReset=success`, handleCodeInApp: false };
+  return { url: `${window.location.origin}/action`, handleCodeInApp: true };
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);

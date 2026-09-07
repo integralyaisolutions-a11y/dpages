@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { usePathname } from 'next/navigation';
+import type { ReactNode } from 'react';
+import { Sidebar } from '@/components/layout/Sidebar';
 
-const FULL_SCREEN_ROUTES = ["/login"];
+const FULL_SCREEN_ROUTES = ['/login', '/action'];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
