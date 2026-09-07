@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from 'react';
 import {
   api,
   ApiError,
@@ -9,7 +9,7 @@ import {
   type PanellObradorApi,
   type TotalsPanellObradorApi,
   type TreballLiniaRespostaApi,
-} from "@/lib/api";
+} from '@/lib/api';
 
 /**
  * Els 4 filtres reals de GET /panells/obrador (contrato §4.7, confirmat
@@ -36,7 +36,11 @@ type UsePanellObradorResult = {
   isLoading: boolean;
   error: ApiError | null;
   refetch: () => void;
-  toggleTreball: (comandaId: number, liniaId: number, marcat: boolean) => Promise<ToggleTreballResult>;
+  toggleTreball: (
+    comandaId: number,
+    liniaId: number,
+    marcat: boolean,
+  ) => Promise<ToggleTreballResult>;
 };
 
 // Paginació real (20/pàgina). `totals` ve calculat pel backend sobre TOT
@@ -54,18 +58,27 @@ export function usePanellObrador(filters: WorkshopPanelFilters = {}): UsePanellO
   const [reloadToken, setReloadToken] = useState(0);
   const filtersKey = JSON.stringify(filters);
 
-  useEffect(() => {
+  // Ajustat durant el render (patró oficial de React per "adjusting state
+  // when a prop changes": https://react.dev/learn/you-might-not-need-an-effect),
+  // no en un efecte — mateix comportament que abans, sense el render
+  // intermedi amb la pàgina vella.
+  const [prevFiltersKey, setPrevFiltersKey] = useState(filtersKey);
+  if (filtersKey !== prevFiltersKey) {
+    setPrevFiltersKey(filtersKey);
     setPagina(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtersKey]);
+  }
 
   useEffect(() => {
     let cancelled = false;
+    // Fetch a un sistema extern (API): el reset síncron d'isLoading/error
+    // just abans de cridar-lo és el patró de React per a data fetching en
+    // efectes, no un valor derivable durant el render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     setError(null);
 
     api
-      .get<PanellObradorApi>("/panells/obrador", { mida: MIDA_PAGINA, pagina, ...filters })
+      .get<PanellObradorApi>('/panells/obrador', { mida: MIDA_PAGINA, pagina, ...filters })
       .then((resposta) => {
         if (!cancelled) {
           setData(resposta.dades);
@@ -75,7 +88,11 @@ export function usePanellObrador(filters: WorkshopPanelFilters = {}): UsePanellO
       })
       .catch((caught) => {
         if (!cancelled) {
-          setError(caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null));
+          setError(
+            caught instanceof ApiError
+              ? caught
+              : new ApiError('ERROR_XARXA', 'Error desconegut.', null),
+          );
         }
       })
       .finally(() => {

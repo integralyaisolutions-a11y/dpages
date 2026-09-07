@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, type CategoriaApi, type Paginacio, type RespostaPaginada } from "@/lib/api";
+import { useCallback, useEffect, useState } from 'react';
+import { api, ApiError, type CategoriaApi, type Paginacio, type RespostaPaginada } from '@/lib/api';
 
-export type CategoryFormValues = Pick<CategoriaApi, "nom" | "elaboratPorc" | "agrupacioRendiment">;
+export type CategoryFormValues = Pick<CategoriaApi, 'nom' | 'elaboratPorc' | 'agrupacioRendiment'>;
 
 /**
  * `mida` per defecte es manté a 200 (no 20): aquest hook no només alimenta
@@ -41,11 +41,15 @@ export function useCategories(params: UseCategoriesParams = {}): UseCategoriesRe
 
   useEffect(() => {
     let cancelled = false;
+    // Fetch a un sistema extern (API): el reset síncron d'isLoading/error
+    // just abans de cridar-lo és el patró de React per a data fetching en
+    // efectes, no un valor derivable durant el render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     setError(null);
 
     api
-      .get<RespostaPaginada<CategoriaApi>>("/categories", { mida, pagina })
+      .get<RespostaPaginada<CategoriaApi>>('/categories', { mida, pagina })
       .then((resposta) => {
         if (!cancelled) {
           setData(resposta.dades);
@@ -55,7 +59,9 @@ export function useCategories(params: UseCategoriesParams = {}): UseCategoriesRe
       .catch((caught) => {
         if (!cancelled) {
           setError(
-            caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
+            caught instanceof ApiError
+              ? caught
+              : new ApiError('ERROR_XARXA', 'Error desconegut.', null),
           );
         }
       })
@@ -75,7 +81,7 @@ export function useCategories(params: UseCategoriesParams = {}): UseCategoriesRe
   // más simple y confiable re-pedir la lista que reconstruirla a mano.
   const createCategory = useCallback(
     async (values: CategoryFormValues) => {
-      await api.post<CategoriaApi>("/categories", values);
+      await api.post<CategoriaApi>('/categories', values);
       refetch();
     },
     [refetch],
@@ -97,5 +103,16 @@ export function useCategories(params: UseCategoriesParams = {}): UseCategoriesRe
     [refetch],
   );
 
-  return { data, paginacio, pagina, setPagina, isLoading, error, refetch, createCategory, editCategory, deleteCategory };
+  return {
+    data,
+    paginacio,
+    pagina,
+    setPagina,
+    isLoading,
+    error,
+    refetch,
+    createCategory,
+    editCategory,
+    deleteCategory,
+  };
 }

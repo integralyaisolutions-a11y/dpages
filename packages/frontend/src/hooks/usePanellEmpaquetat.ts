@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from 'react';
 import {
   api,
   ApiError,
@@ -9,7 +9,7 @@ import {
   type Paginacio,
   type PanellEmpaquetatApi,
   type TotalsPanellEmpaquetatApi,
-} from "@/lib/api";
+} from '@/lib/api';
 
 /**
  * Els 5 filtres reals de GET /panells/empaquetat (confirmat contra
@@ -44,13 +44,19 @@ type UsePanellEmpaquetatResult = {
   isLoading: boolean;
   error: ApiError | null;
   refetch: () => void;
-  saveLliurament: (comandaId: number, liniaId: number, body: LliuramentBodyApi) => Promise<LliuramentSaveResult>;
+  saveLliurament: (
+    comandaId: number,
+    liniaId: number,
+    body: LliuramentBodyApi,
+  ) => Promise<LliuramentSaveResult>;
 };
 
 // Paginació real (20/pàgina), mateix criteri que usePanellOficina.ts/usePanellObrador.ts.
 const MIDA_PAGINA = 20;
 
-export function usePanellEmpaquetat(filters: PackagingPanelFilters = {}): UsePanellEmpaquetatResult {
+export function usePanellEmpaquetat(
+  filters: PackagingPanelFilters = {},
+): UsePanellEmpaquetatResult {
   const [data, setData] = useState<FilaPanellEmpaquetatApi[]>([]);
   const [totals, setTotals] = useState<TotalsPanellEmpaquetatApi | null>(null);
   const [paginacio, setPaginacio] = useState<Paginacio | null>(null);
@@ -60,18 +66,27 @@ export function usePanellEmpaquetat(filters: PackagingPanelFilters = {}): UsePan
   const [reloadToken, setReloadToken] = useState(0);
   const filtersKey = JSON.stringify(filters);
 
-  useEffect(() => {
+  // Ajustat durant el render (patró oficial de React per "adjusting state
+  // when a prop changes": https://react.dev/learn/you-might-not-need-an-effect),
+  // no en un efecte — mateix comportament que abans, sense el render
+  // intermedi amb la pàgina vella.
+  const [prevFiltersKey, setPrevFiltersKey] = useState(filtersKey);
+  if (filtersKey !== prevFiltersKey) {
+    setPrevFiltersKey(filtersKey);
     setPagina(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtersKey]);
+  }
 
   useEffect(() => {
     let cancelled = false;
+    // Fetch a un sistema extern (API): el reset síncron d'isLoading/error
+    // just abans de cridar-lo és el patró de React per a data fetching en
+    // efectes, no un valor derivable durant el render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     setError(null);
 
     api
-      .get<PanellEmpaquetatApi>("/panells/empaquetat", { mida: MIDA_PAGINA, pagina, ...filters })
+      .get<PanellEmpaquetatApi>('/panells/empaquetat', { mida: MIDA_PAGINA, pagina, ...filters })
       .then((resposta) => {
         if (!cancelled) {
           setData(resposta.dades);
@@ -81,7 +96,11 @@ export function usePanellEmpaquetat(filters: PackagingPanelFilters = {}): UsePan
       })
       .catch((caught) => {
         if (!cancelled) {
-          setError(caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null));
+          setError(
+            caught instanceof ApiError
+              ? caught
+              : new ApiError('ERROR_XARXA', 'Error desconegut.', null),
+          );
         }
       })
       .finally(() => {
@@ -97,7 +116,11 @@ export function usePanellEmpaquetat(filters: PackagingPanelFilters = {}): UsePan
   const refetch = () => setReloadToken((token) => token + 1);
 
   const saveLliurament = useCallback(
-    async (comandaId: number, liniaId: number, body: LliuramentBodyApi): Promise<LliuramentSaveResult> => {
+    async (
+      comandaId: number,
+      liniaId: number,
+      body: LliuramentBodyApi,
+    ): Promise<LliuramentSaveResult> => {
       try {
         await api.patch(`/comandes/${comandaId}/linies/${liniaId}/lliurament`, body);
         refetch();
@@ -112,7 +135,7 @@ export function usePanellEmpaquetat(filters: PackagingPanelFilters = {}): UsePan
             generalError: (caught.detalls?.length ?? 0) > 0 ? null : caught.message,
           };
         }
-        return { success: false, fieldErrors: {}, generalError: "Error desconegut." };
+        return { success: false, fieldErrors: {}, generalError: 'Error desconegut.' };
       }
     },
     [],

@@ -89,6 +89,10 @@ export default function OfficeOrderDetailPage() {
   // connectat.
   useEffect(() => {
     let cancelled = false;
+    // Fetch a un sistema extern (API): el reset síncron d'isLoading/error
+    // just abans de cridar-lo és el patró de React per a data fetching en
+    // efectes, no un valor derivable durant el render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     setLoadError(null);
 

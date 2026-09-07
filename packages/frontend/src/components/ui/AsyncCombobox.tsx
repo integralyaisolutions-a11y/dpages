@@ -80,6 +80,10 @@ export function AsyncCombobox({
   // local y "gratis" de llamar.
   useEffect(() => {
     if (!isEditing || query.trim() === '') {
+      // Sense text encara no hi ha res a cercar (ver comentari de dalt) —
+      // cal netejar un resultat d'una cerca anterior, no és un valor
+      // derivable durant el render.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOptions([]);
       setIsLoading(false);
       return;

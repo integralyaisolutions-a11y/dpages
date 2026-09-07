@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, type Paginacio, type RolApi } from "@/lib/api";
+import { useCallback, useEffect, useState } from 'react';
+import { api, ApiError, type Paginacio, type RolApi } from '@/lib/api';
 
 export type CreateRoleInput = { nom: string; modulsPermesos: string[] };
 export type EditRoleInput = Partial<{ nom: string; modulsPermesos: string[] }>;
@@ -34,11 +34,15 @@ export function useRols(): UseRolsResult {
 
   useEffect(() => {
     let cancelled = false;
+    // Fetch a un sistema extern (API): el reset síncron d'isLoading/error
+    // just abans de cridar-lo és el patró de React per a data fetching en
+    // efectes, no un valor derivable durant el render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     setError(null);
 
     api
-      .get<{ dades: RolApi[]; paginacio: Paginacio }>("/rols", { mida: MIDA_PAGINA, pagina })
+      .get<{ dades: RolApi[]; paginacio: Paginacio }>('/rols', { mida: MIDA_PAGINA, pagina })
       .then((resposta) => {
         if (!cancelled) {
           setData(resposta.dades);
@@ -47,7 +51,11 @@ export function useRols(): UseRolsResult {
       })
       .catch((caught) => {
         if (!cancelled) {
-          setError(caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null));
+          setError(
+            caught instanceof ApiError
+              ? caught
+              : new ApiError('ERROR_XARXA', 'Error desconegut.', null),
+          );
         }
       })
       .finally(() => {
@@ -63,7 +71,7 @@ export function useRols(): UseRolsResult {
 
   const createRole = useCallback(
     async (input: CreateRoleInput): Promise<RolApi> => {
-      const resposta = await api.post<RolApi>("/rols", input);
+      const resposta = await api.post<RolApi>('/rols', input);
       refetch();
       return resposta;
     },

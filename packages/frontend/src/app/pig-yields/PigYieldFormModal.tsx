@@ -1,15 +1,21 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import { DecimalInput } from "@/components/ui/DecimalInput";
-import { Modal } from "@/components/ui/Modal";
-import { SelectFilter } from "@/components/ui/SelectFilter";
-import { useCatalog } from "@/hooks/useCatalog";
-import { useCategories } from "@/hooks/useCategories";
-import { api, ApiError, type RendimentPorcApi, type RendimentPorcEntradaApi, type RespostaPaginada } from "@/lib/api";
-import { parseDecimalInput } from "@/lib/decimals";
+import { useEffect, useMemo, useState } from 'react';
+import { DecimalInput } from '@/components/ui/DecimalInput';
+import { Modal } from '@/components/ui/Modal';
+import { SelectFilter } from '@/components/ui/SelectFilter';
+import { useCatalog } from '@/hooks/useCatalog';
+import { useCategories } from '@/hooks/useCategories';
+import {
+  api,
+  ApiError,
+  type RendimentPorcApi,
+  type RendimentPorcEntradaApi,
+  type RespostaPaginada,
+} from '@/lib/api';
+import { parseDecimalInput } from '@/lib/decimals';
 
-const PLACEHOLDER = "Selecciona...";
+const PLACEHOLDER = 'Selecciona...';
 
 type FieldErrors = { producteId?: string; unitatsPerPorc?: string; kgPerUnitat?: string };
 
@@ -44,14 +50,17 @@ export function PigYieldFormModal({
   // Sólo les categories amb agrupacioRendiment definit poden tenir línies de
   // rendiment (el backend rebutja la resta amb 400 VALIDACIO) — el cascade
   // només ofereix des del principi el subconjunt vàlid.
-  const eligibleCategories = useMemo(() => categories.filter((c) => c.agrupacioRendiment !== null), [categories]);
+  const eligibleCategories = useMemo(
+    () => categories.filter((c) => c.agrupacioRendiment !== null),
+    [categories],
+  );
 
   const [agrupacioRendiment, setAgrupacioRendiment] = useState(PLACEHOLDER);
   const [categoria, setCategoria] = useState(PLACEHOLDER);
   const [agrupacioProduccio, setAgrupacioProduccio] = useState(PLACEHOLDER);
   const [productLabelValue, setProductLabelValue] = useState(PLACEHOLDER);
-  const [unitsPerPig, setUnitsPerPig] = useState("");
-  const [kgPerUnit, setKgPerUnit] = useState("");
+  const [unitsPerPig, setUnitsPerPig] = useState('');
+  const [kgPerUnit, setKgPerUnit] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -65,7 +74,9 @@ export function PigYieldFormModal({
     () => [
       PLACEHOLDER,
       ...eligibleCategories
-        .filter((c) => agrupacioRendiment === PLACEHOLDER || c.agrupacioRendiment === agrupacioRendiment)
+        .filter(
+          (c) => agrupacioRendiment === PLACEHOLDER || c.agrupacioRendiment === agrupacioRendiment,
+        )
         .map((c) => c.nom),
     ],
     [eligibleCategories, agrupacioRendiment],
@@ -78,7 +89,8 @@ export function PigYieldFormModal({
       products.filter((product) => {
         const cat = product.categoria ? categoriaByNom.get(product.categoria.nom) : undefined;
         if (!cat || cat.agrupacioRendiment === null) return false;
-        if (agrupacioRendiment !== PLACEHOLDER && cat.agrupacioRendiment !== agrupacioRendiment) return false;
+        if (agrupacioRendiment !== PLACEHOLDER && cat.agrupacioRendiment !== agrupacioRendiment)
+          return false;
         if (categoria !== PLACEHOLDER && product.categoria?.nom !== categoria) return false;
         return true;
       }),
@@ -100,14 +112,17 @@ export function PigYieldFormModal({
   const eligibleProducts = useMemo(
     () =>
       productsUpToCategoria.filter(
-        (product) => agrupacioProduccio === PLACEHOLDER || product.agrupacioProduccio === agrupacioProduccio,
+        (product) =>
+          agrupacioProduccio === PLACEHOLDER || product.agrupacioProduccio === agrupacioProduccio,
       ),
     [productsUpToCategoria, agrupacioProduccio],
   );
 
   const productOptions = useMemo(() => eligibleProducts.map(productLabel), [eligibleProducts]);
 
-  const selectedProduct = eligibleProducts.find((product) => productLabel(product) === productLabelValue);
+  const selectedProduct = eligibleProducts.find(
+    (product) => productLabel(product) === productLabelValue,
+  );
 
   // Advertència no bloquejant de duplicat: RendimentPorcApi (la resposta del
   // GET) NO porta producteId (es va treure a la capa 22 — ver la nota al
@@ -119,12 +134,16 @@ export function PigYieldFormModal({
 
   useEffect(() => {
     if (!selectedProduct) {
+      // Sense producte seleccionat no hi ha res a comprovar contra l'API
+      // (GET de sota) — cal netejar l'avís d'un producte triat abans, no
+      // és un valor derivable durant el render.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsDuplicate(false);
       return;
     }
     let cancelled = false;
     api
-      .get<RespostaPaginada<RendimentPorcApi>>("/rendiments-porcs", {
+      .get<RespostaPaginada<RendimentPorcApi>>('/rendiments-porcs', {
         producte: selectedProduct.descripcio,
         mida: 1,
       })
@@ -146,7 +165,7 @@ export function PigYieldFormModal({
 
   async function handleSave() {
     if (!selectedProduct) {
-      setFieldErrors({ producteId: "Selecciona un producte." });
+      setFieldErrors({ producteId: 'Selecciona un producte.' });
       return;
     }
     setFieldErrors({});
@@ -162,7 +181,11 @@ export function PigYieldFormModal({
       if (caught instanceof ApiError) {
         const nextFieldErrors: FieldErrors = {};
         for (const detall of caught.detalls ?? []) {
-          if (detall.camp === "producteId" || detall.camp === "unitatsPerPorc" || detall.camp === "kgPerUnitat") {
+          if (
+            detall.camp === 'producteId' ||
+            detall.camp === 'unitatsPerPorc' ||
+            detall.camp === 'kgPerUnitat'
+          ) {
             nextFieldErrors[detall.camp] = detall.missatge;
           }
         }
@@ -219,10 +242,13 @@ export function PigYieldFormModal({
             value={productLabelValue}
             onChange={setProductLabelValue}
           />
-          {fieldErrors.producteId && <p className="mt-1.5 text-xs text-red-600">{fieldErrors.producteId}</p>}
+          {fieldErrors.producteId && (
+            <p className="mt-1.5 text-xs text-red-600">{fieldErrors.producteId}</p>
+          )}
           {isDuplicate && (
             <p className="mt-1.5 text-xs text-amber-700">
-              Aquest producte ja té una línia de rendiment carregada. Pots continuar i desar-la igualment.
+              Aquest producte ja té una línia de rendiment carregada. Pots continuar i desar-la
+              igualment.
             </p>
           )}
         </div>
@@ -247,7 +273,11 @@ export function PigYieldFormModal({
         {formError && <p className="text-xs text-red-600">{formError}</p>}
       </div>
       <div className="mt-6 flex items-center justify-between">
-        <button type="button" onClick={onClose} className="text-sm font-medium text-gray-500 hover:text-gray-700">
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-sm font-medium text-gray-500 hover:text-gray-700"
+        >
           Cancel·lar
         </button>
         <button
@@ -256,7 +286,7 @@ export function PigYieldFormModal({
           disabled={isSaving}
           className="rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isSaving ? "Desant..." : "Desar"}
+          {isSaving ? 'Desant...' : 'Desar'}
         </button>
       </div>
     </Modal>

@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, type ClientApi, type Paginacio, type RespostaPaginada } from "@/lib/api";
+import { useCallback, useEffect, useState } from 'react';
+import { api, ApiError, type ClientApi, type Paginacio, type RespostaPaginada } from '@/lib/api';
 
 export type ClientFormValues = {
   nom: string;
@@ -51,18 +51,27 @@ export function useClientTariffs(
   const [reloadToken, setReloadToken] = useState(0);
   const filtersKey = JSON.stringify(filters);
 
-  useEffect(() => {
+  // Ajustat durant el render (patró oficial de React per "adjusting state
+  // when a prop changes": https://react.dev/learn/you-might-not-need-an-effect),
+  // no en un efecte — mateix comportament que abans, sense el render
+  // intermedi amb la pàgina vella.
+  const [prevFiltersKey, setPrevFiltersKey] = useState(filtersKey);
+  if (filtersKey !== prevFiltersKey) {
+    setPrevFiltersKey(filtersKey);
     setPagina(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtersKey]);
+  }
 
   useEffect(() => {
     let cancelled = false;
+    // Fetch a un sistema extern (API): el reset síncron d'isLoading/error
+    // just abans de cridar-lo és el patró de React per a data fetching en
+    // efectes, no un valor derivable durant el render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     setError(null);
 
     api
-      .get<RespostaPaginada<ClientApi>>("/clients", { mida, pagina, ...filters })
+      .get<RespostaPaginada<ClientApi>>('/clients', { mida, pagina, ...filters })
       .then((resposta) => {
         if (!cancelled) {
           setData(resposta.dades);
@@ -72,7 +81,9 @@ export function useClientTariffs(
       .catch((caught) => {
         if (!cancelled) {
           setError(
-            caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
+            caught instanceof ApiError
+              ? caught
+              : new ApiError('ERROR_XARXA', 'Error desconegut.', null),
           );
         }
       })
@@ -104,7 +115,7 @@ export function useClientTariffs(
         telefon: values.telefon,
       };
       if (values.tarifaId !== null) cos.tarifaId = values.tarifaId;
-      await api.post<ClientApi>("/clients", cos);
+      await api.post<ClientApi>('/clients', cos);
       refetch();
     },
     [refetch],
@@ -128,5 +139,15 @@ export function useClientTariffs(
     [refetch],
   );
 
-  return { data, paginacio, pagina, setPagina, isLoading, error, refetch, createClient, editClient };
+  return {
+    data,
+    paginacio,
+    pagina,
+    setPagina,
+    isLoading,
+    error,
+    refetch,
+    createClient,
+    editClient,
+  };
 }
