@@ -25,6 +25,16 @@ function clientLabel(client: ClientApi) {
   return `${client.codi ?? client.id} · ${client.nom ?? ''}`;
 }
 
+// "0" pla en comptes de "0.000"/"0.00" — mateix criteri que kgDemanats a
+// Comandes, evita que el cursor caigui enmig dels decimals en fer clic.
+// NOMÉS per a una línia encara NO confirmada (confirmatA === null): si ja
+// es va confirmar una entrega abans (encara que casualment fos zero per
+// una merma total), és un valor real ja resolt i es mostra tal qual, mai
+// simplificat.
+function initialDeliveredValue(value: string, confirmatA: string | null): string {
+  return confirmatA === null && Number(value) === 0 ? '0' : value;
+}
+
 // De sólo lectura — l'únic camí real per marcar-la és carregar unitats/kg i
 // Guardar (que confirma al backend, ver PATCH .../lliurament); aquest
 // checkbox només reflecteix confirmatA, mai el modifica. Mateix tractament
@@ -76,8 +86,8 @@ function PackagingRow({
   const [isSaving, setIsSaving] = useState(false);
 
   const initialValues: Draft = {
-    unitatsLliurades: line.unitatsLliurades,
-    kgLliurats: line.kgLliurats,
+    unitatsLliurades: initialDeliveredValue(line.unitatsLliurades, line.confirmatA),
+    kgLliurats: initialDeliveredValue(line.kgLliurats, line.confirmatA),
   };
 
   const { draft, setField, save, isDirty } = useEditableRow(initialValues, async (values) => {
@@ -181,8 +191,8 @@ function PackagingCard({
   const [isSaving, setIsSaving] = useState(false);
 
   const initialValues: Draft = {
-    unitatsLliurades: line.unitatsLliurades,
-    kgLliurats: line.kgLliurats,
+    unitatsLliurades: initialDeliveredValue(line.unitatsLliurades, line.confirmatA),
+    kgLliurats: initialDeliveredValue(line.kgLliurats, line.confirmatA),
   };
 
   const { draft, setField, save, isDirty } = useEditableRow(initialValues, async (values) => {

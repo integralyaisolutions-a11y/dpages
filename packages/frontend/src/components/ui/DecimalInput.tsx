@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { forwardRef } from "react";
+import { forwardRef } from 'react';
 
 /**
  * <input type="number"> nativo exige punt com a separador decimal sense
@@ -15,16 +15,18 @@ type DecimalInputProps = {
   label?: string;
   value: string;
   onChange: (value: string) => void;
+  /** Opcional: para formatear/redondear recién al perder el foco, nunca en cada tecla (ver Comandes, Pes demanat). */
+  onBlur?: () => void;
   error?: string;
   disabled?: boolean;
   className?: string;
 };
 
 const DEFAULT_CLASSNAME =
-  "w-full rounded-md border px-3 py-2 text-sm text-gray-900 focus:outline-none border-gray-300 focus:border-gray-400 disabled:bg-gray-50 disabled:text-gray-400";
+  'w-full rounded-md border px-3 py-2 text-sm text-gray-900 focus:outline-none border-gray-300 focus:border-gray-400 disabled:bg-gray-50 disabled:text-gray-400';
 
 export const DecimalInput = forwardRef<HTMLInputElement, DecimalInputProps>(function DecimalInput(
-  { label, value, onChange, error, disabled, className },
+  { label, value, onChange, onBlur, error, disabled, className },
   ref,
 ) {
   const input = (
@@ -32,12 +34,12 @@ export const DecimalInput = forwardRef<HTMLInputElement, DecimalInputProps>(func
       ref={ref}
       type="text"
       inputMode="decimal"
-      value={value.replace(".", ",")}
-      onChange={(event) => onChange(event.target.value.replace(",", "."))}
+      value={value.replace('.', ',')}
+      onChange={(event) => onChange(event.target.value.replace(',', '.'))}
+      onBlur={onBlur}
       disabled={disabled}
       className={
-        className ??
-        `${DEFAULT_CLASSNAME} ${error ? "border-red-400 focus:border-red-500" : ""}`
+        className ?? `${DEFAULT_CLASSNAME} ${error ? 'border-red-400 focus:border-red-500' : ''}`
       }
     />
   );

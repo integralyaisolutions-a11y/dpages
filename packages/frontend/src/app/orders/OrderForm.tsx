@@ -25,7 +25,7 @@ import {
   type TransportistaApi,
 } from '@/lib/api';
 import { origenBadgeVariant } from '@/lib/comandaOrigen';
-import { formatDecimal } from '@/lib/decimals';
+import { formatDecimal, parseDecimalInput } from '@/lib/decimals';
 import { calculateOrderedWeightKg } from '@/lib/orderCalculations';
 
 const NO_CLIENT = 'Selecciona client...';
@@ -120,7 +120,12 @@ function createEmptyLine(ordinal: number): LineDraft {
     format: null,
     envasat: null,
     unitatsDemanades: '0',
-    kgDemanats: '0.000',
+    // "0" pla, no "0.000": mateix criteri que unitatsDemanades — evita que
+    // el cursor caigui enmig dels decimals en fer clic (fricció original
+    // reportada per Francesc). Només afecta el default d'una línia nova
+    // "a mida" (kgEditable=true) — un producte amb pes de fitxa el
+    // sobreescriu de seguida amb el pes real calculat (ver applyProduct).
+    kgDemanats: '0',
     kgEditable: true,
     unitatsLliurades: '0',
     kgLliurats: '0.000',
@@ -374,7 +379,8 @@ function LineFormCard({
             <DecimalInput
               disabled={disabled}
               value={line.kgDemanats}
-              onChange={(value) => onUpdate({ kgDemanats: Number(value).toFixed(3) })}
+              onChange={(value) => onUpdate({ kgDemanats: value })}
+              onBlur={() => onUpdate({ kgDemanats: parseDecimalInput(line.kgDemanats, 3) })}
               className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
             />
           )}
@@ -990,8 +996,11 @@ export const OrderForm = forwardRef<
                         <DecimalInput
                           disabled={isFrozen}
                           value={line.kgDemanats}
-                          onChange={(value) =>
-                            updateLine(line.id, { kgDemanats: Number(value).toFixed(3) })
+                          onChange={(value) => updateLine(line.id, { kgDemanats: value })}
+                          onBlur={() =>
+                            updateLine(line.id, {
+                              kgDemanats: parseDecimalInput(line.kgDemanats, 3),
+                            })
                           }
                           className="w-full rounded-md border border-gray-300 px-1.5 py-1 text-right text-sm text-gray-900 focus:border-gray-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
                         />
