@@ -449,6 +449,10 @@ export const OrderForm = forwardRef<
   const [poblacioDesti, setPoblacioDesti] = useState(initialData?.poblacioDesti ?? '');
   const [tarifaId, setTarifaId] = useState<number | null>(initialData?.tarifa?.id ?? null);
   const [tariffTouched, setTariffTouched] = useState(false);
+  // Mateix patró que tariffTouched: un cop l'usuari edita "Població de
+  // destí" a mà, cap canvi de client posterior el torna a pisar en aquesta
+  // sessió del formulari.
+  const [poblacioTouched, setPoblacioTouched] = useState(false);
   const [transportistaId, setTransportistaId] = useState<number | null>(
     initialData?.transportista?.id ?? null,
   );
@@ -479,9 +483,14 @@ export const OrderForm = forwardRef<
 
   function handleClientChange(id: number | null) {
     setClientId(id);
+    const client = clients.find((item) => item.id === id);
     if (!tariffTouched) {
-      const client = clients.find((item) => item.id === id);
       setTarifaId(client?.tarifa?.id ?? null);
+    }
+    // La fitxa del client pot no tenir població informada — en aquest cas
+    // es deixa buit, mai undefined/error.
+    if (!poblacioTouched) {
+      setPoblacioDesti(client?.poblacio ?? '');
     }
   }
 
@@ -741,12 +750,31 @@ export const OrderForm = forwardRef<
               setTransportistaId(carrier?.id ?? null);
             }}
           />
+          {/* Decisió de negoci conscient (confirmada per Michelle): l'etiqueta
+              d'aquest camp és "Data comanda" NOMÉS acá, a Capçalera — l'estat
+              intern (dataProduccio) i el mapeig al backend (comanda.data_
+              produccio) NO canvien. Això reintrodueix a propòsit el mateix
+              xoc de noms que ja es va identificar i revertir en una sessió
+              anterior: "Data comanda" al llistat de Comandes i al Panell
+              d'Oficina és creat_en (data real d'alta del pedido) — un camp
+              totalment diferent. Es fa així per distingir-lo del camp "Data
+              producció" de Línies (ver línia ~865 i ~319), que sí es diu
+              "Data producció" tal qual. Si algun dia sembla un error, NO HO
+              és — no "corregir-ho" sense tornar a llegir aquest comentari. */}
           <TextField
-            label="Data producció"
+            label="Data comanda"
             type="date"
             disabled={isFrozen}
             value={dataProduccio}
             onChange={(event) => setDataProduccio(event.target.value)}
+          />
+          <TextField
+            label="Data expedició"
+            type="date"
+            disabled={isFrozen}
+            value={dataExpedicio}
+            onChange={(event) => setDataExpedicio(event.target.value)}
+            error={headerDateErrors.dataExpedicio}
           />
           <TextField
             label="Data lliurament"
@@ -755,15 +783,6 @@ export const OrderForm = forwardRef<
             value={dataLliurament}
             onChange={(event) => setDataLliurament(event.target.value)}
             error={headerDateErrors.dataLliurament}
-          />
-
-          <TextField
-            label="Data expedició"
-            type="date"
-            disabled={isFrozen}
-            value={dataExpedicio}
-            onChange={(event) => setDataExpedicio(event.target.value)}
-            error={headerDateErrors.dataExpedicio}
           />
           <TextField
             label="Núm. bultos"
@@ -776,7 +795,10 @@ export const OrderForm = forwardRef<
             label="Població de destí"
             disabled={isFrozen}
             value={poblacioDesti}
-            onChange={(event) => setPoblacioDesti(event.target.value)}
+            onChange={(event) => {
+              setPoblacioTouched(true);
+              setPoblacioDesti(event.target.value);
+            }}
           />
         </div>
 
