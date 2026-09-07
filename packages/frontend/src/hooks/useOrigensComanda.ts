@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { api, ApiError, type OrigenComandaApi, type RespostaPaginada } from "@/lib/api";
+import { useEffect, useState } from 'react';
+import { api, ApiError, type OrigenComandaApi, type RespostaPaginada } from '@/lib/api';
 
 // Volum real: 5 files fixes (woocommerce/manual/whatsapp/telefon/correu,
 // capa 43) — molt per sota del màxim de pàgina (200), sense cap pantalla
@@ -22,18 +22,24 @@ export function useOrigensComanda(): UseOrigensComandaResult {
 
   useEffect(() => {
     let cancelled = false;
+    // Fetch a un sistema extern (API): el reset síncron d'isLoading/error
+    // just abans de cridar-lo és el patró de React per a data fetching en
+    // efectes, no un valor derivable durant el render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     setError(null);
 
     api
-      .get<RespostaPaginada<OrigenComandaApi>>("/origens-comanda", { mida: MIDA_LLISTAT })
+      .get<RespostaPaginada<OrigenComandaApi>>('/origens-comanda', { mida: MIDA_LLISTAT })
       .then((resposta) => {
         if (!cancelled) setData(resposta.dades);
       })
       .catch((caught) => {
         if (!cancelled) {
           setError(
-            caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
+            caught instanceof ApiError
+              ? caught
+              : new ApiError('ERROR_XARXA', 'Error desconegut.', null),
           );
         }
       })

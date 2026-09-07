@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, type Paginacio, type ProducteApi, type RespostaPaginada } from "@/lib/api";
+import { useCallback, useEffect, useState } from 'react';
+import { api, ApiError, type Paginacio, type ProducteApi, type RespostaPaginada } from '@/lib/api';
 
 export type ProductFormValues = {
   codi: string | null;
@@ -9,8 +9,8 @@ export type ProductFormValues = {
   descripcioVenda: string | null;
   categoriaId: number | null;
   agrupacioProduccio: string | null;
-  format: ProducteApi["format"];
-  envasat: ProducteApi["envasat"];
+  format: ProducteApi['format'];
+  envasat: ProducteApi['envasat'];
   pesKg: string | null;
   preuVenda: string | null;
   actiu: boolean;
@@ -43,7 +43,10 @@ type UseCatalogResult = {
 
 const MIDA_PER_DEFECTE = 200;
 
-export function useCatalog(filters: CatalogFilters = {}, params: UseCatalogParams = {}): UseCatalogResult {
+export function useCatalog(
+  filters: CatalogFilters = {},
+  params: UseCatalogParams = {},
+): UseCatalogResult {
   const { mida = MIDA_PER_DEFECTE } = params;
   const [data, setData] = useState<ProducteApi[]>([]);
   const [paginacio, setPaginacio] = useState<Paginacio | null>(null);
@@ -54,19 +57,29 @@ export function useCatalog(filters: CatalogFilters = {}, params: UseCatalogParam
   const filtersKey = JSON.stringify(filters);
 
   // Un canvi de cerca torna a la pàgina 1 — evita quedar-se en una pàgina
-  // que ja no existeix pel nou resultat filtrat.
-  useEffect(() => {
+  // que ja no existeix pel nou resultat filtrat. Ajustat durant el render
+  // (patró oficial de React per "adjusting state when a prop changes":
+  // https://react.dev/learn/you-might-not-need-an-effect), no en un
+  // efecte — mateix comportament, sense el render intermedi amb la pàgina
+  // vella que l'efecte anterior deixava passar abans de corregir-se sol.
+  const [prevFiltersKey, setPrevFiltersKey] = useState(filtersKey);
+  if (filtersKey !== prevFiltersKey) {
+    setPrevFiltersKey(filtersKey);
     setPagina(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtersKey]);
+  }
 
   useEffect(() => {
     let cancelled = false;
+    // Fetch a un sistema extern (API): el reset síncron d'isLoading/error
+    // just abans de cridar-lo és el patró de React per a data fetching en
+    // efectes (mateix link de dalt, secció "Fetching data"), no un valor
+    // derivable durant el render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     setError(null);
 
     api
-      .get<RespostaPaginada<ProducteApi>>("/productes", { mida, pagina, ...filters })
+      .get<RespostaPaginada<ProducteApi>>('/productes', { mida, pagina, ...filters })
       .then((resposta) => {
         if (!cancelled) {
           setData(resposta.dades);
@@ -76,7 +89,9 @@ export function useCatalog(filters: CatalogFilters = {}, params: UseCatalogParam
       .catch((caught) => {
         if (!cancelled) {
           setError(
-            caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
+            caught instanceof ApiError
+              ? caught
+              : new ApiError('ERROR_XARXA', 'Error desconegut.', null),
           );
         }
       })
@@ -112,7 +127,7 @@ export function useCatalog(filters: CatalogFilters = {}, params: UseCatalogParam
   // Sin edición optimista, mismo criterio que useCategories.ts: refetch tras mutación.
   const createProduct = useCallback(
     async (values: ProductFormValues) => {
-      await api.post<ProducteApi>("/productes", aCosApi(values));
+      await api.post<ProducteApi>('/productes', aCosApi(values));
       refetch();
     },
     [refetch],
@@ -126,5 +141,15 @@ export function useCatalog(filters: CatalogFilters = {}, params: UseCatalogParam
     [refetch],
   );
 
-  return { data, paginacio, pagina, setPagina, isLoading, error, refetch, createProduct, editProduct };
+  return {
+    data,
+    paginacio,
+    pagina,
+    setPagina,
+    isLoading,
+    error,
+    refetch,
+    createProduct,
+    editProduct,
+  };
 }

@@ -1,11 +1,16 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, type FilaMatriuTarifesApi, type Paginacio, type TarifaResumApi } from "@/lib/api";
+import { useCallback, useEffect, useState } from 'react';
+import {
+  api,
+  ApiError,
+  type FilaMatriuTarifesApi,
+  type Paginacio,
+  type TarifaResumApi,
+} from '@/lib/api';
 
 export type CellSaveResult =
-  | { tarifaId: string; success: true }
-  | { tarifaId: string; success: false; error: ApiError };
+  { tarifaId: string; success: true } | { tarifaId: string; success: false; error: ApiError };
 
 export type RatesFilters = { cerca?: string };
 
@@ -45,20 +50,29 @@ export function useRates(filters: RatesFilters = {}): UseRatesResult {
   const filtersKey = JSON.stringify(filters);
 
   // Un canvi de filtre (cerca) torna a la pàgina 1 — evita quedar-se en una
-  // pàgina que ja no existeix pel nou resultat filtrat.
-  useEffect(() => {
+  // pàgina que ja no existeix pel nou resultat filtrat. Ajustat durant el
+  // render (patró oficial de React per "adjusting state when a prop
+  // changes": https://react.dev/learn/you-might-not-need-an-effect), no
+  // en un efecte — mateix comportament, sense el render intermedi amb la
+  // pàgina vella.
+  const [prevFiltersKey, setPrevFiltersKey] = useState(filtersKey);
+  if (filtersKey !== prevFiltersKey) {
+    setPrevFiltersKey(filtersKey);
     setPagina(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtersKey]);
+  }
 
   useEffect(() => {
     let cancelled = false;
+    // Fetch a un sistema extern (API): el reset síncron d'isLoading/error
+    // just abans de cridar-lo és el patró de React per a data fetching en
+    // efectes, no un valor derivable durant el render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     setError(null);
 
     api
       .get<{ tarifes: TarifaResumApi[]; dades: FilaMatriuTarifesApi[]; paginacio: Paginacio }>(
-        "/tarifes/matriu",
+        '/tarifes/matriu',
         { mida: MIDA_PAGINA, pagina, ...filters },
       )
       .then((resposta) => {
@@ -71,7 +85,9 @@ export function useRates(filters: RatesFilters = {}): UseRatesResult {
       .catch((caught) => {
         if (!cancelled) {
           setError(
-            caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
+            caught instanceof ApiError
+              ? caught
+              : new ApiError('ERROR_XARXA', 'Error desconegut.', null),
           );
         }
       })
@@ -99,18 +115,23 @@ export function useRates(filters: RatesFilters = {}): UseRatesResult {
       changes: Record<string, string>,
       deletions: string[],
     ): Promise<CellSaveResult[]> => {
-      const patches = Object.entries(changes).map(async ([tarifaId, preu]): Promise<CellSaveResult> => {
-        try {
-          await api.patch(`/tarifes/${tarifaId}/preus/${producteId}`, { preu });
-          return { tarifaId, success: true };
-        } catch (caught) {
-          return {
-            tarifaId,
-            success: false,
-            error: caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
-          };
-        }
-      });
+      const patches = Object.entries(changes).map(
+        async ([tarifaId, preu]): Promise<CellSaveResult> => {
+          try {
+            await api.patch(`/tarifes/${tarifaId}/preus/${producteId}`, { preu });
+            return { tarifaId, success: true };
+          } catch (caught) {
+            return {
+              tarifaId,
+              success: false,
+              error:
+                caught instanceof ApiError
+                  ? caught
+                  : new ApiError('ERROR_XARXA', 'Error desconegut.', null),
+            };
+          }
+        },
+      );
       const deletes = deletions.map(async (tarifaId): Promise<CellSaveResult> => {
         try {
           await api.delete(`/tarifes/${tarifaId}/preus/${producteId}`);
@@ -119,7 +140,10 @@ export function useRates(filters: RatesFilters = {}): UseRatesResult {
           return {
             tarifaId,
             success: false,
-            error: caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
+            error:
+              caught instanceof ApiError
+                ? caught
+                : new ApiError('ERROR_XARXA', 'Error desconegut.', null),
           };
         }
       });
@@ -134,11 +158,22 @@ export function useRates(filters: RatesFilters = {}): UseRatesResult {
   // para que la columna nueva aparezca con sus celdas inicializadas en null.
   const createTariff = useCallback(
     async (codi: string, nom: string) => {
-      await api.post<TarifaResumApi>("/tarifes", { codi, nom });
+      await api.post<TarifaResumApi>('/tarifes', { codi, nom });
       refetch();
     },
     [refetch],
   );
 
-  return { data, tariffColumns, paginacio, pagina, setPagina, isLoading, error, refetch, savePrices, createTariff };
+  return {
+    data,
+    tariffColumns,
+    paginacio,
+    pagina,
+    setPagina,
+    isLoading,
+    error,
+    refetch,
+    savePrices,
+    createTariff,
+  };
 }

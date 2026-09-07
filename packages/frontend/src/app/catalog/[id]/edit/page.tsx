@@ -1,12 +1,11 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { useCatalog, type ProductFormValues } from "@/hooks/useCatalog";
-import { api, ApiError, type ProducteApi } from "@/lib/api";
-import { ProductForm } from "../../ProductForm";
-
+import { useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { useCatalog, type ProductFormValues } from '@/hooks/useCatalog';
+import { api, ApiError, type ProducteApi } from '@/lib/api';
+import { ProductForm } from '../../ProductForm';
 
 export default function EditProductPage() {
   const router = useRouter();
@@ -22,6 +21,10 @@ export default function EditProductPage() {
   // articles reals no en tenen) i no és un identificador fiable per a rutar.
   useEffect(() => {
     let cancelled = false;
+    // Fetch a un sistema extern (API): el reset síncron d'isLoading/error
+    // just abans de cridar-lo és el patró de React per a data fetching en
+    // efectes, no un valor derivable durant el render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     setError(null);
 
@@ -33,7 +36,9 @@ export default function EditProductPage() {
       .catch((caught) => {
         if (!cancelled) {
           setError(
-            caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
+            caught instanceof ApiError
+              ? caught
+              : new ApiError('ERROR_XARXA', 'Error desconegut.', null),
           );
         }
       })
@@ -49,7 +54,7 @@ export default function EditProductPage() {
   async function handleSave(values: ProductFormValues) {
     if (!product) return;
     await editProduct(product.id, values);
-    router.push("/catalog");
+    router.push('/catalog');
   }
 
   return (
@@ -58,7 +63,9 @@ export default function EditProductPage() {
       {isLoading && <p className="text-sm text-gray-500">Carregant...</p>}
       {error && (
         <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-          <p className="text-sm text-red-600">No s&apos;ha pogut carregar el producte: {error.message}</p>
+          <p className="text-sm text-red-600">
+            No s&apos;ha pogut carregar el producte: {error.message}
+          </p>
           <button
             type="button"
             onClick={() => setReloadToken((token) => token + 1)}
@@ -68,7 +75,13 @@ export default function EditProductPage() {
           </button>
         </div>
       )}
-      {product && <ProductForm initialData={product} onSave={handleSave} onCancel={() => router.push("/catalog")} />}
+      {product && (
+        <ProductForm
+          initialData={product}
+          onSave={handleSave}
+          onCancel={() => router.push('/catalog')}
+        />
+      )}
     </div>
   );
 }

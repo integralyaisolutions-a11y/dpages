@@ -1,7 +1,13 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { api, ApiError, type Paginacio, type PanellProduccioApi, type PanellProduccioFilaApi } from "@/lib/api";
+import { useEffect, useState } from 'react';
+import {
+  api,
+  ApiError,
+  type Paginacio,
+  type PanellProduccioApi,
+  type PanellProduccioFilaApi,
+} from '@/lib/api';
 
 /**
  * Els filtres reals de GET /panells/produccio (confirmat contra
@@ -20,7 +26,7 @@ export type ProductionPanelFilters = {
 
 type UseProductionPanellResult = {
   data: PanellProduccioFilaApi[];
-  totals: PanellProduccioApi["totals"] | null;
+  totals: PanellProduccioApi['totals'] | null;
   paginacio: Paginacio | null;
   pagina: number;
   setPagina: (pagina: number) => void;
@@ -39,7 +45,7 @@ const MIDA_PAGINA = 20;
 
 export function useProductionPanell(filters: ProductionPanelFilters): UseProductionPanellResult {
   const [data, setData] = useState<PanellProduccioFilaApi[]>([]);
-  const [totals, setTotals] = useState<PanellProduccioApi["totals"] | null>(null);
+  const [totals, setTotals] = useState<PanellProduccioApi['totals'] | null>(null);
   const [paginacio, setPaginacio] = useState<Paginacio | null>(null);
   const [pagina, setPagina] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -49,13 +55,24 @@ export function useProductionPanell(filters: ProductionPanelFilters): UseProduct
   const isReady = filters.nombrePorcs !== null && filters.nombrePorcs > 0;
   const filtersKey = JSON.stringify(filters);
 
-  useEffect(() => {
+  // Ajustat durant el render (patró oficial de React per "adjusting state
+  // when a prop changes": https://react.dev/learn/you-might-not-need-an-effect),
+  // no en un efecte — mateix comportament que abans, sense el render
+  // intermedi amb la pàgina vella.
+  const [prevFiltersKey, setPrevFiltersKey] = useState(filtersKey);
+  if (filtersKey !== prevFiltersKey) {
+    setPrevFiltersKey(filtersKey);
     setPagina(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtersKey]);
+  }
 
   useEffect(() => {
     if (!isReady) {
+      // Sense nombrePorcs encara no hi ha res a demanar al backend (400
+      // segur) — buidar l'estat és necessari perquè la pantalla no mostri
+      // dades d'un filtre anterior mentre `isReady` és fals, no un valor
+      // derivable durant el render (canviaria què queda retingut
+      // internament si `isReady` torna a ser cert després).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setData([]);
       setTotals(null);
       setPaginacio(null);
@@ -70,7 +87,12 @@ export function useProductionPanell(filters: ProductionPanelFilters): UseProduct
 
     const { nombrePorcs, ...rest } = filters;
     api
-      .get<PanellProduccioApi>("/panells/produccio", { mida: MIDA_PAGINA, pagina, nombrePorcs: nombrePorcs!, ...rest })
+      .get<PanellProduccioApi>('/panells/produccio', {
+        mida: MIDA_PAGINA,
+        pagina,
+        nombrePorcs: nombrePorcs!,
+        ...rest,
+      })
       .then((resposta) => {
         if (!cancelled) {
           setData(resposta.dades);
@@ -80,7 +102,11 @@ export function useProductionPanell(filters: ProductionPanelFilters): UseProduct
       })
       .catch((caught) => {
         if (!cancelled) {
-          setError(caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null));
+          setError(
+            caught instanceof ApiError
+              ? caught
+              : new ApiError('ERROR_XARXA', 'Error desconegut.', null),
+          );
         }
       })
       .finally(() => {

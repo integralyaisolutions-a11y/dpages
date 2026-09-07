@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 import {
   api,
   ApiError,
@@ -8,7 +8,7 @@ import {
   type Paginacio,
   type PanellOficinaApi,
   type TotalsPanellOficinaApi,
-} from "@/lib/api";
+} from '@/lib/api';
 
 /**
  * Els 8 filtres reals de GET /panells/oficina (contrato §4.6, confirmat
@@ -54,18 +54,27 @@ export function usePanellOficina(filters: OfficePanelFilters = {}): UsePanellOfi
   const [reloadToken, setReloadToken] = useState(0);
   const filtersKey = JSON.stringify(filters);
 
-  useEffect(() => {
+  // Ajustat durant el render (patró oficial de React per "adjusting state
+  // when a prop changes": https://react.dev/learn/you-might-not-need-an-effect),
+  // no en un efecte — mateix comportament que abans, sense el render
+  // intermedi amb la pàgina vella.
+  const [prevFiltersKey, setPrevFiltersKey] = useState(filtersKey);
+  if (filtersKey !== prevFiltersKey) {
+    setPrevFiltersKey(filtersKey);
     setPagina(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtersKey]);
+  }
 
   useEffect(() => {
     let cancelled = false;
+    // Fetch a un sistema extern (API): el reset síncron d'isLoading/error
+    // just abans de cridar-lo és el patró de React per a data fetching en
+    // efectes, no un valor derivable durant el render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     setError(null);
 
     api
-      .get<PanellOficinaApi>("/panells/oficina", { mida: MIDA_PAGINA, pagina, ...filters })
+      .get<PanellOficinaApi>('/panells/oficina', { mida: MIDA_PAGINA, pagina, ...filters })
       .then((resposta) => {
         if (!cancelled) {
           setData(resposta.dades);
@@ -75,7 +84,11 @@ export function usePanellOficina(filters: OfficePanelFilters = {}): UsePanellOfi
       })
       .catch((caught) => {
         if (!cancelled) {
-          setError(caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null));
+          setError(
+            caught instanceof ApiError
+              ? caught
+              : new ApiError('ERROR_XARXA', 'Error desconegut.', null),
+          );
         }
       })
       .finally(() => {

@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from 'react';
 import {
   api,
   ApiError,
@@ -8,7 +8,7 @@ import {
   type RespostaPaginada,
   type UsuariApi,
   type UsuariCreatRespostaApi,
-} from "@/lib/api";
+} from '@/lib/api';
 
 export type UserFilters = {
   actiu?: boolean;
@@ -44,18 +44,27 @@ export function useUsers(filters: UserFilters = {}): UseUsersResult {
   const [reloadToken, setReloadToken] = useState(0);
   const filtersKey = JSON.stringify(filters);
 
-  useEffect(() => {
+  // Ajustat durant el render (patró oficial de React per "adjusting state
+  // when a prop changes": https://react.dev/learn/you-might-not-need-an-effect),
+  // no en un efecte — mateix comportament que abans, sense el render
+  // intermedi amb la pàgina vella.
+  const [prevFiltersKey, setPrevFiltersKey] = useState(filtersKey);
+  if (filtersKey !== prevFiltersKey) {
+    setPrevFiltersKey(filtersKey);
     setPagina(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtersKey]);
+  }
 
   useEffect(() => {
     let cancelled = false;
+    // Fetch a un sistema extern (API): el reset síncron d'isLoading/error
+    // just abans de cridar-lo és el patró de React per a data fetching en
+    // efectes, no un valor derivable durant el render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     setError(null);
 
     api
-      .get<RespostaPaginada<UsuariApi>>("/usuaris", { mida: MIDA_PAGINA, pagina, ...filters })
+      .get<RespostaPaginada<UsuariApi>>('/usuaris', { mida: MIDA_PAGINA, pagina, ...filters })
       .then((resposta) => {
         if (!cancelled) {
           setData(resposta.dades);
@@ -64,7 +73,11 @@ export function useUsers(filters: UserFilters = {}): UseUsersResult {
       })
       .catch((caught) => {
         if (!cancelled) {
-          setError(caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null));
+          setError(
+            caught instanceof ApiError
+              ? caught
+              : new ApiError('ERROR_XARXA', 'Error desconegut.', null),
+          );
         }
       })
       .finally(() => {
@@ -84,7 +97,7 @@ export function useUsers(filters: UserFilters = {}): UseUsersResult {
   // criteri que ProductForm.tsx/PigYieldFormModal.tsx, sin envoltori acá.
   const createUser = useCallback(
     async (input: CreateUserInput): Promise<UsuariCreatRespostaApi> => {
-      const resposta = await api.post<UsuariCreatRespostaApi>("/usuaris", input);
+      const resposta = await api.post<UsuariCreatRespostaApi>('/usuaris', input);
       refetch();
       return resposta;
     },

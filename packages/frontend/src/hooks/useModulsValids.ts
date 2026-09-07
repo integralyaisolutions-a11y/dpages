@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { api, ApiError } from "@/lib/api";
+import { useEffect, useState } from 'react';
+import { api, ApiError } from '@/lib/api';
 
 /**
  * Capa 44 — `GET /rols/moduls-valids` expone la MISMA constante que valida
@@ -24,18 +24,24 @@ export function useModulsValids(): UseModulsValidsResult {
 
   useEffect(() => {
     let cancelled = false;
+    // Fetch a un sistema extern (API): el reset síncron d'isLoading/error
+    // just abans de cridar-lo és el patró de React per a data fetching en
+    // efectes, no un valor derivable durant el render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     setError(null);
 
     api
-      .get<{ dades: string[] }>("/rols/moduls-valids")
+      .get<{ dades: string[] }>('/rols/moduls-valids')
       .then((resposta) => {
         if (!cancelled) setData(resposta.dades);
       })
       .catch((caught) => {
         if (!cancelled) {
           setError(
-            caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
+            caught instanceof ApiError
+              ? caught
+              : new ApiError('ERROR_XARXA', 'Error desconegut.', null),
           );
         }
       })

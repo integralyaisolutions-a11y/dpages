@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from 'react';
 import {
   api,
   ApiError,
@@ -11,7 +11,7 @@ import {
   type LiniaEdicioApi,
   type Paginacio,
   type RespostaPaginada,
-} from "@/lib/api";
+} from '@/lib/api';
 
 export type OrderListFilters = {
   estat?: string;
@@ -83,8 +83,10 @@ export type OrderLineChanges = {
 function esErrorCoherenciaDates(caught: ApiError): boolean {
   const camp = caught.detalls?.[0]?.camp;
   return (
-    caught.codi === "VALIDACIO" &&
-    (camp === "dataLliurament" || camp === "dataExpedicio" || (camp?.startsWith("linies[") ?? false))
+    caught.codi === 'VALIDACIO' &&
+    (camp === 'dataLliurament' ||
+      camp === 'dataExpedicio' ||
+      (camp?.startsWith('linies[') ?? false))
   );
 }
 
@@ -106,7 +108,9 @@ type UseOrdersResult = {
   isLoading: boolean;
   error: ApiError | null;
   refetch: () => void;
-  createOrder: (values: OrderFormValues) => Promise<{ order: ComandaDetallApi; patchError: ApiError | null }>;
+  createOrder: (
+    values: OrderFormValues,
+  ) => Promise<{ order: ComandaDetallApi; patchError: ApiError | null }>;
   editOrder: (id: number, values: OrderFormValues) => Promise<void>;
   deleteLine: (comandaId: number, liniaId: number) => Promise<void>;
   /** Capa 31 — PATCH { estat: "amb_incidencia", detall }. `detall` és obligatori (400 si arriba buit). */
@@ -114,7 +118,11 @@ type UseOrdersResult = {
   /** Capa 30 — POST /comandes/:comandaId/linies. */
   addLine: (comandaId: number, linia: LiniaCreacioApi) => Promise<ComandaDetallApi>;
   /** Capa 30 — PATCH /comandes/:comandaId/linies/:liniaId. */
-  editLine: (comandaId: number, liniaId: number, patch: LiniaEdicioApi) => Promise<ComandaDetallApi>;
+  editLine: (
+    comandaId: number,
+    liniaId: number,
+    patch: LiniaEdicioApi,
+  ) => Promise<ComandaDetallApi>;
 };
 
 // Paginació real (20/pàgina) — a diferència de catálogos/categorías/
@@ -133,19 +141,32 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
   const filtersKey = JSON.stringify(filters);
 
   // Un canvi de filtre torna a la pàgina 1 — evita quedar-se en una pàgina
-  // que ja no existeix pel nou resultat filtrat.
-  useEffect(() => {
+  // que ja no existeix pel nou resultat filtrat. Ajustat durant el render
+  // (patró oficial de React per "adjusting state when a prop changes":
+  // https://react.dev/learn/you-might-not-need-an-effect), no en un
+  // efecte — mateix comportament, sense el render intermedi amb la pàgina
+  // vella.
+  const [prevFiltersKey, setPrevFiltersKey] = useState(filtersKey);
+  if (filtersKey !== prevFiltersKey) {
+    setPrevFiltersKey(filtersKey);
     setPagina(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtersKey]);
+  }
 
   useEffect(() => {
     let cancelled = false;
+    // Fetch a un sistema extern (API): el reset síncron d'isLoading/error
+    // just abans de cridar-lo és el patró de React per a data fetching en
+    // efectes, no un valor derivable durant el render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     setError(null);
 
     api
-      .get<RespostaPaginada<ComandaResumApi>>("/comandes", { mida: MIDA_PAGINA, pagina, ...filters })
+      .get<RespostaPaginada<ComandaResumApi>>('/comandes', {
+        mida: MIDA_PAGINA,
+        pagina,
+        ...filters,
+      })
       .then((resposta) => {
         if (!cancelled) {
           setData(resposta.dades);
@@ -155,7 +176,9 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
       .catch((caught) => {
         if (!cancelled) {
           setError(
-            caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
+            caught instanceof ApiError
+              ? caught
+              : new ApiError('ERROR_XARXA', 'Error desconegut.', null),
           );
         }
       })
@@ -186,14 +209,14 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
       // Capa 43 — OrderForm.tsx ya valida que `origen` no sea null antes de
       // llegar acá (mode create); el "manual" de reserva nunca debería
       // disparar en la práctica, sólo defensivo.
-      const cos: ComandaCreacioApi = { origen: values.origen ?? "manual", linies: values.linies };
+      const cos: ComandaCreacioApi = { origen: values.origen ?? 'manual', linies: values.linies };
       if (values.clientId !== null) cos.clientId = values.clientId;
       if (values.tarifaId !== null) cos.tarifaId = values.tarifaId;
       if (values.dataLliurament !== null) cos.dataLliurament = values.dataLliurament;
       if (values.transportistaId !== null) cos.transportistaId = values.transportistaId;
       if (values.obsLliurament !== null) cos.obsLliurament = values.obsLliurament;
 
-      const creada = await api.post<ComandaDetallApi>("/comandes", cos);
+      const creada = await api.post<ComandaDetallApi>('/comandes', cos);
 
       const patchCos: Record<string, unknown> = {};
       if (values.bultos !== null) patchCos.bultos = values.bultos;
@@ -217,7 +240,9 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
         return {
           order: creada,
           patchError:
-            caught instanceof ApiError ? caught : new ApiError("ERROR_XARXA", "Error desconegut.", null),
+            caught instanceof ApiError
+              ? caught
+              : new ApiError('ERROR_XARXA', 'Error desconegut.', null),
         };
       }
     },
@@ -245,7 +270,7 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
       // backend exigeix `detall` sempre que `estat` sigui amb_incidencia
       // al body, encara que sigui el mateix valor que ja tenia). La única
       // via cap a amb_incidencia és markIncidence, més avall.
-      if (values.estat !== "amb_incidencia") {
+      if (values.estat !== 'amb_incidencia') {
         cos.estat = values.estat;
       }
       await api.patch<ComandaDetallApi>(`/comandes/${id}`, cos);
@@ -267,7 +292,7 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
   const markIncidence = useCallback(
     async (comandaId: number, detall: string): Promise<ComandaDetallApi> => {
       const actualitzada = await api.patch<ComandaDetallApi>(`/comandes/${comandaId}`, {
-        estat: "amb_incidencia",
+        estat: 'amb_incidencia',
         detall,
       });
       refetch();
@@ -289,7 +314,11 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
   // Capa 30 — editar unitatsDemanades/kgDemanats/dataProduccio/obsProduccio
   // d'una línia existent. Mai re-resol preuUnitari (ver LiniaEdicioApi).
   const editLine = useCallback(
-    async (comandaId: number, liniaId: number, patch: LiniaEdicioApi): Promise<ComandaDetallApi> => {
+    async (
+      comandaId: number,
+      liniaId: number,
+      patch: LiniaEdicioApi,
+    ): Promise<ComandaDetallApi> => {
       const actualitzada = await api.patch<ComandaDetallApi>(
         `/comandes/${comandaId}/linies/${liniaId}`,
         patch,

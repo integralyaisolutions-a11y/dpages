@@ -1,16 +1,39 @@
-"use client";
+'use client';
 
 import {
   AuthErrorCodes,
+  browserSessionPersistence,
   onAuthStateChanged,
   sendPasswordResetEmail,
+  setPersistence,
   signInWithEmailAndPassword,
   signOut,
   type AuthError,
-} from "firebase/auth";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { api, setAuthTokenProvider, type UsuariApi } from "@/lib/api";
-import { auth } from "@/lib/firebase";
+} from 'firebase/auth';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
+import { InactivityWarningBanner } from '@/components/auth/InactivityWarningBanner';
+import { useInactivityTimeout } from '@/hooks/useInactivityTimeout';
+import { api, setAuthTokenProvider, type UsuariApi } from '@/lib/api';
+import { auth } from '@/lib/firebase';
+
+// 30 min sense activitat real → logout automàtic, amb avís 2 min abans
+// (decisió confirmada, Opció C). Veure useInactivityTimeout.ts pel
+// mecanisme genèric i InactivityWarningBanner.tsx per l'avís.
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+const INACTIVITY_WARNING_MS = 28 * 60 * 1000;
+
+// Clau de sessionStorage (no localStorage: ha de desaparèixer sola si es
+// tanca el navegador, igual que la sessió mateixa amb browserSessionPersistence
+// de sota) — /login la llegeix un cop per mostrar el missatge i l'esborra.
+export const INACTIVITY_LOGOUT_FLAG_KEY = 'dpages:sessioTancadaPerInactivitat';
 
 // Punto de inyección del token para lib/api.ts (tarea 3 de esta sesión) —
 // se resuelve acá, una sola vez, apenas se importa este módulo: cada
@@ -19,13 +42,15 @@ import { auth } from "@/lib/firebase";
 // 401 NO_AUTENTICAT, contrato §2).
 setAuthTokenProvider(async () => (auth.currentUser ? auth.currentUser.getIdToken() : null));
 
-export type LoginResult = { ok: true; user: UsuariApi } | { ok: false; reason: "invalid" | "inactive" };
+export type LoginResult =
+  { ok: true; user: UsuariApi } | { ok: false; reason: 'invalid' | 'inactive' };
 
 // Firebase gestiona la pantalla de contrasenya (alta i restabliment són el
 // mateix mecanisme: sendPasswordResetEmail / generatePasswordResetLink),
 // nosaltres només controlem la pantalla de destí un cop la persona ja l'ha
 // establerta — sempre torna a /login amb aquest query param.
-export type PasswordResetResult = { ok: true } | { ok: false; reason: "too-many-requests" | "unknown" };
+export type PasswordResetResult =
+  { ok: true } | { ok: false; reason: 'too-many-requests' | 'unknown' };
 
 type AuthContextValue = {
   user: UsuariApi | null;
@@ -44,7 +69,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 /** `GET /jo` — usuario autenticado con rol y mòduls permesos, contrato §4.12. Devuelve `null` si el backend lo rechaza (token vencido, usuari.actiu=false). */
 async function fetchUsuariActual(): Promise<UsuariApi | null> {
   try {
-    return await api.get<UsuariApi>("/jo");
+    return await api.get<UsuariApi>('/jo');
   } catch {
     return null;
   }
@@ -72,9 +97,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
     try {
+      // Opció A confirmada: la sessió viu només mentre el navegador/pestanya
+      // estigui obert (browserSessionPersistence), no indefinidament com el
+      // default de Firebase (browserLocalPersistence). S'ha de cridar ABANS
+      // de signInWithEmailAndPassword — Firebase aplica la persistència
+      // vigent en el moment en què s'estableix la sessió, no amb efecte
+      // retroactiu sobre una sessió ja creada.
+      await setPersistence(auth, browserSessionPersistence);
       await signInWithEmailAndPassword(auth, email, password);
     } catch {
-      return { ok: false, reason: "invalid" };
+      return { ok: false, reason: 'invalid' };
     }
 
     const usuari = await fetchUsuariActual();
@@ -83,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // usuari.actiu=false (403 SENSE_PERMIS, contrato §4.12) — no dejamos
       // una sesión de Firebase viva si el backend no reconoce al usuario.
       await signOut(auth);
-      return { ok: false, reason: "inactive" };
+      return { ok: false, reason: 'inactive' };
     }
 
     setUser(usuari);
@@ -95,17 +127,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  // Distint de logout(): a més de tancar sessió, deixa una marca perquè
+  // /login sàpiga per què (logout() "normal", per exemple des del menú de
+  // l'usuari, no ha de mostrar cap missatge).
+  const handleInactivityTimeout = useCallback(() => {
+    try {
+      window.sessionStorage.setItem(INACTIVITY_LOGOUT_FLAG_KEY, '1');
+    } catch {
+      // Entorns sense sessionStorage (mode privat estricte, etc.): es perd
+      // el missatge a /login, però el logout en si no depèn d'això.
+    }
+    logout();
+  }, [logout]);
+
+  // Només corre amb sessió activa — `enabled: user !== null` ja cobreix
+  // /login sol (allà `user` és null fins que es faci login), sense fer
+  // falta cap comprovació addicional de ruta.
+  const { isWarning, resetTimer } = useInactivityTimeout({
+    enabled: user !== null,
+    warningAfterMs: INACTIVITY_WARNING_MS,
+    timeoutAfterMs: INACTIVITY_TIMEOUT_MS,
+    onTimeout: handleInactivityTimeout,
+  });
+
   const requestPasswordReset = useCallback(async (email: string): Promise<PasswordResetResult> => {
     try {
       await sendPasswordResetEmail(auth, email, passwordResetActionCodeSettings());
       return { ok: true };
     } catch (error) {
       const code = (error as AuthError).code;
-      if (code === AuthErrorCodes.TOO_MANY_ATTEMPTS_TRY_LATER) return { ok: false, reason: "too-many-requests" };
+      if (code === AuthErrorCodes.TOO_MANY_ATTEMPTS_TRY_LATER)
+        return { ok: false, reason: 'too-many-requests' };
       // auth/user-not-found es un cas normal, no un error: no revelem si
       // l'email existeix o no al sistema (evita enumeració de comptes).
       if (code === AuthErrorCodes.USER_DELETED) return { ok: true };
-      return { ok: false, reason: "unknown" };
+      return { ok: false, reason: 'unknown' };
     }
   }, []);
 
@@ -114,11 +170,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user, isLoading, login, logout, requestPasswordReset],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      {isWarning && <InactivityWarningBanner onContinue={resetTimer} />}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthContextValue {
   const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used within an AuthProvider");
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 }
