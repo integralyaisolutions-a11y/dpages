@@ -175,15 +175,26 @@ export function construirActionCodeSettingsEstabliment(): {
     );
   }
   return {
-    url: `${origen}/login?passwordReset=success`,
-    // Obligatorio pasarlo explícito a `generatePasswordResetLink`: sin
-    // esto, el Admin SDK intenta generar un link corto vía Firebase
-    // Dynamic Links, que Google dio de baja — la llamada queda colgada
-    // esperando una respuesta que nunca llega, sin lanzar error (encontrado
-    // probando este endpoint contra Firebase real, ver consola: "finalizó
-    // el período de baja de Firebase Dynamic Links"). `false` evita que
-    // intente generar un deep link a una app móvil, que tampoco existe.
-    handleCodeInApp: false,
+    // Capa de UI de reset de contraseña (pedido de Michelle, frontend): los
+    // 3 flujos de contraseña (reset, verificación, alta) ahora los maneja
+    // una pantalla propia en `/action`, no la pantalla genérica de Firebase.
+    // Los otros 2 flujos (controlados directo por el frontend) ya apuntaban
+    // ahí — esto hace que el link de alta de usuario (POST /usuaris) sea
+    // consistente con ellos.
+    url: `${origen}/action`,
+    // Obligatorio pasarlo explícito a `generatePasswordResetLink` — el
+    // riesgo real es OMITIR este campo (dejarlo `undefined`), no el valor
+    // que lleve: sin él, el Admin SDK intenta generar un link corto vía
+    // Firebase Dynamic Links, que Google dio de baja — la llamada queda
+    // colgada esperando una respuesta que nunca llega, sin lanzar error
+    // (encontrado probando este endpoint contra Firebase real, ver consola:
+    // "finalizó el período de baja de Firebase Dynamic Links"). `true`
+    // (antes `false`) porque ahora SÍ hay una pantalla propia en `/action`
+    // que maneja el código de acción dentro de la propia app — ya no hace
+    // falta que Firebase arme su propia pantalla ni un deep link a una app
+    // móvil (que tampoco existe). Lo que importa para evitar el bug
+    // histórico es que el campo siga siempre explícito, nunca ausente.
+    handleCodeInApp: true,
   };
 }
 

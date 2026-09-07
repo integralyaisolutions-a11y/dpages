@@ -173,8 +173,8 @@ describe('construirActionCodeSettingsEstabliment — fuera de producción', () =
     const settings = construirActionCodeSettingsEstabliment();
 
     expect(settings).toEqual({
-      url: 'http://localhost:3000/login?passwordReset=success',
-      handleCodeInApp: false,
+      url: 'http://localhost:3000/action',
+      handleCodeInApp: true,
     });
   });
 });
@@ -224,8 +224,8 @@ describe('construirActionCodeSettingsEstabliment — producción con CORS_ORIGIN
     const settings = construirActionCodeSettingsEstabliment();
 
     expect(settings).toEqual({
-      url: 'https://app.dpages.cat/login?passwordReset=success',
-      handleCodeInApp: false,
+      url: 'https://app.dpages.cat/action',
+      handleCodeInApp: true,
     });
   });
 });
