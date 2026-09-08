@@ -11,10 +11,10 @@ describe('leerMigraciones', () => {
   it('encuentra las migraciones reales del proyecto, ordenadas', () => {
     const migraciones = leerMigraciones();
     expect(migraciones.map((m) => m.id)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
     ]);
     expect(migraciones[0]?.archivo).toBe('0001_infraestructura_sincronizacion.up.sql');
-    expect(migraciones[16]?.archivo).toBe('0017_treball_obrador.up.sql');
+    expect(migraciones[17]?.archivo).toBe('0018_rendiments_per_agrupacio.up.sql');
   });
 });
 
@@ -38,7 +38,7 @@ describe('runner de migraciones (Postgres real, esquema aislado)', () => {
     await client.end();
   });
 
-  it('aplica las 17 migraciones reales del proyecto', async () => {
+  it('aplica las 18 migraciones reales del proyecto', async () => {
     const { aplicadas } = await migrarArriba(client);
     expect(aplicadas).toEqual([
       '0001_infraestructura_sincronizacion.up.sql',
@@ -58,6 +58,7 @@ describe('runner de migraciones (Postgres real, esquema aislado)', () => {
       '0015_client_codi_unic.up.sql',
       '0016_unitats_decimal.up.sql',
       '0017_treball_obrador.up.sql',
+      '0018_rendiments_per_agrupacio.up.sql',
     ]);
 
     const tablas = await client.query<{ table_name: string }>(
@@ -94,9 +95,9 @@ describe('runner de migraciones (Postgres real, esquema aislado)', () => {
     expect(aplicadas).toEqual([]);
   });
 
-  it('status muestra las 17 migraciones aplicadas y el hash en verde', async () => {
+  it('status muestra las 18 migraciones aplicadas y el hash en verde', async () => {
     const estado = await obtenerEstado(client);
-    expect(estado).toHaveLength(17);
+    expect(estado).toHaveLength(18);
     expect(estado.every((e) => e.aplicada)).toBe(true);
     expect(estado.every((e) => e.hashCoincide)).toBe(true);
     expect(estado.every((e) => e.aplicadaEn !== null)).toBe(true);

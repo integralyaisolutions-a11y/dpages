@@ -40,7 +40,11 @@
  *      real tampoco se tocan, aunque su producte_id no esté protegido —
  *      no debería pasar en un dato consistente, pero es una FK real
  *      (comanda_linia → alias_producte) y se respeta igual.
- *   2. rendiments_porcs — de los producte NO protegidos únicamente.
+ *   2. rendiments_porcs — de los GRUPOS (categoria_id + agrupacio_produccio)
+ *      sin NINGÚN producte protegido (migración issues #3/#4: ya no
+ *      referencia producte_id, "protegido" pasó a ser una propiedad del
+ *      grupo, no de la fila — un grupo sobrevive si al menos uno de sus
+ *      productes está protegido, aunque otros del mismo grupo se borren).
  *   3. tarifa_preu — de cualquier tarifa O producte que se vaya a borrar
  *      (si cualquiera de los dos lados no está protegido, el precio no
  *      puede sobrevivir sin dejar una referencia rota).
@@ -50,8 +54,9 @@
  *      borrar la tarifa.
  *   5. tarifa — las no protegidas (ya sin tarifa_preu ni client
  *      apuntándoles).
- *   6. producte — los no protegidos (ya sin alias_producte, rendiments_porcs
- *      ni tarifa_preu apuntándoles).
+ *   6. producte — los no protegidos (ya sin alias_producte ni tarifa_preu
+ *      apuntándoles; rendiments_porcs ya no tiene FK directa a producte
+ *      desde la migración de issues #3/#4, no bloquea este paso).
  *
  * Uso: tsx --env-file-if-exists=../../.env src/scripts/carga-inicial/reset-carga-inicial.ts [--permitir-produccio]
  */
@@ -218,9 +223,19 @@ async function esborrar(dbPool: Pool, proteccions: ProteccionsNeteja): Promise<R
         [oParaComparar(idsProductesProtegits)],
       );
 
-      // 2. rendiments_porcs de los producte NO protegidos.
+      // 2. rendiments_porcs de los grupos (categoria_id + agrupacio_produccio)
+      // que NO tienen NINGÚN producte protegido — migración issues #3/#4:
+      // rendiments_porcs ya no referencia producte_id, así que "protegido"
+      // ahora es a nivel de grupo, no de fila puntual (un grupo sobrevive si
+      // AL MENOS uno de sus productes está protegido).
       const rendimentsEsborrats = await client.query(
-        `DELETE FROM rendiments_porcs WHERE NOT (producte_id = ANY($1::uuid[]))`,
+        `DELETE FROM rendiments_porcs r
+         WHERE NOT EXISTS (
+           SELECT 1 FROM producte p
+           WHERE p.id = ANY($1::uuid[])
+             AND p.categoria_id = r.categoria_id
+             AND p.agrupacio_produccio = r.agrupacio_produccio
+         )`,
         [oParaComparar(idsProductesProtegits)],
       );
 

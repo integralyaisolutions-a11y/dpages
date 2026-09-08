@@ -52,8 +52,8 @@ describe('resetComandesICataleg (Postgres real, esquema aislado por test)', () =
       `INSERT INTO categoria_producte (nom) VALUES ('Fresc') RETURNING id`,
     );
     const producte = await poolTest.query<{ id: string }>(
-      `INSERT INTO producte (codi, descripcio, tipus, pes_kg, categoria_id)
-       VALUES ('LLF01', 'Llom fresc de porc', 'simple', '1.250', $1) RETURNING id`,
+      `INSERT INTO producte (codi, descripcio, tipus, pes_kg, categoria_id, agrupacio_produccio)
+       VALUES ('LLF01', 'Llom fresc de porc', 'simple', '1.250', $1, 'Llom') RETURNING id`,
       [categoria.rows[0]!.id],
     );
     await poolTest.query(
@@ -61,10 +61,12 @@ describe('resetComandesICataleg (Postgres real, esquema aislado por test)', () =
        VALUES ($1, 100, 0, 'ca', 'LLF01')`,
       [producte.rows[0]!.id],
     );
+    // Issues #3/#4: rendiments_porcs ya no referencia producte_id — clave
+    // por categoria_id + agrupacio_produccio.
     await poolTest.query(
-      `INSERT INTO rendiments_porcs (producte_id, unitats_per_porc, kg_per_unitat)
-       VALUES ($1, '2.00', '3.500')`,
-      [producte.rows[0]!.id],
+      `INSERT INTO rendiments_porcs (categoria_id, agrupacio_produccio, unitats_per_porc, kg_per_unitat)
+       VALUES ($1, 'Llom', '2.00', '3.500')`,
+      [categoria.rows[0]!.id],
     );
     const tarifa = await poolTest.query<{ id: string }>(
       `INSERT INTO tarifa (nom) VALUES ('Tarifa de prova') RETURNING id`,

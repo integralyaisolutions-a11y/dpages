@@ -52,10 +52,15 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
        VALUES ($1, $1, 'simple', $2, $3) RETURNING id`,
       [opts.producteCodi, categoria.rows[0]!.id, opts.agrupacioProduccio],
     );
+    // Issues #3/#4: rendiments_porcs ya no se identifica por producte_id —
+    // categoria_id + agrupacio_produccio, ON CONFLICT porque dos llamadas a
+    // crearAgrupacio() con el mismo grupo (ver el test de grupo compartido
+    // más abajo) deben reusar la MISMA fila, no fallar contra la UNIQUE.
     await entorn.poolTest.query(
-      `INSERT INTO rendiments_porcs (producte_id, unitats_per_porc, kg_per_unitat)
-       VALUES ($1, $2, $3)`,
-      [producte.rows[0]!.id, opts.unitatsPerPorc, opts.kgPerUnitat],
+      `INSERT INTO rendiments_porcs (categoria_id, agrupacio_produccio, unitats_per_porc, kg_per_unitat)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (categoria_id, agrupacio_produccio) DO NOTHING`,
+      [categoria.rows[0]!.id, opts.agrupacioProduccio, opts.unitatsPerPorc, opts.kgPerUnitat],
     );
     await entorn.poolTest.query(
       `INSERT INTO comanda_linia (
@@ -395,6 +400,85 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
       kgRecortes: '30.000',
       kgPaletillas: '35.000',
     });
+
+    await fastify.close();
+  });
+
+  /**
+   * Issues #3/#4 (Francesc) — el bug de fondo que motivó la migración a
+   * clave por agrupació: bajo el modelo viejo (rendiments_porcs por
+   * producte_id), cargar el rendimiento de UN producto del grupo no
+   * beneficiaba a los demás — el join `rp.producte_id = p.id` sólo
+   * encontraba la fila para ese producto puntual, el resto de las líneas
+   * de la misma agrupació quedaban con rp NULL, en silencio. Este test crea
+   * DOS productos en la MISMA categoria + agrupacio_produccio, con una
+   * ÚNICA fila de rendiment (ahora keyed por categoria_id +
+   * agrupacio_produccio, no por ninguno de los dos producte_id) y confirma
+   * que el cálculo del panel usa ese rendimiento para AMBOS productos —
+   * tanto en el total agregado (kgAElaborar) como en el propio rendiment.
+   */
+  it('un rendiment por agrupació cubre a TODOS los productos del grupo, no sólo a uno', async () => {
+    const categoria = await entorn.poolTest.query<{ id: string }>(
+      `INSERT INTO categoria_producte (nom, elaborat_porc, agrupacio_rendiment)
+       VALUES ('Peces Compartides', true, 'KG') RETURNING id`,
+    );
+    const producteA = await entorn.poolTest.query<{ id: string }>(
+      `INSERT INTO producte (codi, descripcio, tipus, categoria_id, agrupacio_produccio)
+       VALUES ('COMP-A', 'COMP-A', 'simple', $1, 'LOM_COMPARTIT') RETURNING id`,
+      [categoria.rows[0]!.id],
+    );
+    const producteB = await entorn.poolTest.query<{ id: string }>(
+      `INSERT INTO producte (codi, descripcio, tipus, categoria_id, agrupacio_produccio)
+       VALUES ('COMP-B', 'COMP-B', 'simple', $1, 'LOM_COMPARTIT') RETURNING id`,
+      [categoria.rows[0]!.id],
+    );
+
+    // UNA sola fila de rendiment para el grupo — ninguno de los dos
+    // producte_id existe ya en este esquema, la fila no apunta a ninguno.
+    await entorn.poolTest.query(
+      `INSERT INTO rendiments_porcs (categoria_id, agrupacio_produccio, unitats_per_porc, kg_per_unitat)
+       VALUES ($1, 'LOM_COMPARTIT', '2.00', '5.000')`,
+      [categoria.rows[0]!.id],
+    );
+
+    const comanda = await entorn.poolTest.query<{ id: string }>(
+      `INSERT INTO comanda (origen_id, estat)
+       VALUES ((SELECT id FROM origen_comanda WHERE codi = 'manual'), 'oberta') RETURNING id`,
+    );
+    await entorn.poolTest.query(
+      `INSERT INTO comanda_linia (
+         comanda_id, ordinal, producte_id, unitats_demanades, preu_unitari,
+         pes_calculat_kg, data_produccio
+       ) VALUES ($1, 0, $2, 1, '0.00', '10.000', $3)`,
+      [comanda.rows[0]!.id, producteA.rows[0]!.id, DATA],
+    );
+    await entorn.poolTest.query(
+      `INSERT INTO comanda_linia (
+         comanda_id, ordinal, producte_id, unitats_demanades, preu_unitari,
+         pes_calculat_kg, data_produccio
+       ) VALUES ($1, 1, $2, 1, '0.00', '20.000', $3)`,
+      [comanda.rows[0]!.id, producteB.rows[0]!.id, DATA],
+    );
+
+    const fastify = construirServidor();
+    const res = await fastify.inject({
+      method: 'GET',
+      url: `/api/v1/panells/produccio?nombrePorcs=5&dataDes=${DATA}&dataFins=${DATA}&agrupacioRendiment=KG`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const cuerpo = cuerpoJson<PanellProduccioApi>(res);
+    const fila = cuerpo.dades.find((f) => f.agrupacioProduccio === 'LOM_COMPARTIT');
+
+    // Las dos líneas (COMP-A: 10.000kg, COMP-B: 20.000kg) suman en UNA sola
+    // fila de agrupació — confirma que ambos productos cayeron en el mismo
+    // grupo del panel.
+    expect(fila?.kgAElaborar).toBe('30.000');
+    // rendiment = unitatsPerPorc(2.00) × kgPerUnitat(5.000) × nombrePorcs(5)
+    // = 50.000 — si el join siguiera atado a un producte_id puntual, esto
+    // daría null para el producto que "no tuviera" la fila de rendiment.
+    expect(fila?.rendiment).toBe('50.000');
+    expect(fila?.diferencia).toBe('20.000');
 
     await fastify.close();
   });

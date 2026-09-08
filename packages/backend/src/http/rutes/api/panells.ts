@@ -615,12 +615,20 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
     // Agrupado por agrupacio_produccio + agrupacio_rendiment (no por
     // producte_id): varios artículos pueden compartir una misma agrupación
     // de producción — por eso, capa 22, `producte` YA NO viaja en la
-    // respuesta (ver PanellProduccioFilaApi, BREAKING). `ORDER BY p.id_seq`
-    // dentro de los array_agg se mantiene igual: sigue haciendo falta un
-    // criterio determinístico para elegir categoria_nom/unitats_per_porc/
-    // kg_per_unitat cuando varios productos de la agrupación traen valores
-    // distintos — ya no es "cuál producte mostrar", es "qué fila de
-    // rendiments_porcs usar para el cálculo".
+    // respuesta (ver PanellProduccioFilaApi, BREAKING). `categoria_nom`
+    // sigue sin estar en el GROUP BY (que es por agrupacio_produccio, no por
+    // categoria_id) y sigue necesitando un array_agg — issues #3/#4 no
+    // tocaron esto, cat.nom es constante dentro del grupo por la misma
+    // invariante de negocio (un agrupacio_produccio no cruza categorías),
+    // pero Postgres no puede inferirlo, sigue exigiendo un agregado.
+    //
+    // unitats_per_porc/kg_per_unitat SÍ cambiaron (issues #3/#4): el join
+    // ahora es categoria_id + agrupacio_produccio, la MISMA UNIQUE de
+    // rendiments_porcs — como mucho una fila de rp por grupo, así que
+    // MAX() alcanza (nunca hay más de un valor no-nulo que desempatar,
+    // a diferencia del array_agg(...)[1] ORDER BY p.id_seq de antes, que
+    // elegía un producte arbitrario cuando varios del grupo competían por
+    // la única fila de rp que existiera).
     const filas = await pool.query<{
       agrupacio_produccio: string;
       agrupacio_rendiment: AgrupacioRendiment;
@@ -632,15 +640,16 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
     }>(
       `SELECT p.agrupacio_produccio, cat.agrupacio_rendiment,
               (array_agg(cat.nom ORDER BY p.id_seq))[1] AS categoria_nom,
-              (array_agg(rp.unitats_per_porc ORDER BY p.id_seq))[1] AS unitats_per_porc,
-              (array_agg(rp.kg_per_unitat ORDER BY p.id_seq))[1] AS kg_per_unitat,
+              MAX(rp.unitats_per_porc) AS unitats_per_porc,
+              MAX(rp.kg_per_unitat) AS kg_per_unitat,
               SUM(cl.pes_calculat_kg)::numeric(14,3) AS kg_a_elaborar,
               SUM(cl.unitats_demanades) AS paq_pedido
        FROM comanda_linia cl
        JOIN comanda c ON c.id = cl.comanda_id
        JOIN producte p ON p.id = cl.producte_id
        JOIN categoria_producte cat ON cat.id = p.categoria_id
-       LEFT JOIN rendiments_porcs rp ON rp.producte_id = p.id
+       LEFT JOIN rendiments_porcs rp
+         ON rp.categoria_id = p.categoria_id AND rp.agrupacio_produccio = p.agrupacio_produccio
        ${where}
        GROUP BY p.agrupacio_produccio, cat.agrupacio_rendiment
        ORDER BY p.agrupacio_produccio ASC`,

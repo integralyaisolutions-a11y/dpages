@@ -8,37 +8,61 @@ import {
   prepararEntornApi,
 } from './test-suport.js';
 
+/**
+ * Issues #3/#4 (Francesc) — migración validada con Michelle (frontend): la
+ * fila se identifica por categoriaId + agrupacioProduccio, no por
+ * producteId. El fixture crea DOS productos en la misma categoria/grupo
+ * ('LLF01'/'LLF02', ambos 'Llom') para poder confirmar que un único
+ * rendiment cubre a todo el grupo, no a un producto puntual — exactamente
+ * lo que el modelo viejo no garantizaba.
+ */
 describe('API negoci — /rendiments-porcs (Postgres real, esquema aislado)', () => {
   let entorn: EntornTestApi;
   let construirServidor: typeof construirServidorType;
-  let producteLlomId: number;
-  let producteCongelatId: number;
+  let categoriaFrescId: number;
+  let categoriaCongelatsId: number;
   let rendimentId: number;
 
   beforeAll(async () => {
     entorn = await prepararEntornApi('rendiments-porcs');
     construirServidor = entorn.construirServidor;
 
-    const fresc = await entorn.poolTest.query<{ id: string }>(
+    const fresc = await entorn.poolTest.query<{ id_seq: string }>(
       `INSERT INTO categoria_producte (nom, elaborat_porc, agrupacio_rendiment)
-       VALUES ('Fresc', true, 'KG') RETURNING id`,
+       VALUES ('Fresc', true, 'KG') RETURNING id_seq`,
     );
-    const llom = await entorn.poolTest.query<{ id_seq: string }>(
+    categoriaFrescId = Number(fresc.rows[0]!.id_seq);
+    const categoriaFrescRow = await entorn.poolTest.query<{ id: string }>(
+      `SELECT id FROM categoria_producte WHERE id_seq = $1`,
+      [categoriaFrescId],
+    );
+    // Dos productos, misma categoria, misma agrupació de producció — el caso
+    // real que motivó la migración: un solo rendiment tiene que cubrir a
+    // los dos.
+    await entorn.poolTest.query(
       `INSERT INTO producte (codi, descripcio, tipus, categoria_id, agrupacio_produccio)
-       VALUES ('LLF01', 'Llom fresc de porc', 'simple', $1, 'Llom') RETURNING id_seq`,
-      [fresc.rows[0]!.id],
+       VALUES ('LLF01', 'Llom fresc de porc', 'simple', $1, 'Llom')`,
+      [categoriaFrescRow.rows[0]!.id],
     );
-    producteLlomId = Number(llom.rows[0]!.id_seq);
+    await entorn.poolTest.query(
+      `INSERT INTO producte (codi, descripcio, tipus, categoria_id, agrupacio_produccio)
+       VALUES ('LLF02', 'Llom fresc de porc adobat', 'simple', $1, 'Llom')`,
+      [categoriaFrescRow.rows[0]!.id],
+    );
 
-    const congelats = await entorn.poolTest.query<{ id: string }>(
-      `INSERT INTO categoria_producte (nom, elaborat_porc) VALUES ('Congelats', false) RETURNING id`,
+    const congelats = await entorn.poolTest.query<{ id_seq: string }>(
+      `INSERT INTO categoria_producte (nom, elaborat_porc) VALUES ('Congelats', false) RETURNING id_seq`,
     );
-    const congelat = await entorn.poolTest.query<{ id_seq: string }>(
-      `INSERT INTO producte (codi, descripcio, tipus, categoria_id)
-       VALUES ('CON01', 'Congelat sense rendiment', 'simple', $1) RETURNING id_seq`,
-      [congelats.rows[0]!.id],
+    categoriaCongelatsId = Number(congelats.rows[0]!.id_seq);
+    const categoriaCongelatsRow = await entorn.poolTest.query<{ id: string }>(
+      `SELECT id FROM categoria_producte WHERE id_seq = $1`,
+      [categoriaCongelatsId],
     );
-    producteCongelatId = Number(congelat.rows[0]!.id_seq);
+    await entorn.poolTest.query(
+      `INSERT INTO producte (codi, descripcio, tipus, categoria_id, agrupacio_produccio)
+       VALUES ('CON01', 'Congelat sense rendiment', 'simple', $1, 'Congelat')`,
+      [categoriaCongelatsRow.rows[0]!.id],
+    );
   });
 
   afterAll(() => netejarEntornApi(entorn));
@@ -48,7 +72,12 @@ describe('API negoci — /rendiments-porcs (Postgres real, esquema aislado)', ()
     const res = await fastify.inject({
       method: 'POST',
       url: '/api/v1/rendiments-porcs',
-      payload: { producteId: producteLlomId, unitatsPerPorc: '2.00', kgPerUnitat: '3.500' },
+      payload: {
+        categoriaId: categoriaFrescId,
+        agrupacioProduccio: 'Llom',
+        unitatsPerPorc: '2.00',
+        kgPerUnitat: '3.500',
+      },
     });
 
     expect(res.statusCode).toBe(201);
@@ -67,12 +96,17 @@ describe('API negoci — /rendiments-porcs (Postgres real, esquema aislado)', ()
     await fastify.close();
   });
 
-  it('POST /rendiments-porcs con un producte la categoria del qual no té agrupació de rendiment retorna 400', async () => {
+  it('POST /rendiments-porcs amb una categoria que no té agrupació de rendiment retorna 400', async () => {
     const fastify = construirServidor();
     const res = await fastify.inject({
       method: 'POST',
       url: '/api/v1/rendiments-porcs',
-      payload: { producteId: producteCongelatId, unitatsPerPorc: '1.00', kgPerUnitat: '1.000' },
+      payload: {
+        categoriaId: categoriaCongelatsId,
+        agrupacioProduccio: 'Congelat',
+        unitatsPerPorc: '1.00',
+        kgPerUnitat: '1.000',
+      },
     });
 
     expect(res.statusCode).toBe(400);
@@ -81,16 +115,63 @@ describe('API negoci — /rendiments-porcs (Postgres real, esquema aislado)', ()
     await fastify.close();
   });
 
-  it('POST /rendiments-porcs con producteId inexistent retorna 400', async () => {
+  it('POST /rendiments-porcs amb categoriaId inexistent retorna 400', async () => {
     const fastify = construirServidor();
     const res = await fastify.inject({
       method: 'POST',
       url: '/api/v1/rendiments-porcs',
-      payload: { producteId: 999999, unitatsPerPorc: '1.00', kgPerUnitat: '1.000' },
+      payload: {
+        categoriaId: 999999,
+        agrupacioProduccio: 'Llom',
+        unitatsPerPorc: '1.00',
+        kgPerUnitat: '1.000',
+      },
     });
 
     expect(res.statusCode).toBe(400);
     expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+    await fastify.close();
+  });
+
+  it('POST /rendiments-porcs amb agrupacioProduccio que no coincideix amb cap producte real retorna 400', async () => {
+    // Validación necesaria (no cosmética, ver el comentario en la ruta):
+    // panells.ts hace un JOIN de texto exacto contra producte.agrupacio_produccio
+    // — un typo acá dejaría la fila huérfana, invisible para el cálculo del
+    // panel, en silencio.
+    const fastify = construirServidor();
+    const res = await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/rendiments-porcs',
+      payload: {
+        categoriaId: categoriaFrescId,
+        agrupacioProduccio: 'Llom sencer', // no existe cap producte amb aquest valor exacte
+        unitatsPerPorc: '1.00',
+        kgPerUnitat: '1.000',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+    await fastify.close();
+  });
+
+  it('POST /rendiments-porcs duplicat (mateixa categoriaId + agrupacioProduccio) retorna 409 CONFLICTE', async () => {
+    const fastify = construirServidor();
+    const res = await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/rendiments-porcs',
+      payload: {
+        categoriaId: categoriaFrescId,
+        agrupacioProduccio: 'Llom',
+        unitatsPerPorc: '3.00',
+        kgPerUnitat: '2.000',
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ error: { codi: 'CONFLICTE' } });
 
     await fastify.close();
   });
@@ -110,31 +191,29 @@ describe('API negoci — /rendiments-porcs (Postgres real, esquema aislado)', ()
     await fastify.close();
   });
 
-  it('GET /rendiments-porcs?producte= exige coincidencia exacta (case-insensitive), no substring', async () => {
+  it('GET /rendiments-porcs?categoriaId= exige coincidencia exacta contra la categoria del rendiment', async () => {
     const fastify = construirServidor();
 
-    const exacte = await fastify.inject({
+    const coincideix = await fastify.inject({
       method: 'GET',
-      url: `/api/v1/rendiments-porcs?${new URLSearchParams({ producte: 'LLOM FRESC DE PORC' }).toString()}`,
+      url: `/api/v1/rendiments-porcs?categoriaId=${categoriaFrescId}`,
     });
-    const cuerpoExacte = cuerpoJson<RespostaPaginada<RendimentPorcApi>>(exacte);
-    expect(cuerpoExacte.dades).toHaveLength(1);
-    expect(cuerpoExacte.dades[0]?.id).toBe(rendimentId);
-    expect(cuerpoExacte.dades[0]).not.toHaveProperty('producte');
+    const cuerpoCoincideix = cuerpoJson<RespostaPaginada<RendimentPorcApi>>(coincideix);
+    expect(cuerpoCoincideix.dades).toHaveLength(1);
+    expect(cuerpoCoincideix.dades[0]?.id).toBe(rendimentId);
 
-    const substring = await fastify.inject({
+    const noCoincideix = await fastify.inject({
       method: 'GET',
-      url: '/api/v1/rendiments-porcs?producte=llom',
+      url: `/api/v1/rendiments-porcs?categoriaId=${categoriaCongelatsId}`,
     });
-    const cuerpoSubstring = cuerpoJson<RespostaPaginada<RendimentPorcApi>>(substring);
-    expect(cuerpoSubstring.dades).toHaveLength(0);
+    expect(cuerpoJson<RespostaPaginada<RendimentPorcApi>>(noCoincideix).dades).toHaveLength(0);
 
     await fastify.close();
   });
 
   // Capa 45 — hallazgo de Michel: este filtro quedó case-sensitive por
-  // descuido, inconsistente con el de producte de arriba. El fixture guarda
-  // 'Llom' (con mayúscula inicial) — 'llom' y 'LLOM' tienen que matchear igual.
+  // descuido. El fixture guarda 'Llom' (con mayúscula inicial) — 'llom' y
+  // 'LLOM' tienen que matchear igual.
   it('GET /rendiments-porcs?agrupacioProduccio= exige coincidencia exacta, case-insensitive', async () => {
     const fastify = construirServidor();
 
@@ -177,6 +256,33 @@ describe('API negoci — /rendiments-porcs (Postgres real, esquema aislado)', ()
     expect(cuerpo.unitatsPerPorc).toBe('4.00');
     expect(cuerpo.kgPerUnitat).toBe('3.500');
     expect(cuerpo.pesTotal).toBe('14.000');
+
+    await fastify.close();
+  });
+
+  it('PATCH /rendiments-porcs/:id ignora categoriaId/agrupacioProduccio si vénen al cos — són immutables', async () => {
+    // Mateix comportament EXACTE que producteId abans d'aquesta migració
+    // (i que codi a PATCH /clients/:id): el cos no té camp per a ells, així
+    // que un intent de canviar-los es descarta en silenci, no es rebutja
+    // amb 400 — no és un canvi de criteri d'UX, és el mateix de sempre.
+    const fastify = construirServidor();
+    const res = await fastify.inject({
+      method: 'PATCH',
+      url: `/api/v1/rendiments-porcs/${rendimentId}`,
+      payload: {
+        categoriaId: categoriaCongelatsId,
+        agrupacioProduccio: 'Un altre grup',
+        kgPerUnitat: '5.000',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const cuerpo = cuerpoJson<RendimentPorcApi>(res);
+    // categoriaId/agrupacioProduccio no cambiaron pese a venir en el body.
+    expect(cuerpo.categoria).toBe('Fresc');
+    expect(cuerpo.agrupacioProduccio).toBe('Llom');
+    // El campo válido del mismo PATCH sí se aplicó.
+    expect(cuerpo.kgPerUnitat).toBe('5.000');
 
     await fastify.close();
   });

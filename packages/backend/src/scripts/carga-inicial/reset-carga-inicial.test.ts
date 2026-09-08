@@ -70,18 +70,22 @@ describe('netejarCargaInicial (Postgres real, esquema aislado por test)', () => 
   });
 
   it('producte con rendiments_porcs asociado (sin comanda_linia): ambos se borran sin error', async () => {
+    // Issues #3/#4: rendiments_porcs ya no referencia producte_id — la fila
+    // "pertenece" al producte vía categoria_id + agrupacio_produccio, no
+    // por FK directa.
     const categoria = await poolTest.query<{ id: string }>(
       `INSERT INTO categoria_producte (nom, elaborat_porc, agrupacio_rendiment)
        VALUES ('Categoria de prova KG', true, 'KG') RETURNING id`,
     );
-    const producte = await poolTest.query<{ id: string }>(
-      `INSERT INTO producte (codi, descripcio, tipus, categoria_id)
-       VALUES ('P02', 'Producte amb rendiment', 'simple', $1) RETURNING id`,
+    await poolTest.query(
+      `INSERT INTO producte (codi, descripcio, tipus, categoria_id, agrupacio_produccio)
+       VALUES ('P02', 'Producte amb rendiment', 'simple', $1, 'Grup P02')`,
       [categoria.rows[0]!.id],
     );
     await poolTest.query(
-      `INSERT INTO rendiments_porcs (producte_id, unitats_per_porc, kg_per_unitat) VALUES ($1, '2.00', '3.500')`,
-      [producte.rows[0]!.id],
+      `INSERT INTO rendiments_porcs (categoria_id, agrupacio_produccio, unitats_per_porc, kg_per_unitat)
+       VALUES ($1, 'Grup P02', '2.00', '3.500')`,
+      [categoria.rows[0]!.id],
     );
 
     const resultat = await netejarCargaInicial(poolTest, confirmarSi);
@@ -90,6 +94,61 @@ describe('netejarCargaInicial (Postgres real, esquema aislado por test)', () => 
     if (!resultat.feta) throw new Error('inesperat: feta hauria de ser true');
     expect(resultat.recompte.productesEsborrats).toBe(1);
     expect(resultat.recompte.rendimentsPorcsEsborrats).toBe(1);
+
+    const producteRow = await poolTest.query<{ id: string }>('SELECT id FROM producte');
+    const rendimentRow = await poolTest.query<{ id: string }>('SELECT id FROM rendiments_porcs');
+    expect(producteRow.rows).toHaveLength(0);
+    expect(rendimentRow.rows).toHaveLength(0);
+  });
+
+  it('producte protegido (con comanda_linia real) conserva su rendiments_porcs — grupo compartido no protegido se borra igual', async () => {
+    // Issues #3/#4 — el caso nuevo que el modelo por producte_id no podía
+    // expresar: dos productes del MISMO grupo, uno protegido y otro no. La
+    // fila de rendiments_porcs (una sola por grupo, UNIQUE) debe sobrevivir
+    // porque el grupo tiene AL MENOS un producte protegido — aunque el otro
+    // producte del grupo sí se borre.
+    const categoria = await poolTest.query<{ id: string }>(
+      `INSERT INTO categoria_producte (nom, elaborat_porc, agrupacio_rendiment)
+       VALUES ('Categoria compartida', true, 'KG') RETURNING id`,
+    );
+    const producteProtegit = await poolTest.query<{ id: string }>(
+      `INSERT INTO producte (codi, descripcio, tipus, categoria_id, agrupacio_produccio)
+       VALUES ('P06', 'Producte protegit del grup', 'simple', $1, 'Grup compartit') RETURNING id`,
+      [categoria.rows[0]!.id],
+    );
+    await poolTest.query(
+      `INSERT INTO producte (codi, descripcio, tipus, categoria_id, agrupacio_produccio)
+       VALUES ('P07', 'Producte NO protegit del mateix grup', 'simple', $1, 'Grup compartit')`,
+      [categoria.rows[0]!.id],
+    );
+    await poolTest.query(
+      `INSERT INTO rendiments_porcs (categoria_id, agrupacio_produccio, unitats_per_porc, kg_per_unitat)
+       VALUES ($1, 'Grup compartit', '2.00', '3.500')`,
+      [categoria.rows[0]!.id],
+    );
+    const comanda = await poolTest.query<{ id: string }>(
+      `INSERT INTO comanda (origen_id, estat)
+       VALUES ((SELECT id FROM origen_comanda WHERE codi = 'manual'), 'oberta') RETURNING id`,
+    );
+    await poolTest.query(
+      `INSERT INTO comanda_linia (comanda_id, ordinal, producte_id, unitats_demanades, preu_unitari, pes_calculat_kg)
+       VALUES ($1, 0, $2, 1, '0.00', '1.000')`,
+      [comanda.rows[0]!.id, producteProtegit.rows[0]!.id],
+    );
+
+    const resultat = await netejarCargaInicial(poolTest, confirmarSi);
+
+    expect(resultat.feta).toBe(true);
+    if (!resultat.feta) throw new Error('inesperat: feta hauria de ser true');
+    expect(resultat.recompte.productesEsborrats).toBe(1); // sólo P07
+    expect(resultat.recompte.rendimentsPorcsEsborrats).toBe(0); // el grupo sobrevive
+
+    const productes = await poolTest.query<{ codi: string | null }>('SELECT codi FROM producte');
+    expect(productes.rows.map((r) => r.codi)).toEqual(['P06']);
+    const rendiments = await poolTest.query<{ count: string }>(
+      'SELECT count(*) FROM rendiments_porcs',
+    );
+    expect(Number(rendiments.rows[0]?.count)).toBe(1);
   });
 
   it('producte protegido (con comanda_linia real) conserva su alias_producte — no se toca', async () => {

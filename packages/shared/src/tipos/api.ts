@@ -99,12 +99,18 @@ export interface ProducteApi {
  */
 export interface RendimentPorcApi {
   id: number;
-  /** Derivado de producte.categoria.agrupacioRendiment — sólo lectura. */
+  /** Derivado de categoria.agrupacioRendiment — sólo lectura. */
   agrupacioRendiment: string;
-  /** Derivado de producte.categoria.nom — sólo lectura. */
+  /** Derivado de categoria.nom — sólo lectura. */
   categoria: string;
-  /** Derivado de producte.agrupacioProduccio — sólo lectura. */
-  agrupacioProduccio: string | null;
+  /**
+   * Migración a clave por agrupació (issues #3/#4, Francesc): ya no se
+   * deriva de un producte concreto — es el identificador del grupo junto
+   * con categoriaId, guardado directo en rendiments_porcs. Nunca null
+   * (a diferencia de ProducteApi.agrupacioProduccio): el grupo es la
+   * identidad misma del registro, no puede faltar.
+   */
+  agrupacioProduccio: string;
   /** NUMERIC como string, mismo criterio que pesKg. */
   unitatsPerPorc: string;
   kgPerUnitat: string;
@@ -112,8 +118,16 @@ export interface RendimentPorcApi {
   pesTotal: string;
 }
 
+/**
+ * Migración a clave por agrupació (issues #3/#4, Francesc): identifica el
+ * registro por categoriaId (id_seq público) + agrupacioProduccio, no por un
+ * producte puntual — el rendimiento de un cerdo se define a nivel de grupo,
+ * no de artículo individual. INMUTABLE tras crear el registro (mismo
+ * criterio que regía para producteId antes de esta migración).
+ */
 export interface RendimentPorcEntradaApi {
-  producteId: number;
+  categoriaId: number;
+  agrupacioProduccio: string;
   unitatsPerPorc: string;
   kgPerUnitat: string;
 }
