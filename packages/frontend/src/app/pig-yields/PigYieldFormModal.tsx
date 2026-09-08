@@ -17,11 +17,12 @@ import { parseDecimalInput } from '@/lib/decimals';
 
 const PLACEHOLDER = 'Selecciona...';
 
-type FieldErrors = { producteId?: string; unitatsPerPorc?: string; kgPerUnitat?: string };
-
-function productLabel(product: { id: number; codi: string | null; descripcio: string }) {
-  return `${product.codi ?? product.id} · ${product.descripcio}`;
-}
+type FieldErrors = {
+  categoriaId?: string;
+  agrupacioProduccio?: string;
+  unitatsPerPorc?: string;
+  kgPerUnitat?: string;
+};
 
 function distinct<T>(values: T[]): T[] {
   return Array.from(new Set(values));
@@ -39,13 +40,13 @@ export function PigYieldFormModal({
   const { data: products } = useCatalog();
   const { data: categories } = useCategories();
 
-  // Cascada de filtres (Agrupació Rendiment → Categoria → Agrupació
-  // Producció → Producte): cap dels 3 primers viatja al backend, només
-  // angosten el desplegable de Producte (investigació confirmada: POST
-  // /rendiments-porcs només accepta producteId/unitatsPerPorc/kgPerUnitat,
-  // els altres 3 camps els deriva el backend i els ignora si es manden).
-  // Cardinalitat producte→categoria→agrupacioRendiment és 1:1 (o null) a
-  // cada pas (migracions 0006/0011), per això la cascada és determinista.
+  // Cascada de 2 nivells (Agrupació Rendiment → Categoria → Agrupació
+  // Producció): issues #3/#4, la fila ja no s'identifica per un producte
+  // puntual, sinó per categoriaId + agrupacioProduccio (columna pròpia de
+  // rendiments_porcs des de la migració 0018) — el nivell de Producte
+  // desapareix per complet, ni de lectura ni d'escriptura (confirmat
+  // contra rendiments-porcs.ts real: POST accepta categoriaId +
+  // agrupacioProduccio, ja no producteId).
   const categoriaByNom = useMemo(() => new Map(categories.map((c) => [c.nom, c])), [categories]);
   // Sólo les categories amb agrupacioRendiment definit poden tenir línies de
   // rendiment (el backend rebutja la resta amb 400 VALIDACIO) — el cascade
@@ -58,7 +59,6 @@ export function PigYieldFormModal({
   const [agrupacioRendiment, setAgrupacioRendiment] = useState(PLACEHOLDER);
   const [categoria, setCategoria] = useState(PLACEHOLDER);
   const [agrupacioProduccio, setAgrupacioProduccio] = useState(PLACEHOLDER);
-  const [productLabelValue, setProductLabelValue] = useState(PLACEHOLDER);
   const [unitsPerPig, setUnitsPerPig] = useState('');
   const [kgPerUnit, setKgPerUnit] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -82,8 +82,11 @@ export function PigYieldFormModal({
     [eligibleCategories, agrupacioRendiment],
   );
 
+  const selectedCategoria = categoriaByNom.get(categoria);
+
   // Productes que ja compleixen Agrupació Rendiment + Categoria — base per
-  // calcular les opcions d'Agrupació Producció i, després, de Producte.
+  // calcular les opcions d'Agrupació Producció (el catàleg complet ja el
+  // carrega useCatalog(), no fa falta cap endpoint nou per filtrar-lo).
   const productsUpToCategoria = useMemo(
     () =>
       products.filter((product) => {
@@ -109,34 +112,18 @@ export function PigYieldFormModal({
     [productsUpToCategoria],
   );
 
-  const eligibleProducts = useMemo(
-    () =>
-      productsUpToCategoria.filter(
-        (product) =>
-          agrupacioProduccio === PLACEHOLDER || product.agrupacioProduccio === agrupacioProduccio,
-      ),
-    [productsUpToCategoria, agrupacioProduccio],
-  );
-
-  const productOptions = useMemo(() => eligibleProducts.map(productLabel), [eligibleProducts]);
-
-  const selectedProduct = eligibleProducts.find(
-    (product) => productLabel(product) === productLabelValue,
-  );
-
-  // Advertència no bloquejant de duplicat: RendimentPorcApi (la resposta del
-  // GET) NO porta producteId (es va treure a la capa 22 — ver la nota al
-  // shared), per això no es pot mirar contra `data` ja carregat al hook.
-  // Un sol GET amb coincidència exacta per descripció (mateix criteri que
-  // el backend fa servir, confirmat amb curl real), disparat només quan
-  // canvia el producte triat — no a cada tecla.
+  // Advertència no bloquejant de duplicat: substitueix la comprovació
+  // vella per descripció de producte (?producte=) — ara la fila
+  // s'identifica per categoriaId + agrupacioProduccio, així que aquest és
+  // el filtre exacte que fa falta (mateix propòsit, mateix missatge,
+  // disparat només quan canvien categoria o agrupació triades).
   const [isDuplicate, setIsDuplicate] = useState(false);
 
   useEffect(() => {
-    if (!selectedProduct) {
-      // Sense producte seleccionat no hi ha res a comprovar contra l'API
-      // (GET de sota) — cal netejar l'avís d'un producte triat abans, no
-      // és un valor derivable durant el render.
+    if (!selectedCategoria || agrupacioProduccio === PLACEHOLDER) {
+      // Sense els dos camps triats no hi ha res a comprovar contra l'API
+      // (GET de sota) — cal netejar l'avís d'una selecció anterior, no és
+      // un valor derivable durant el render.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsDuplicate(false);
       return;
@@ -144,7 +131,8 @@ export function PigYieldFormModal({
     let cancelled = false;
     api
       .get<RespostaPaginada<RendimentPorcApi>>('/rendiments-porcs', {
-        producte: selectedProduct.descripcio,
+        categoriaId: selectedCategoria.id,
+        agrupacioProduccio,
         mida: 1,
       })
       .then((resposta) => {
@@ -158,39 +146,48 @@ export function PigYieldFormModal({
     return () => {
       cancelled = true;
     };
-    // Depèn de l'id, no de l'objecte `selectedProduct` (nova referència a
-    // cada render via .find()) — evita repetir el GET sense necessitat.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProduct?.id]);
+  }, [selectedCategoria, agrupacioProduccio]);
 
   async function handleSave() {
-    if (!selectedProduct) {
-      setFieldErrors({ producteId: 'Selecciona un producte.' });
+    const nextFieldErrors: FieldErrors = {};
+    if (!selectedCategoria) nextFieldErrors.categoriaId = 'Selecciona una categoria.';
+    if (agrupacioProduccio === PLACEHOLDER) {
+      nextFieldErrors.agrupacioProduccio = 'Selecciona una agrupació de producció.';
+    }
+    if (Object.keys(nextFieldErrors).length > 0) {
+      setFieldErrors(nextFieldErrors);
       return;
     }
+
     setFieldErrors({});
     setFormError(null);
     setIsSaving(true);
     try {
       await onSave({
-        producteId: selectedProduct.id,
+        categoriaId: selectedCategoria!.id,
+        agrupacioProduccio,
         unitatsPerPorc: parseDecimalInput(unitsPerPig, 2),
         kgPerUnitat: parseDecimalInput(kgPerUnit, 3),
       });
     } catch (caught) {
       if (caught instanceof ApiError) {
-        const nextFieldErrors: FieldErrors = {};
+        const nextErrors: FieldErrors = {};
         for (const detall of caught.detalls ?? []) {
           if (
-            detall.camp === 'producteId' ||
+            detall.camp === 'categoriaId' ||
+            detall.camp === 'agrupacioProduccio' ||
             detall.camp === 'unitatsPerPorc' ||
             detall.camp === 'kgPerUnitat'
           ) {
-            nextFieldErrors[detall.camp] = detall.missatge;
+            // El backend ja distingeix el cas típic de typo ("no coincideix
+            // amb cap producte real d'aquesta categoria") amb el seu propi
+            // missatge clar (rendiments-porcs.ts) — es mostra tal qual, no
+            // es substitueix per un de genèric.
+            nextErrors[detall.camp] = detall.missatge;
           }
         }
-        if (Object.keys(nextFieldErrors).length > 0) {
-          setFieldErrors(nextFieldErrors);
+        if (Object.keys(nextErrors).length > 0) {
+          setFieldErrors(nextErrors);
         } else {
           setFormError(caught.message);
         }
@@ -213,42 +210,36 @@ export function PigYieldFormModal({
             setAgrupacioRendiment(value);
             setCategoria(PLACEHOLDER);
             setAgrupacioProduccio(PLACEHOLDER);
-            setProductLabelValue(PLACEHOLDER);
-          }}
-        />
-        <SelectFilter
-          label="Categoria"
-          options={categoriaOptions}
-          value={categoria}
-          onChange={(value) => {
-            setCategoria(value);
-            setAgrupacioProduccio(PLACEHOLDER);
-            setProductLabelValue(PLACEHOLDER);
-          }}
-        />
-        <SelectFilter
-          label="Agrupació Producció"
-          options={agrupacioProduccioOptions}
-          value={agrupacioProduccio}
-          onChange={(value) => {
-            setAgrupacioProduccio(value);
-            setProductLabelValue(PLACEHOLDER);
           }}
         />
         <div>
           <SelectFilter
-            label="Producte"
-            options={[PLACEHOLDER, ...productOptions]}
-            value={productLabelValue}
-            onChange={setProductLabelValue}
+            label="Categoria"
+            options={categoriaOptions}
+            value={categoria}
+            onChange={(value) => {
+              setCategoria(value);
+              setAgrupacioProduccio(PLACEHOLDER);
+            }}
           />
-          {fieldErrors.producteId && (
-            <p className="mt-1.5 text-xs text-red-600">{fieldErrors.producteId}</p>
+          {fieldErrors.categoriaId && (
+            <p className="mt-1.5 text-xs text-red-600">{fieldErrors.categoriaId}</p>
+          )}
+        </div>
+        <div>
+          <SelectFilter
+            label="Agrupació Producció"
+            options={agrupacioProduccioOptions}
+            value={agrupacioProduccio}
+            onChange={setAgrupacioProduccio}
+          />
+          {fieldErrors.agrupacioProduccio && (
+            <p className="mt-1.5 text-xs text-red-600">{fieldErrors.agrupacioProduccio}</p>
           )}
           {isDuplicate && (
             <p className="mt-1.5 text-xs text-amber-700">
-              Aquest producte ja té una línia de rendiment carregada. Pots continuar i desar-la
-              igualment.
+              Aquesta categoria i agrupació ja tenen una línia de rendiment carregada. Pots
+              continuar i desar-la igualment.
             </p>
           )}
         </div>

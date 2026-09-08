@@ -93,9 +93,10 @@ export function usePigYields(filters: PigYieldFilters = {}): UsePigYieldsResult 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 
   // Sin edición optimista, mismo criterio que useCategories.ts/useCatalog.ts:
-  // refetch tras mutación. agrupacioRendiment/categoria/agrupacioProduccio
-  // NO viatgen mai en aquest POST — el backend els deriva de producteId i els
-  // rebutja/ignora si es manden (investigació confirmada amb curl real).
+  // refetch tras mutación. Issues #3/#4 (migració 0018): categoriaId +
+  // agrupacioProduccio identifiquen la fila i SÍ viatgen en aquest POST —
+  // ja no hi ha producteId del qual derivar-los. agrupacioRendiment/
+  // categoria (nom) segueixen sent només de lectura.
   const createPigYield = useCallback(
     async (entrada: RendimentPorcEntradaApi) => {
       await api.post<RendimentPorcApi>('/rendiments-porcs', entrada);
@@ -104,8 +105,9 @@ export function usePigYields(filters: PigYieldFilters = {}): UsePigYieldsResult 
     [refetch],
   );
 
-  // producteId no forma part del payload de PATCH (el backend no l'accepta,
-  // confirmat: el producte d'una línia és fix un cop creada).
+  // categoriaId/agrupacioProduccio no formen part del payload de PATCH (el
+  // backend no els accepta, confirmat: la identitat d'una fila és fixa un
+  // cop creada — mateix criteri que producteId abans de la migració 0018).
   const updatePigYield = useCallback(
     async (id: number, patch: PigYieldPatch) => {
       await api.patch<RendimentPorcApi>(`/rendiments-porcs/${id}`, patch);

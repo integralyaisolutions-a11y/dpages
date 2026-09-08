@@ -63,7 +63,7 @@ function PigYieldRow({
       <td className="px-2 py-3 break-words">
         <span className="font-semibold text-gray-900">{item.categoria}</span>
       </td>
-      <td className="px-2 py-3 break-words text-gray-900">{item.agrupacioProduccio ?? '—'}</td>
+      <td className="px-2 py-3 break-words text-gray-900">{item.agrupacioProduccio}</td>
       <td className="px-2 py-3 text-right">
         <EditableCell
           value={draft.unitsPerPig}
@@ -138,7 +138,7 @@ function PigYieldCard({
   return (
     <DataCard>
       <p className="font-semibold text-gray-900">{item.categoria}</p>
-      <p className="text-sm text-gray-500">{item.agrupacioProduccio ?? '—'}</p>
+      <p className="text-sm text-gray-500">{item.agrupacioProduccio}</p>
 
       <div className="mt-3 grid grid-cols-2 gap-3">
         <div>
@@ -346,7 +346,7 @@ export default function PigYieldsPage() {
         title="Suprimeix línia"
         message={
           pigYieldToDelete
-            ? `Estàs segur que vols suprimir la línia "${pigYieldToDelete.categoria} · ${pigYieldToDelete.agrupacioProduccio ?? '—'}"? Aquesta acció no es pot desfer.`
+            ? `Estàs segur que vols suprimir la línia "${pigYieldToDelete.categoria} · ${pigYieldToDelete.agrupacioProduccio}"? Aquesta acció no es pot desfer.`
             : ''
         }
         confirmLabel="Eliminar"
