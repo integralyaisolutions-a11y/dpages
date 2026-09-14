@@ -9,7 +9,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
 import { SearchInput } from '@/components/ui/SearchInput';
-import { SelectFilter } from '@/components/ui/SelectFilter';
+import { SimpleDropdown } from '@/components/ui/SimpleDropdown';
 import { useRols } from '@/hooks/useRols';
 import { useUsers } from '@/hooks/useUsers';
 import type { RolApi, UsuariApi, UsuariCreatRespostaApi } from '@/lib/api';
@@ -19,7 +19,7 @@ import { RoleFormModal } from './RoleFormModal';
 import { UserFormModal } from './UserFormModal';
 
 const ALL = 'Tots';
-const STATUS_OPTIONS = [ALL, 'Actiu', 'Inactiu'];
+const STATUS_OPTIONS = ['Actiu', 'Inactiu'];
 
 type Tab = 'usuaris' | 'rols';
 
@@ -180,11 +180,12 @@ export default function UsersPage() {
               value={search}
               onChange={setSearch}
             />
-            <SelectFilter
+            <SimpleDropdown
               label="Estat"
               options={STATUS_OPTIONS}
               value={statusFilter}
               onChange={setStatusFilter}
+              allLabel={ALL}
             />
           </FilterBar>
 

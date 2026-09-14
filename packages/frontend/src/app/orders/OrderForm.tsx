@@ -8,7 +8,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DataCard, DataCardField, DataCardGrid } from '@/components/ui/DataCard';
 import { DecimalInput } from '@/components/ui/DecimalInput';
 import { IconButton } from '@/components/ui/IconButton';
-import { SelectFilter } from '@/components/ui/SelectFilter';
+import { SimpleDropdown } from '@/components/ui/SimpleDropdown';
 import { TextField } from '@/components/ui/TextField';
 import type { OrderFormValues, OrderLineChanges } from '@/hooks/useOrders';
 import {
@@ -27,6 +27,7 @@ import {
 import { origenBadgeVariant } from '@/lib/comandaOrigen';
 import { formatDecimal, parseDecimalInput } from '@/lib/decimals';
 import { calculateOrderedWeightKg } from '@/lib/orderCalculations';
+import { MAX_LOCAL_COMBOBOX_RESULTS, matchesProductQuery } from '@/lib/productSearch';
 
 const NO_CLIENT = 'Selecciona client...';
 const NO_TARIFF = 'Sense tarifa';
@@ -85,16 +86,6 @@ async function loadClientOptions(query: string): Promise<ComboboxOption[]> {
     mida: 8,
   });
   return resposta.dades.map((client) => ({ id: client.id, label: clientLabel(client) }));
-}
-
-const MAX_LOCAL_COMBOBOX_RESULTS = 8;
-
-function matchesProductQuery(product: ProducteApi, query: string): boolean {
-  const normalized = query.trim().toLowerCase();
-  return (
-    product.descripcio.toLowerCase().includes(normalized) ||
-    (product.codi ?? '').toLowerCase().includes(normalized)
-  );
 }
 
 function loadLocalProductOptions(products: ProducteApi[]) {
@@ -700,7 +691,7 @@ export const OrderForm = forwardRef<
             onChange={(option) => handleClientChange(option?.id ?? null)}
           />
           {mode === 'create' ? (
-            <SelectFilter
+            <SimpleDropdown
               label="Origen"
               options={originOptions}
               value={originValue}
@@ -723,7 +714,7 @@ export const OrderForm = forwardRef<
               </div>
             </div>
           )}
-          <SelectFilter
+          <SimpleDropdown
             label="Estat"
             options={estatOptions.map((value) => ESTAT_LABELS[value]!)}
             value={ESTAT_LABELS[estat] ?? estat}
@@ -734,7 +725,7 @@ export const OrderForm = forwardRef<
             }}
           />
 
-          <SelectFilter
+          <SimpleDropdown
             label="Tarifa"
             options={tariffOptions}
             value={tariffValue}
@@ -746,7 +737,7 @@ export const OrderForm = forwardRef<
             }}
           />
 
-          <SelectFilter
+          <SimpleDropdown
             label="Transportista"
             options={carrierOptions}
             value={carrierValue}

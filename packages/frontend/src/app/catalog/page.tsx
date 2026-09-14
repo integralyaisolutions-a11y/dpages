@@ -10,7 +10,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
 import { SearchInput } from '@/components/ui/SearchInput';
-import { SelectFilter } from '@/components/ui/SelectFilter';
+import { SimpleDropdown } from '@/components/ui/SimpleDropdown';
 import { useCatalog } from '@/hooks/useCatalog';
 import { useCategories } from '@/hooks/useCategories';
 import type { ProducteApi } from '@/lib/api';
@@ -109,11 +109,11 @@ export default function CatalogPage() {
   const { data: allCategories } = useCategories();
   const { data: allProducts } = useCatalog();
   const categoryOptions = useMemo(
-    () => [ALL_FEM, ...distinct(allCategories.map((category) => category.nom))],
+    () => distinct(allCategories.map((category) => category.nom)),
     [allCategories],
   );
   const productionGroupOptions = useMemo(
-    () => [ALL, ...distinct(allProducts.map((product) => product.agrupacioProduccio ?? '—'))],
+    () => distinct(allProducts.map((product) => product.agrupacioProduccio ?? '—')),
     [allProducts],
   );
 
@@ -144,33 +144,38 @@ export default function CatalogPage() {
 
       <FilterBar>
         <SearchInput label="Cerca descripció" value={search} onChange={setSearch} />
-        <SelectFilter
+        <SimpleDropdown
           label="Categoria"
+          allLabel={ALL_FEM}
           options={categoryOptions}
           value={category}
           onChange={setCategory}
         />
-        <SelectFilter
+        <SimpleDropdown
           label="Agrupació producció"
+          allLabel={ALL}
           options={productionGroupOptions}
           value={productionGroup}
           onChange={setProductionGroup}
         />
-        <SelectFilter
+        <SimpleDropdown
           label="Format"
-          options={[ALL, ...FORMAT_OPTIONS]}
+          allLabel={ALL}
+          options={FORMAT_OPTIONS}
           value={format}
           onChange={setFormat}
         />
-        <SelectFilter
+        <SimpleDropdown
           label="Envasat"
-          options={[ALL, ...PACKAGING_OPTIONS]}
+          allLabel={ALL}
+          options={PACKAGING_OPTIONS}
           value={packaging}
           onChange={setPackaging}
         />
-        <SelectFilter
+        <SimpleDropdown
           label="Estat"
-          options={[ALL, ...STATUS_OPTIONS]}
+          allLabel={ALL}
+          options={STATUS_OPTIONS}
           value={status}
           onChange={setStatus}
         />

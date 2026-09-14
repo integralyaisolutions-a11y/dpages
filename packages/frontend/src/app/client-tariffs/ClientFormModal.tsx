@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { Modal } from "@/components/ui/Modal";
-import { SelectFilter } from "@/components/ui/SelectFilter";
-import { TextField } from "@/components/ui/TextField";
-import type { ClientFormValues } from "@/hooks/useClientTariffs";
-import { ApiError, type ClientApi, type TarifaResumApi } from "@/lib/api";
+import { useState } from 'react';
+import { Modal } from '@/components/ui/Modal';
+import { SimpleDropdown } from '@/components/ui/SimpleDropdown';
+import { TextField } from '@/components/ui/TextField';
+import type { ClientFormValues } from '@/hooks/useClientTariffs';
+import { ApiError, type ClientApi, type TarifaResumApi } from '@/lib/api';
 
-const NO_TARIFF = "Sense tarifa";
+const NO_TARIFF = 'Sense tarifa';
 
 // codi no es editable acá: el backend lo autogenera siempre (capa 25/29),
 // así que un error de ese campo no tiene dónde mostrarse junto a un input
@@ -22,21 +22,21 @@ export function ClientFormModal({
   onClose,
   onSave,
 }: {
-  mode: "create" | "edit";
+  mode: 'create' | 'edit';
   initialData?: ClientApi;
   tariffColumns: TarifaResumApi[];
   isOpen: boolean;
   onClose: () => void;
   onSave: (values: ClientFormValues) => Promise<void>;
 }) {
-  const [poblacio, setPoblacio] = useState(initialData?.poblacio ?? "");
-  const [nom, setNom] = useState(initialData?.nom ?? "");
+  const [poblacio, setPoblacio] = useState(initialData?.poblacio ?? '');
+  const [nom, setNom] = useState(initialData?.nom ?? '');
   const [tariffName, setTariffName] = useState(initialData?.tarifa?.nom ?? NO_TARIFF);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const canSave = nom.trim() !== "" && poblacio.trim() !== "";
+  const canSave = nom.trim() !== '' && poblacio.trim() !== '';
 
   async function handleSave() {
     if (!canSave) return;
@@ -57,7 +57,7 @@ export function ClientFormModal({
       if (caught instanceof ApiError) {
         const nextFieldErrors: FieldErrors = {};
         for (const detall of caught.detalls ?? []) {
-          if (detall.camp === "nom" || detall.camp === "poblacio" || detall.camp === "tarifaId") {
+          if (detall.camp === 'nom' || detall.camp === 'poblacio' || detall.camp === 'tarifaId') {
             nextFieldErrors[detall.camp] = detall.missatge;
           }
         }
@@ -75,18 +75,22 @@ export function ClientFormModal({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={mode === "create" ? "Nou client" : "Modificar client"}>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={mode === 'create' ? 'Nou client' : 'Modificar client'}
+    >
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {mode === "edit" && (
+          {mode === 'edit' && (
             <div className="flex flex-col gap-1.5 text-sm">
               <span className="font-medium text-gray-900">Codi</span>
               <span className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-gray-500">
-                {initialData?.codi ?? "—"}
+                {initialData?.codi ?? '—'}
               </span>
             </div>
           )}
-          <div className={mode === "create" ? "sm:col-span-2" : undefined}>
+          <div className={mode === 'create' ? 'sm:col-span-2' : undefined}>
             <TextField
               label="Població"
               value={poblacio}
@@ -95,20 +99,31 @@ export function ClientFormModal({
             />
           </div>
         </div>
-        <TextField label="Nom" value={nom} onChange={(event) => setNom(event.target.value)} error={fieldErrors.nom} />
+        <TextField
+          label="Nom"
+          value={nom}
+          onChange={(event) => setNom(event.target.value)}
+          error={fieldErrors.nom}
+        />
         <div>
-          <SelectFilter
+          <SimpleDropdown
             label="Tarifa"
             options={[NO_TARIFF, ...tariffColumns.map((tariff) => tariff.nom)]}
             value={tariffName}
             onChange={setTariffName}
           />
-          {fieldErrors.tarifaId && <p className="mt-1.5 text-xs text-red-600">{fieldErrors.tarifaId}</p>}
+          {fieldErrors.tarifaId && (
+            <p className="mt-1.5 text-xs text-red-600">{fieldErrors.tarifaId}</p>
+          )}
         </div>
         {formError && <p className="text-sm text-red-600">{formError}</p>}
       </div>
       <div className="mt-6 flex items-center justify-between">
-        <button type="button" onClick={onClose} className="text-sm font-medium text-gray-500 hover:text-gray-700">
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-sm font-medium text-gray-500 hover:text-gray-700"
+        >
           Cancel·lar
         </button>
         <button
@@ -116,10 +131,12 @@ export function ClientFormModal({
           onClick={handleSave}
           disabled={!canSave || isSaving}
           className={`rounded-full px-5 py-2.5 text-sm font-semibold ${
-            canSave && !isSaving ? "bg-ink text-white hover:opacity-90" : "cursor-not-allowed bg-gray-200 text-gray-400"
+            canSave && !isSaving
+              ? 'bg-ink text-white hover:opacity-90'
+              : 'cursor-not-allowed bg-gray-200 text-gray-400'
           }`}
         >
-          {isSaving ? "Desant..." : "Desar"}
+          {isSaving ? 'Desant...' : 'Desar'}
         </button>
       </div>
     </Modal>

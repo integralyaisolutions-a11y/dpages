@@ -11,7 +11,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
 import { SearchInput } from '@/components/ui/SearchInput';
-import { SelectFilter } from '@/components/ui/SelectFilter';
+import { SimpleDropdown } from '@/components/ui/SimpleDropdown';
 import { useClientTariffs } from '@/hooks/useClientTariffs';
 import { useOrders } from '@/hooks/useOrders';
 import { useOrigensComanda } from '@/hooks/useOrigensComanda';
@@ -194,11 +194,12 @@ export default function OrdersPage() {
           onChange={setOrderNumberSearch}
         />
         <SearchInput label="Client" value={clientSearch} onChange={setClientSearch} />
-        <SelectFilter
+        <SimpleDropdown
           label="Estat"
-          options={[ALL, ...Object.values(ESTAT_LABELS)]}
+          options={Object.values(ESTAT_LABELS)}
           value={statusFilter}
           onChange={setStatusFilter}
+          allLabel={ALL}
         />
         <DateInput
           label="Data producció"

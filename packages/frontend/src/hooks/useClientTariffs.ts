@@ -1,7 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { api, ApiError, type ClientApi, type Paginacio, type RespostaPaginada } from '@/lib/api';
+import {
+  api,
+  ApiError,
+  obtenirTotesLesPagines,
+  paginacioTaulaCompleta,
+  type ClientApi,
+  type Paginacio,
+  type RespostaPaginada,
+} from '@/lib/api';
 
 export type ClientFormValues = {
   nom: string;
@@ -21,6 +29,15 @@ export type ClientTariffsFilters = { cerca?: string };
  * per resoldre nom/codi de client — necessiten TOTS els clients, no una
  * pàgina de 20. Només `app/client-tariffs/page.tsx` passa `mida: 20`
  * explícit per paginar de veritat la seva pròpia llista.
+ *
+ * BUG real corregit (2026-09): amb 1291 clients reals, "sense `mida`" no
+ * volia dir "tots" — el backend té un topall dur de 200 files per petició
+ * (MIDA_PAGINA_MAXIMA, comu.ts), així que els 5 llocs de dalt es quedaven
+ * en silenci amb només els primers 200. Quan `params.mida` no es passa,
+ * l'efecte de sota demana totes les pàgines i les combina (ver
+ * `obtenirTotesLesPagines`, lib/api.ts) — `app/client-tariffs/page.tsx`
+ * (que sí passa `mida: 20`) no entra per aquest camí, segueix paginant una
+ * sola pàgina real com sempre.
  */
 export type UseClientTariffsParams = { mida?: number };
 
@@ -42,6 +59,9 @@ export function useClientTariffs(
   filters: ClientTariffsFilters = {},
   params: UseClientTariffsParams = {},
 ): UseClientTariffsResult {
+  // Cal saber-ho ABANS d'aplicar el valor per defecte: "taula completa" és
+  // "el caller no ha passat `mida`", no "mida === 200".
+  const esTaulaCompleta = params.mida === undefined;
   const { mida = MIDA_PER_DEFECTE } = params;
   const [data, setData] = useState<ClientApi[]>([]);
   const [paginacio, setPaginacio] = useState<Paginacio | null>(null);
@@ -70,8 +90,24 @@ export function useClientTariffs(
     setIsLoading(true);
     setError(null);
 
-    api
-      .get<RespostaPaginada<ClientApi>>('/clients', { mida, pagina, ...filters })
+    const demanarPagina = (paginaADemanar: number) =>
+      api.get<RespostaPaginada<ClientApi>>('/clients', {
+        mida,
+        pagina: paginaADemanar,
+        ...filters,
+      });
+
+    // Mode "taula completa": totes les pàgines combinades (ver comentari a
+    // UseClientTariffsParams). isLoading es manté a true fins que TOTES han
+    // arribat.
+    const carrega = esTaulaCompleta
+      ? obtenirTotesLesPagines(demanarPagina).then((dades) => ({
+          dades,
+          paginacio: paginacioTaulaCompleta(dades.length),
+        }))
+      : demanarPagina(pagina);
+
+    carrega
       .then((resposta) => {
         if (!cancelled) {
           setData(resposta.dades);
@@ -95,7 +131,7 @@ export function useClientTariffs(
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reloadToken, pagina, mida, filtersKey]);
+  }, [reloadToken, pagina, mida, filtersKey, esTaulaCompleta]);
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 

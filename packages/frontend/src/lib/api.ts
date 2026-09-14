@@ -15,7 +15,13 @@
 // (hooks/useCategories.ts) — el resto sigue consumiendo mocks hasta que le
 // toque su turno.
 
-import type { CodiErrorApi, CosErrorApi, DetallErrorApi } from "@dpages/shared";
+import type {
+  CodiErrorApi,
+  CosErrorApi,
+  DetallErrorApi,
+  Paginacio,
+  RespostaPaginada,
+} from '@dpages/shared';
 
 export type {
   CategoriaApi,
@@ -56,11 +62,11 @@ export type {
   TotalsPanellEmpaquetatApi,
   PanellProduccioApi,
   PanellProduccioFilaApi,
-} from "@dpages/shared";
+} from '@dpages/shared';
 
 // ── Cliente HTTP ────────────────────────────────────────────────────────
 
-const API_BASE_URL = `${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/v1`;
+const API_BASE_URL = `${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/v1`;
 
 /**
  * Punto de inyección del token de Firebase (tarea 5 de esta sesión). Hasta
@@ -80,7 +86,7 @@ export function setAuthTokenProvider(provider: () => Promise<string | null>): vo
  * del cliente para errores que nunca llegan a tener una respuesta del
  * backend con esa forma (falla de red, respuesta sin JSON válido).
  */
-export type CodiErrorClient = CodiErrorApi | "ERROR_XARXA" | "RESPOSTA_INVALIDA";
+export type CodiErrorClient = CodiErrorApi | 'ERROR_XARXA' | 'RESPOSTA_INVALIDA';
 
 /** Excepción tipada que lanzan `api.get`/`post`/`patch`/`delete` — pensada para capturarse de forma consistente en cualquier hook. */
 export class ApiError extends Error {
@@ -88,9 +94,14 @@ export class ApiError extends Error {
   readonly detalls?: DetallErrorApi[];
   readonly status: number | null;
 
-  constructor(codi: CodiErrorClient, missatge: string, status: number | null, detalls?: DetallErrorApi[]) {
+  constructor(
+    codi: CodiErrorClient,
+    missatge: string,
+    status: number | null,
+    detalls?: DetallErrorApi[],
+  ) {
     super(missatge);
-    this.name = "ApiError";
+    this.name = 'ApiError';
     this.codi = codi;
     this.status = status;
     this.detalls = detalls;
@@ -101,20 +112,33 @@ async function parseErrorBody(response: Response): Promise<ApiError> {
   try {
     const body = (await response.json()) as CosErrorApi;
     if (body?.error?.codi && body.error.missatge) {
-      return new ApiError(body.error.codi, body.error.missatge, response.status, body.error.detalls);
+      return new ApiError(
+        body.error.codi,
+        body.error.missatge,
+        response.status,
+        body.error.detalls,
+      );
     }
   } catch {
     // La respuesta de error no trae JSON válido con la forma del contrato — cae al genérico de abajo.
   }
-  return new ApiError("RESPOSTA_INVALIDA", `Error ${response.status} sense cos d'error vàlid.`, response.status);
+  return new ApiError(
+    'RESPOSTA_INVALIDA',
+    `Error ${response.status} sense cos d'error vàlid.`,
+    response.status,
+  );
 }
 
-async function request<T>(method: "GET" | "POST" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T> {
+async function request<T>(
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  path: string,
+  body?: unknown,
+): Promise<T> {
   const token = await authTokenProvider();
   const headers: Record<string, string> = {
-    "Accept-Language": "ca",
+    'Accept-Language': 'ca',
   };
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (token) headers.Authorization = `Bearer ${token}`;
 
   let response: Response;
@@ -126,7 +150,7 @@ async function request<T>(method: "GET" | "POST" | "PATCH" | "DELETE", path: str
     });
   } catch (caught) {
     throw new ApiError(
-      "ERROR_XARXA",
+      'ERROR_XARXA',
       caught instanceof Error ? caught.message : "No s'ha pogut connectar amb el servidor.",
       null,
     );
@@ -137,7 +161,10 @@ async function request<T>(method: "GET" | "POST" | "PATCH" | "DELETE", path: str
   return (await response.json()) as T;
 }
 
-function withQuery(path: string, params?: Record<string, string | number | boolean | undefined>): string {
+function withQuery(
+  path: string,
+  params?: Record<string, string | number | boolean | undefined>,
+): string {
   if (!params) return path;
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -149,8 +176,44 @@ function withQuery(path: string, params?: Record<string, string | number | boole
 
 export const api = {
   get: <T>(path: string, params?: Record<string, string | number | boolean | undefined>) =>
-    request<T>("GET", withQuery(path, params)),
-  post: <T>(path: string, body?: unknown) => request<T>("POST", path, body ?? {}),
-  patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, body ?? {}),
-  delete: <T>(path: string) => request<T>("DELETE", path),
+    request<T>('GET', withQuery(path, params)),
+  post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
+  patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body ?? {}),
+  delete: <T>(path: string) => request<T>('DELETE', path),
 };
+
+// ── Hooks "de taula completa" ───────────────────────────────────────────
+
+/**
+ * El backend té un topall dur de 200 files per petició (MIDA_PAGINA_MAXIMA,
+ * comu.ts) — cap `mida` per damunt es respecta. Els hooks "de taula
+ * completa" (useCatalog, useClientTariffs) que es criden SENSE `mida`
+ * explícit necessiten TOTES les files igual (353 productes, 1291 clients
+ * reals, tots dos per damunt de 200), no una pàgina — sense això, els
+ * consumidors que en depenen (options de filtres, resolució de nom/codi)
+ * es quedaven en silenci amb només les primeres 200.
+ *
+ * Demana la primera pàgina per conèixer `totalPagines`, i si n'hi ha més
+ * d'una, la resta EN PARAL·LEL (`Promise.all`, no en sèrie — amb 2 pàgines
+ * de 200 no val la pena esperar-les una darrere l'altra). Mai s'ha de fer
+ * servir al camí de paginació real d'una pantalla pròpia (aquella sempre
+ * passa `mida` explícit i vol una sola pàgina, no el total combinat).
+ */
+export async function obtenirTotesLesPagines<T>(
+  demanarPagina: (pagina: number) => Promise<RespostaPaginada<T>>,
+): Promise<T[]> {
+  const primera = await demanarPagina(1);
+  if (primera.paginacio.totalPagines <= 1) return primera.dades;
+
+  const restants = await Promise.all(
+    Array.from({ length: primera.paginacio.totalPagines - 1 }, (_, index) =>
+      demanarPagina(index + 2),
+    ),
+  );
+  return [primera, ...restants].flatMap((resposta) => resposta.dades);
+}
+
+/** Paginació sintètica per a un dataset ja combinat sencer (ver `obtenirTotesLesPagines`) — honesta amb el total real, no una pàgina més. */
+export function paginacioTaulaCompleta(total: number): Paginacio {
+  return { pagina: 1, mida: total, total, totalPagines: 1 };
+}

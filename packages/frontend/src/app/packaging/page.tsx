@@ -1,28 +1,45 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { AsyncCombobox, type ComboboxOption } from '@/components/ui/AsyncCombobox';
 import { ClearFiltersButton, FilterBar } from '@/components/ui/FilterBar';
 import { DataCard, DataCardActions, DataCardField, DataCardGrid } from '@/components/ui/DataCard';
 import { DateInput } from '@/components/ui/DateInput';
 import { DecimalInput } from '@/components/ui/DecimalInput';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
-import { SelectFilter } from '@/components/ui/SelectFilter';
+import { SimpleDropdown } from '@/components/ui/SimpleDropdown';
 import { StatCard } from '@/components/ui/StatCard';
 import { useCarriers } from '@/hooks/useCarriers';
 import { useCatalog } from '@/hooks/useCatalog';
-import { useClientTariffs } from '@/hooks/useClientTariffs';
 import { useEditableRow } from '@/hooks/useEditableRow';
 import { type LliuramentSaveResult, usePanellEmpaquetat } from '@/hooks/usePanellEmpaquetat';
-import type { ClientApi, FilaPanellEmpaquetatApi } from '@/lib/api';
+import {
+  api,
+  type ClientApi,
+  type FilaPanellEmpaquetatApi,
+  type RespostaPaginada,
+} from '@/lib/api';
 import { formatData } from '@/lib/dates';
 import { formatDecimal, parseDecimalInput } from '@/lib/decimals';
+import { MAX_LOCAL_COMBOBOX_RESULTS, matchesProductQuery } from '@/lib/productSearch';
 
 const ALL = 'Tots';
-const ALL_FEM = 'Totes';
 
 function clientLabel(client: ClientApi) {
   return `${client.codi ?? client.id} · ${client.nom ?? ''}`;
+}
+
+// Mateix patró que office/page.tsx i OrderForm.tsx: GET /clients?cerca= és
+// substring case-insensitive real, per això Client fa servir mode servidor
+// (abans carregava els 200 clients per defecte de useClientTariffs() només
+// per a aquest filtre — amb 1291 clients reals, ja quedava incomplet).
+async function loadClientOptions(query: string): Promise<ComboboxOption[]> {
+  const resposta = await api.get<RespostaPaginada<ClientApi>>('/clients', {
+    cerca: query,
+    mida: 8,
+  });
+  return resposta.dades.map((client) => ({ id: client.id, label: clientLabel(client) }));
 }
 
 // "0" pla en comptes de "0.000"/"0.00" — mateix criteri que kgDemanats a
@@ -289,19 +306,25 @@ function PackagingCard({
 }
 
 export default function PackagingPage() {
-  const { data: clients } = useClientTariffs();
   const { data: carriers } = useCarriers();
   const { data: catalog } = useCatalog();
 
   const [shippingDateFilter, setShippingDateFilter] = useState('');
   const [carrierFilter, setCarrierFilter] = useState(ALL);
-  const [clientFilter, setClientFilter] = useState(ALL);
+  // Client ja no ve d'un <select> amb els clients de useClientTariffs()
+  // precarregats (per defecte només 200, i n'hi ha 1291 reals — el filtre
+  // ja quedava incomplet abans d'aquest canvi) — AsyncCombobox el resol via
+  // GET /clients?cerca=, mateix patró que office/page.tsx i OrderForm.tsx.
+  // Es guarda l'opció sencera (id+label): no hi ha cap array complet
+  // d'on resoldre l'etiqueta a mostrar després.
+  const [selectedClient, setSelectedClient] = useState<ComboboxOption | null>(null);
   // Capa 37 — dataLliuramentDes/Fins (rang) i producte (exacte,
   // case-insensitive) ja tenen suport real al backend. Mateix patró que
-  // "Data d'expedició" (un sol camp, enviat com Des=Fins=mateix valor) i
-  // que el select de producte d'Obrador/Producció (exacte, no substring —
-  // per això és un SelectFilter i no el SearchInput de lupa del mockup
-  // original).
+  // "Data d'expedició" (un sol camp, enviat com Des=Fins=mateix valor).
+  // Producte segueix en mode LOCAL (filtrant `catalog` ja carregat, mateix
+  // criteri que Producte a OrderForm.tsx): GET /productes?cerca= fa
+  // coincidència EXACTA a propòsit (regla 3.1), no serveix per a cerca
+  // incremental — veure lib/productSearch.ts.
   const [deliveryDateFilter, setDeliveryDateFilter] = useState('');
   const [productFilter, setProductFilter] = useState(ALL);
 
@@ -310,15 +333,26 @@ export default function PackagingPage() {
       carrierFilter !== ALL ? carriers.find((item) => item.nom === carrierFilter)?.id : undefined,
     [carrierFilter, carriers],
   );
-  const clientId = useMemo(
+  // L'input de producte necessita un id numèric per a `value` (contracte
+  // d'AsyncCombobox), però el filtre real que viatja al backend és la
+  // descripció (string, ver `filters` més avall) — es resol el primer
+  // producte que la comparteixi, igual que abans es resolia `clientId`/
+  // `carrierId` a partir d'una etiqueta.
+  const productId = useMemo(
     () =>
-      clientFilter !== ALL
-        ? clients.find((item) => clientLabel(item) === clientFilter)?.id
-        : undefined,
-    [clientFilter, clients],
+      productFilter !== ALL
+        ? (catalog.find((product) => product.descripcio === productFilter)?.id ?? null)
+        : null,
+    [productFilter, catalog],
   );
-  const productOptions = useMemo(
-    () => [ALL, ...Array.from(new Set(catalog.map((product) => product.descripcio))).sort()],
+  const loadProductOptions = useMemo(
+    () => (query: string) =>
+      Promise.resolve(
+        catalog
+          .filter((product) => matchesProductQuery(product, query))
+          .slice(0, MAX_LOCAL_COMBOBOX_RESULTS)
+          .map((product) => ({ id: product.id, label: product.descripcio })),
+      ),
     [catalog],
   );
 
@@ -328,13 +362,13 @@ export default function PackagingPage() {
         ? { dataExpedicioDes: shippingDateFilter, dataExpedicioFins: shippingDateFilter }
         : {}),
       ...(carrierId !== undefined ? { transportistaId: carrierId } : {}),
-      ...(clientId !== undefined ? { clientId } : {}),
+      ...(selectedClient !== null ? { clientId: selectedClient.id } : {}),
       ...(deliveryDateFilter
         ? { dataLliuramentDes: deliveryDateFilter, dataLliuramentFins: deliveryDateFilter }
         : {}),
       ...(productFilter !== ALL ? { producte: productFilter } : {}),
     }),
-    [shippingDateFilter, carrierId, clientId, deliveryDateFilter, productFilter],
+    [shippingDateFilter, carrierId, selectedClient, deliveryDateFilter, productFilter],
   );
 
   // Capa 46 — "pendents primer" ja ve per defecte des del backend (GET
@@ -347,7 +381,7 @@ export default function PackagingPage() {
   function clearFilters() {
     setShippingDateFilter('');
     setCarrierFilter(ALL);
-    setClientFilter(ALL);
+    setSelectedClient(null);
     setDeliveryDateFilter('');
     setProductFilter(ALL);
   }
@@ -392,23 +426,29 @@ export default function PackagingPage() {
           value={deliveryDateFilter}
           onChange={setDeliveryDateFilter}
         />
-        <SelectFilter
+        <SimpleDropdown
           label="Transportista"
-          options={[ALL, ...carriers.map((item) => item.nom)]}
+          options={carriers.map((item) => item.nom)}
           value={carrierFilter}
           onChange={setCarrierFilter}
+          allLabel={ALL}
         />
-        <SelectFilter
+        <AsyncCombobox
           label="Producte"
-          options={productOptions}
-          value={productFilter}
-          onChange={setProductFilter}
+          value={productId}
+          displayValue={productFilter !== ALL ? productFilter : ''}
+          placeholder="Cercar producte..."
+          debounceMs={0}
+          loadOptions={loadProductOptions}
+          onChange={(option) => setProductFilter(option?.label ?? ALL)}
         />
-        <SelectFilter
+        <AsyncCombobox
           label="Client"
-          options={[ALL, ...clients.map((item) => clientLabel(item))]}
-          value={clientFilter}
-          onChange={setClientFilter}
+          value={selectedClient?.id ?? null}
+          displayValue={selectedClient?.label ?? ''}
+          placeholder="Cercar client..."
+          onChange={setSelectedClient}
+          loadOptions={loadClientOptions}
         />
         <ClearFiltersButton onClick={clearFilters} />
       </FilterBar>

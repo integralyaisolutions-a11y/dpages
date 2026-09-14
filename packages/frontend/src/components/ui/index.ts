@@ -12,5 +12,6 @@ export * from './Modal';
 export * from './PageHeader';
 export * from './SearchInput';
 export * from './SelectFilter';
+export * from './SimpleDropdown';
 export * from './StatCard';
 export * from './TextField';

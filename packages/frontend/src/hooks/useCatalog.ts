@@ -1,7 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { api, ApiError, type Paginacio, type ProducteApi, type RespostaPaginada } from '@/lib/api';
+import {
+  api,
+  ApiError,
+  obtenirTotesLesPagines,
+  paginacioTaulaCompleta,
+  type Paginacio,
+  type ProducteApi,
+  type RespostaPaginada,
+} from '@/lib/api';
 
 export type ProductFormValues = {
   codi: string | null;
@@ -26,6 +34,15 @@ export type CatalogFilters = { cerca?: string };
  * resoldre categoria/format de CADA producte de la matriu de tarifes, no
  * només els 20 de la pàgina actual). Sols `app/catalog/page.tsx` passa
  * `mida: 20` explícit per paginar de veritat la seva pròpia llista.
+ *
+ * BUG real corregit (2026-09): amb catàleg real (353 productes), "sense
+ * `mida`" no volia dir "tots" — el backend té un topall dur de 200 files
+ * per petició (MIDA_PAGINA_MAXIMA, comu.ts), així que els 7 llocs de dalt
+ * es quedaven en silenci amb només les primeres 200. Quan `params.mida` no
+ * es passa, l'efecte de sota demana totes les pàgines i les combina (ver
+ * `obtenirTotesLesPagines`, lib/api.ts) — `app/catalog/page.tsx` (que sí
+ * passa `mida: 20`) no entra per aquest camí, segueix paginant una sola
+ * pàgina real com sempre.
  */
 export type UseCatalogParams = { mida?: number };
 
@@ -47,6 +64,10 @@ export function useCatalog(
   filters: CatalogFilters = {},
   params: UseCatalogParams = {},
 ): UseCatalogResult {
+  // Cal saber-ho ABANS d'aplicar el valor per defecte: "taula completa" és
+  // "el caller no ha passat `mida`", no "mida === 200" (algú podria voler
+  // 200 de veritat com a pàgina real algun dia).
+  const esTaulaCompleta = params.mida === undefined;
   const { mida = MIDA_PER_DEFECTE } = params;
   const [data, setData] = useState<ProducteApi[]>([]);
   const [paginacio, setPaginacio] = useState<Paginacio | null>(null);
@@ -78,8 +99,24 @@ export function useCatalog(
     setIsLoading(true);
     setError(null);
 
-    api
-      .get<RespostaPaginada<ProducteApi>>('/productes', { mida, pagina, ...filters })
+    const demanarPagina = (paginaADemanar: number) =>
+      api.get<RespostaPaginada<ProducteApi>>('/productes', {
+        mida,
+        pagina: paginaADemanar,
+        ...filters,
+      });
+
+    // Mode "taula completa": totes les pàgines combinades (ver comentari a
+    // UseCatalogParams). isLoading es manté a true fins que TOTES han
+    // arribat — `obtenirTotesLesPagines` no resol fins tenir-les totes.
+    const carrega = esTaulaCompleta
+      ? obtenirTotesLesPagines(demanarPagina).then((dades) => ({
+          dades,
+          paginacio: paginacioTaulaCompleta(dades.length),
+        }))
+      : demanarPagina(pagina);
+
+    carrega
       .then((resposta) => {
         if (!cancelled) {
           setData(resposta.dades);
@@ -103,7 +140,7 @@ export function useCatalog(
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reloadToken, pagina, mida, filtersKey]);
+  }, [reloadToken, pagina, mida, filtersKey, esTaulaCompleta]);
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 

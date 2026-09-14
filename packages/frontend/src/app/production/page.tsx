@@ -1,17 +1,19 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { AsyncCombobox } from '@/components/ui/AsyncCombobox';
 import { ClearFiltersButton, FilterBar } from '@/components/ui/FilterBar';
 import { DataCard, DataCardField, DataCardGrid } from '@/components/ui/DataCard';
 import { DateInput } from '@/components/ui/DateInput';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
-import { SelectFilter } from '@/components/ui/SelectFilter';
+import { SimpleDropdown } from '@/components/ui/SimpleDropdown';
 import { StatCard } from '@/components/ui/StatCard';
 import { useCatalog } from '@/hooks/useCatalog';
 import { useProductionPanell } from '@/hooks/useProductionPanell';
 import type { PanellProduccioFilaApi } from '@/lib/api';
 import { formatDecimal } from '@/lib/decimals';
+import { MAX_LOCAL_COMBOBOX_RESULTS, matchesProductQuery } from '@/lib/productSearch';
 
 const ALL = 'Totes';
 const AGRUPACIONS_RENDIMENT = ['KG', 'MAGRE', 'PAQ'];
@@ -103,8 +105,25 @@ export default function ProductionPage() {
   const [dateFromTouched, setDateFromTouched] = useState(false);
   const [dateToTouched, setDateToTouched] = useState(false);
 
-  const productOptions = useMemo(
-    () => [ALL, ...Array.from(new Set(catalog.map((product) => product.descripcio))).sort()],
+  // Mode LOCAL (filtrant `catalog` ja carregat), mateix criteri que
+  // Producte a OrderForm.tsx: GET /productes?cerca= fa coincidència EXACTA
+  // a propòsit (regla 3.1 — "lomo" no ha de portar "cabeza de lomo"), no
+  // serveix per a cerca incremental — ver lib/productSearch.ts.
+  const productId = useMemo(
+    () =>
+      productFilter !== ALL
+        ? (catalog.find((product) => product.descripcio === productFilter)?.id ?? null)
+        : null,
+    [productFilter, catalog],
+  );
+  const loadProductOptions = useMemo(
+    () => (query: string) =>
+      Promise.resolve(
+        catalog
+          .filter((product) => matchesProductQuery(product, query))
+          .slice(0, MAX_LOCAL_COMBOBOX_RESULTS)
+          .map((product) => ({ id: product.id, label: product.descripcio })),
+      ),
     [catalog],
   );
 
@@ -218,17 +237,21 @@ export default function ProductionPage() {
       </div>
 
       <FilterBar>
-        <SelectFilter
+        <SimpleDropdown
           label="Agrupació Rendiment"
-          options={[ALL, ...AGRUPACIONS_RENDIMENT]}
+          options={AGRUPACIONS_RENDIMENT}
           value={agrupacioFilter}
           onChange={setAgrupacioFilter}
+          allLabel={ALL}
         />
-        <SelectFilter
+        <AsyncCombobox
           label="Producte"
-          options={productOptions}
-          value={productFilter}
-          onChange={setProductFilter}
+          value={productId}
+          displayValue={productFilter !== ALL ? productFilter : ''}
+          placeholder="Cercar producte..."
+          debounceMs={0}
+          loadOptions={loadProductOptions}
+          onChange={(option) => setProductFilter(option?.label ?? ALL)}
         />
         <DateInput
           label="Data producció des de"

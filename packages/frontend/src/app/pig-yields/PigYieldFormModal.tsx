@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { DecimalInput } from '@/components/ui/DecimalInput';
 import { Modal } from '@/components/ui/Modal';
-import { SelectFilter } from '@/components/ui/SelectFilter';
+import { SimpleDropdown } from '@/components/ui/SimpleDropdown';
 import { useCatalog } from '@/hooks/useCatalog';
 import { useCategories } from '@/hooks/useCategories';
 import {
@@ -40,13 +40,15 @@ export function PigYieldFormModal({
   const { data: products } = useCatalog();
   const { data: categories } = useCategories();
 
-  // Cascada de 2 nivells (Agrupació Rendiment → Categoria → Agrupació
-  // Producció): issues #3/#4, la fila ja no s'identifica per un producte
-  // puntual, sinó per categoriaId + agrupacioProduccio (columna pròpia de
-  // rendiments_porcs des de la migració 0018) — el nivell de Producte
-  // desapareix per complet, ni de lectura ni d'escriptura (confirmat
-  // contra rendiments-porcs.ts real: POST accepta categoriaId +
-  // agrupacioProduccio, ja no producteId).
+  // Cascada d'1 sol nivell real (Categoria → Agrupació Producció): la fila
+  // s'identifica per categoriaId + agrupacioProduccio (columna pròpia de
+  // rendiments_porcs des de la migració 0018) — Producte no existeix, ni de
+  // lectura ni d'escriptura (confirmat contra rendiments-porcs.ts real: POST
+  // accepta categoriaId + agrupacioProduccio, ja no producteId).
+  // Agrupació Rendiment (l'enum KG/MAGRE/PAQ de la categoria) NO és un camp
+  // triable: era un selector real fins ara però el backend mai el va
+  // necessitar (2d90c10 ja identifica la fila per categoriaId, no per
+  // aquest valor) — treure'l és el fix de l'issue #4 reobert per Francesc.
   const categoriaByNom = useMemo(() => new Map(categories.map((c) => [c.nom, c])), [categories]);
   // Sólo les categories amb agrupacioRendiment definit poden tenir línies de
   // rendiment (el backend rebutja la resta amb 400 VALIDACIO) — el cascade
@@ -56,7 +58,6 @@ export function PigYieldFormModal({
     [categories],
   );
 
-  const [agrupacioRendiment, setAgrupacioRendiment] = useState(PLACEHOLDER);
   const [categoria, setCategoria] = useState(PLACEHOLDER);
   const [agrupacioProduccio, setAgrupacioProduccio] = useState(PLACEHOLDER);
   const [unitsPerPig, setUnitsPerPig] = useState('');
@@ -65,39 +66,26 @@ export function PigYieldFormModal({
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const agrupacioRendimentOptions = useMemo(
-    () => [PLACEHOLDER, ...distinct(eligibleCategories.map((c) => c.agrupacioRendiment as string))],
-    [eligibleCategories],
-  );
-
   const categoriaOptions = useMemo(
-    () => [
-      PLACEHOLDER,
-      ...eligibleCategories
-        .filter(
-          (c) => agrupacioRendiment === PLACEHOLDER || c.agrupacioRendiment === agrupacioRendiment,
-        )
-        .map((c) => c.nom),
-    ],
-    [eligibleCategories, agrupacioRendiment],
+    () => [PLACEHOLDER, ...eligibleCategories.map((c) => c.nom)],
+    [eligibleCategories],
   );
 
   const selectedCategoria = categoriaByNom.get(categoria);
 
-  // Productes que ja compleixen Agrupació Rendiment + Categoria — base per
-  // calcular les opcions d'Agrupació Producció (el catàleg complet ja el
-  // carrega useCatalog(), no fa falta cap endpoint nou per filtrar-lo).
+  // Productes que ja compleixen Categoria (i pertanyen a una categoria
+  // elegible per a rendiments) — base per calcular les opcions d'Agrupació
+  // Producció (el catàleg complet ja el carrega useCatalog(), no fa falta
+  // cap endpoint nou per filtrar-lo).
   const productsUpToCategoria = useMemo(
     () =>
       products.filter((product) => {
         const cat = product.categoria ? categoriaByNom.get(product.categoria.nom) : undefined;
         if (!cat || cat.agrupacioRendiment === null) return false;
-        if (agrupacioRendiment !== PLACEHOLDER && cat.agrupacioRendiment !== agrupacioRendiment)
-          return false;
         if (categoria !== PLACEHOLDER && product.categoria?.nom !== categoria) return false;
         return true;
       }),
-    [products, categoriaByNom, agrupacioRendiment, categoria],
+    [products, categoriaByNom, categoria],
   );
 
   const agrupacioProduccioOptions = useMemo(
@@ -202,18 +190,8 @@ export function PigYieldFormModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Nova línia">
       <div className="flex flex-col gap-4">
-        <SelectFilter
-          label="Agrupació Rendiment"
-          options={agrupacioRendimentOptions}
-          value={agrupacioRendiment}
-          onChange={(value) => {
-            setAgrupacioRendiment(value);
-            setCategoria(PLACEHOLDER);
-            setAgrupacioProduccio(PLACEHOLDER);
-          }}
-        />
         <div>
-          <SelectFilter
+          <SimpleDropdown
             label="Categoria"
             options={categoriaOptions}
             value={categoria}
@@ -227,7 +205,7 @@ export function PigYieldFormModal({
           )}
         </div>
         <div>
-          <SelectFilter
+          <SimpleDropdown
             label="Agrupació Producció"
             options={agrupacioProduccioOptions}
             value={agrupacioProduccio}
