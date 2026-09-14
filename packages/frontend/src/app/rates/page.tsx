@@ -1,27 +1,27 @@
-"use client";
+'use client';
 
-import { ChevronRight } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { EditableCell } from "@/components/ui/EditableCell";
-import { FilterBar } from "@/components/ui/FilterBar";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { Pagination } from "@/components/ui/Pagination";
-import { SearchInput } from "@/components/ui/SearchInput";
-import { SelectFilter } from "@/components/ui/SelectFilter";
-import { useCatalog } from "@/hooks/useCatalog";
-import { useEditableRow } from "@/hooks/useEditableRow";
-import { type CellSaveResult, useRates } from "@/hooks/useRates";
-import type { FilaMatriuTarifesApi, TarifaResumApi } from "@/lib/api";
-import { parseDecimalInput } from "@/lib/decimals";
-import { TariffFormModal } from "./TariffFormModal";
+import { ChevronRight } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { EditableCell } from '@/components/ui/EditableCell';
+import { FilterBar } from '@/components/ui/FilterBar';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Pagination } from '@/components/ui/Pagination';
+import { SearchInput } from '@/components/ui/SearchInput';
+import { SimpleDropdown } from '@/components/ui/SimpleDropdown';
+import { useCatalog } from '@/hooks/useCatalog';
+import { useEditableRow } from '@/hooks/useEditableRow';
+import { type CellSaveResult, useRates } from '@/hooks/useRates';
+import type { FilaMatriuTarifesApi, TarifaResumApi } from '@/lib/api';
+import { parseDecimalInput } from '@/lib/decimals';
+import { TariffFormModal } from './TariffFormModal';
 
-const ALL = "Tots";
-const ALL_FEM = "Totes";
+const ALL = 'Tots';
+const ALL_FEM = 'Totes';
 
 // Valors fixos del enum real (CHECK constraint, migració 0011) — no es
 // deriva de `data` (amb paginació real la pàgina actual pot no contenir
 // tots els formats possibles), mateix criteri que catalog/page.tsx.
-const FORMAT_OPTIONS = ["SENCER", "TALLAT", "LLESCAT"];
+const FORMAT_OPTIONS = ['SENCER', 'TALLAT', 'LLESCAT'];
 
 // Descripció és l'ÚNICA columna fixa ("sticky"): no es desplaça amb el
 // scroll horitzontal. Categoria, Format i Codi Producte ara scrollegen
@@ -49,20 +49,20 @@ const DESCRIPCIO_WIDTH_MOBILE = 150;
 const GUARDAR_WIDTH = 90;
 const TARIFF_COLUMN_WIDTH = 110;
 
-const MOBILE_BREAKPOINT_QUERY = "(max-width: 639px)";
+const MOBILE_BREAKPOINT_QUERY = '(max-width: 639px)';
 
-const STICKY_LEFT_SHADOW = "shadow-[4px_0_6px_-4px_rgba(0,0,0,0.15)]";
+const STICKY_LEFT_SHADOW = 'shadow-[4px_0_6px_-4px_rgba(0,0,0,0.15)]';
 
 function useIsMobileWidth() {
   const [isMobile, setIsMobile] = useState(() =>
-    typeof window === "undefined" ? false : window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches,
+    typeof window === 'undefined' ? false : window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches,
   );
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(MOBILE_BREAKPOINT_QUERY);
     const handleChange = (event: MediaQueryListEvent) => setIsMobile(event.matches);
-    mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
   return isMobile;
@@ -90,7 +90,11 @@ function RateProductRow({
   format: string;
   tariffColumns: TarifaResumApi[];
   descripcioWidth: number;
-  onSave: (producteId: number, changes: Record<string, string>, deletions: string[]) => Promise<CellSaveResult[]>;
+  onSave: (
+    producteId: number,
+    changes: Record<string, string>,
+    deletions: string[],
+  ) => Promise<CellSaveResult[]>;
 }) {
   const [cellErrors, setCellErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -151,7 +155,11 @@ function RateProductRow({
         <span className="font-semibold text-gray-900">{product.codi}</span>
       </td>
       {tariffColumns.map((tariff) => (
-        <td key={tariff.id} className="px-1 py-3 text-right align-top" style={{ width: TARIFF_COLUMN_WIDTH }}>
+        <td
+          key={tariff.id}
+          className="px-1 py-3 text-right align-top"
+          style={{ width: TARIFF_COLUMN_WIDTH }}
+        >
           <EditableCell
             value={draft[String(tariff.id)] ?? null}
             onChange={(value) => setField(String(tariff.id), value)}
@@ -167,10 +175,12 @@ function RateProductRow({
           onClick={save}
           disabled={!isDirty || isSaving}
           className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-            isDirty && !isSaving ? "bg-ink text-white hover:opacity-90" : "cursor-not-allowed bg-gray-200 text-gray-400"
+            isDirty && !isSaving
+              ? 'bg-ink text-white hover:opacity-90'
+              : 'cursor-not-allowed bg-gray-200 text-gray-400'
           }`}
         >
-          {isSaving ? "Desant..." : "Desar"}
+          {isSaving ? 'Desant...' : 'Desar'}
         </button>
       </td>
     </tr>
@@ -179,7 +189,7 @@ function RateProductRow({
 
 export default function RatesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState('');
   const [category, setCategory] = useState(ALL_FEM);
   const [format, setFormat] = useState(ALL);
 
@@ -188,8 +198,18 @@ export default function RatesPage() {
   // confirmat contra tarifes.ts) — abans es filtrava client-side sobre les
   // 200 files ja carregades.
   const ratesFilters = useMemo(() => (search.trim() ? { cerca: search.trim() } : {}), [search]);
-  const { data, tariffColumns, paginacio, pagina, setPagina, isLoading, error, refetch, savePrices, createTariff } =
-    useRates(ratesFilters);
+  const {
+    data,
+    tariffColumns,
+    paginacio,
+    pagina,
+    setPagina,
+    isLoading,
+    error,
+    refetch,
+    savePrices,
+    createTariff,
+  } = useRates(ratesFilters);
   // useCatalog() SENSE paràmetres: es fa servir com a taula de consulta
   // completa per resoldre categoria/format de CADA producte de la matriu
   // (no només els 20 de la pàgina actual) — manté `mida: 200` per defecte,
@@ -212,15 +232,16 @@ export default function RatesPage() {
     if (!scrollContainer) return;
     function updateCanScrollRight() {
       if (!scrollContainer) return;
-      const remaining = scrollContainer.scrollWidth - scrollContainer.scrollLeft - scrollContainer.clientWidth;
+      const remaining =
+        scrollContainer.scrollWidth - scrollContainer.scrollLeft - scrollContainer.clientWidth;
       setCanScrollRight(remaining > 1);
     }
     updateCanScrollRight();
-    scrollContainer.addEventListener("scroll", updateCanScrollRight);
-    window.addEventListener("resize", updateCanScrollRight);
+    scrollContainer.addEventListener('scroll', updateCanScrollRight);
+    window.addEventListener('resize', updateCanScrollRight);
     return () => {
-      scrollContainer.removeEventListener("scroll", updateCanScrollRight);
-      window.removeEventListener("resize", updateCanScrollRight);
+      scrollContainer.removeEventListener('scroll', updateCanScrollRight);
+      window.removeEventListener('resize', updateCanScrollRight);
     };
     // tableWidth canvia quan es filtra/afegeix una tarifa; cal recalcular si hi ha més scroll disponible.
   }, [scrollContainer, tableWidth]);
@@ -234,12 +255,12 @@ export default function RatesPage() {
   // queda en "—" — eso es correcto, no un bug de este cruce.
   const categoryByProductId = useMemo(() => {
     const map = new Map<number, string>();
-    for (const product of catalog) map.set(product.id, product.categoria?.nom ?? "—");
+    for (const product of catalog) map.set(product.id, product.categoria?.nom ?? '—');
     return map;
   }, [catalog]);
   const formatByProductId = useMemo(() => {
     const map = new Map<number, string>();
-    for (const product of catalog) map.set(product.id, product.format ?? "—");
+    for (const product of catalog) map.set(product.id, product.format ?? '—');
     return map;
   }, [catalog]);
 
@@ -249,7 +270,7 @@ export default function RatesPage() {
   // per defecte 200) que aquesta mateixa pantalla ja carregava per resoldre
   // categoria/format de cada fila. Format segueix hardcodejat (enum tancat).
   const categoryOptions = useMemo(
-    () => [ALL_FEM, ...distinct(catalog.map((product) => product.categoria?.nom ?? "—"))],
+    () => distinct(catalog.map((product) => product.categoria?.nom ?? '—')),
     [catalog],
   );
 
@@ -257,8 +278,10 @@ export default function RatesPage() {
   // `ratesFilters` dalt). Categoria/Format es mantenen client-side sobre la
   // pàgina actual, fora de l'abast d'aquesta tasca.
   const filtered = data.filter((product) => {
-    if (category !== ALL_FEM && (categoryByProductId.get(product.producteId) ?? "—") !== category) return false;
-    if (format !== ALL && (formatByProductId.get(product.producteId) ?? "—") !== format) return false;
+    if (category !== ALL_FEM && (categoryByProductId.get(product.producteId) ?? '—') !== category)
+      return false;
+    if (format !== ALL && (formatByProductId.get(product.producteId) ?? '—') !== format)
+      return false;
     return true;
   });
 
@@ -267,19 +290,33 @@ export default function RatesPage() {
       <PageHeader
         title="Llistat de Tarifes"
         subtitle="Preus dels productes per cada tarifa. Edita les cel·les i prem Desar a la fila."
-        action={{ label: "Nova tarifa", onClick: () => setIsModalOpen(true) }}
+        action={{ label: 'Nova tarifa', onClick: () => setIsModalOpen(true) }}
       />
 
       <FilterBar>
         <SearchInput label="Cerca descripció" value={search} onChange={setSearch} />
-        <SelectFilter label="Categoria" options={categoryOptions} value={category} onChange={setCategory} />
-        <SelectFilter label="Format" options={[ALL, ...FORMAT_OPTIONS]} value={format} onChange={setFormat} />
+        <SimpleDropdown
+          label="Categoria"
+          options={categoryOptions}
+          value={category}
+          onChange={setCategory}
+          allLabel={ALL_FEM}
+        />
+        <SimpleDropdown
+          label="Format"
+          options={FORMAT_OPTIONS}
+          value={format}
+          onChange={setFormat}
+          allLabel={ALL}
+        />
       </FilterBar>
 
       {isLoading && <p className="text-sm text-gray-500">Carregant...</p>}
       {error && (
         <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-          <p className="text-sm text-red-600">No s&apos;han pogut carregar les tarifes: {error.message}</p>
+          <p className="text-sm text-red-600">
+            No s&apos;han pogut carregar les tarifes: {error.message}
+          </p>
           <button
             type="button"
             onClick={refetch}
@@ -292,77 +329,98 @@ export default function RatesPage() {
 
       {!isLoading && !error && (
         <>
-        <div className="relative">
-          <div ref={setScrollContainer} className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-            <table className="text-sm" style={{ width: tableWidth, tableLayout: "fixed", borderCollapse: "collapse" }}>
-              <thead className="border-b border-gray-200">
-                <tr>
-                  <th
-                    className={`sticky left-0 z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words ${STICKY_LEFT_SHADOW}`}
-                    style={{ width: descripcioWidth }}
-                  >
-                    Descripció
-                  </th>
-                  <th className="px-2 py-2 text-left font-medium text-gray-500 break-words" style={{ width: CATEGORIA_WIDTH }}>
-                    Categoria
-                  </th>
-                  <th className="px-2 py-2 text-left font-medium text-gray-500 break-words" style={{ width: FORMAT_WIDTH }}>
-                    Format
-                  </th>
-                  <th className="px-2 py-2 text-left font-medium text-gray-500 break-words" style={{ width: CODI_WIDTH }}>
-                    Codi Producte
-                  </th>
-                  {tariffColumns.map((tariff) => (
+          <div className="relative">
+            <div
+              ref={setScrollContainer}
+              className="overflow-x-auto rounded-xl border border-gray-200 bg-white"
+            >
+              <table
+                className="text-sm"
+                style={{ width: tableWidth, tableLayout: 'fixed', borderCollapse: 'collapse' }}
+              >
+                <thead className="border-b border-gray-200">
+                  <tr>
                     <th
-                      key={tariff.id}
-                      className="px-1 py-2 text-right font-medium text-gray-500 break-words"
-                      style={{ width: TARIFF_COLUMN_WIDTH }}
+                      className={`sticky left-0 z-20 bg-white px-2 py-2 text-left font-medium text-gray-500 break-words ${STICKY_LEFT_SHADOW}`}
+                      style={{ width: descripcioWidth }}
                     >
-                      {tariff.nom}
+                      Descripció
                     </th>
+                    <th
+                      className="px-2 py-2 text-left font-medium text-gray-500 break-words"
+                      style={{ width: CATEGORIA_WIDTH }}
+                    >
+                      Categoria
+                    </th>
+                    <th
+                      className="px-2 py-2 text-left font-medium text-gray-500 break-words"
+                      style={{ width: FORMAT_WIDTH }}
+                    >
+                      Format
+                    </th>
+                    <th
+                      className="px-2 py-2 text-left font-medium text-gray-500 break-words"
+                      style={{ width: CODI_WIDTH }}
+                    >
+                      Codi Producte
+                    </th>
+                    {tariffColumns.map((tariff) => (
+                      <th
+                        key={tariff.id}
+                        className="px-1 py-2 text-right font-medium text-gray-500 break-words"
+                        style={{ width: TARIFF_COLUMN_WIDTH }}
+                      >
+                        {tariff.nom}
+                      </th>
+                    ))}
+                    <th
+                      className="px-2 py-2 text-center font-medium text-gray-500 break-words"
+                      style={{ width: GUARDAR_WIDTH }}
+                    >
+                      Desar
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((product) => (
+                    <RateProductRow
+                      key={product.producteId}
+                      product={product}
+                      category={categoryByProductId.get(product.producteId) ?? '—'}
+                      format={formatByProductId.get(product.producteId) ?? '—'}
+                      tariffColumns={tariffColumns}
+                      descripcioWidth={descripcioWidth}
+                      onSave={savePrices}
+                    />
                   ))}
-                  <th
-                    className="px-2 py-2 text-center font-medium text-gray-500 break-words"
-                    style={{ width: GUARDAR_WIDTH }}
-                  >
-                    Desar
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((product) => (
-                  <RateProductRow
-                    key={product.producteId}
-                    product={product}
-                    category={categoryByProductId.get(product.producteId) ?? "—"}
-                    format={formatByProductId.get(product.producteId) ?? "—"}
-                    tariffColumns={tariffColumns}
-                    descripcioWidth={descripcioWidth}
-                    onSave={savePrices}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </tbody>
+              </table>
+            </div>
 
-          {/* Indicador de scroll: degradat + xip amb fletxa a la vora dreta, visible
+            {/* Botó de scroll: degradat + xip amb fletxa a la vora dreta, visible
               només mentre queda contingut de tarifes per veure. Ancorat a prop de la
               capçalera (no al centre vertical) perquè sigui visible sense haver de
               fer scroll vertical, i no depèn de la posició de l'ombra sticky, que a
-              mòbil pot quedar fora del viewport. */}
-          {canScrollRight && (
-            <div
-              aria-hidden
-              className="pointer-events-none absolute top-0 right-0 bottom-0 flex w-12 justify-end rounded-r-xl bg-gradient-to-l from-white via-white/90 to-transparent pt-1.5 pr-1.5"
-            >
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-900/85 text-white shadow-sm">
-                <ChevronRight className="h-4 w-4" />
-              </span>
-            </div>
-          )}
-        </div>
+              mòbil pot quedar fora del viewport. Fa scroll de 2 columnes de tarifa
+              (mateix TARIFF_COLUMN_WIDTH que ja fa servir la taula), no un valor
+              inventat a part. */}
+            {canScrollRight && (
+              <div className="pointer-events-none absolute top-0 right-0 bottom-0 flex w-12 justify-end rounded-r-xl bg-gradient-to-l from-white via-white/90 to-transparent pt-1.5 pr-1.5">
+                <button
+                  type="button"
+                  aria-label="Desplaça la taula cap a la dreta"
+                  onClick={() =>
+                    scrollContainer?.scrollBy({ left: TARIFF_COLUMN_WIDTH * 2, behavior: 'smooth' })
+                  }
+                  className="pointer-events-auto flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-gray-900/85 text-white shadow-sm hover:bg-gray-900"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
 
-        {paginacio && <Pagination paginacio={paginacio} onPageChange={setPagina} />}
+          {paginacio && <Pagination paginacio={paginacio} onPageChange={setPagina} />}
         </>
       )}
 

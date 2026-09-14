@@ -9,7 +9,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
 import { SearchInput } from '@/components/ui/SearchInput';
-import { SelectFilter } from '@/components/ui/SelectFilter';
+import { SimpleDropdown } from '@/components/ui/SimpleDropdown';
 import { useClientTariffs, type ClientFormValues } from '@/hooks/useClientTariffs';
 import { useRates } from '@/hooks/useRates';
 import type { ClientApi } from '@/lib/api';
@@ -101,7 +101,7 @@ export default function ClientTariffsPage() {
 
       <FilterBar>
         <SearchInput label="Cerca client (codi o nom)" value={search} onChange={setSearch} />
-        <SelectFilter
+        <SimpleDropdown
           label="Tarifa"
           options={tariffFilterOptions}
           value={tariffFilter}

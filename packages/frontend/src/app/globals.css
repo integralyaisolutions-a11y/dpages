@@ -44,3 +44,18 @@ body {
 .sidebar-nav-scroll::-webkit-scrollbar-thumb:hover {
   background-color: #9ca3af;
 }
+
+/* Panell d'opcions de SimpleDropdown (i AsyncCombobox): la barra de scroll
+   nativa es dona per amagada del tot — les fletxes d'auto-scroll ja fetes
+   (mouseenter/interval, ver SimpleDropdown.tsx) són l'única senyal de "hi
+   ha més contingut". A diferència de .sidebar-nav-scroll (barra fina però
+   visible), acá no es vol cap barra visible en cap navegador. El scroll en
+   si (roda, trackpad, touch) segueix funcionant igual — només s'amaga la
+   barra. */
+.dropdown-panel-scroll {
+  scrollbar-width: none;
+}
+
+.dropdown-panel-scroll::-webkit-scrollbar {
+  display: none;
+}

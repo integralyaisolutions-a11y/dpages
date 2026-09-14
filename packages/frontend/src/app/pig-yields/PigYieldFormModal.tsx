@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { DecimalInput } from '@/components/ui/DecimalInput';
 import { Modal } from '@/components/ui/Modal';
-import { SelectFilter } from '@/components/ui/SelectFilter';
+import { SimpleDropdown } from '@/components/ui/SimpleDropdown';
 import { useCatalog } from '@/hooks/useCatalog';
 import { useCategories } from '@/hooks/useCategories';
 import {
@@ -202,7 +202,7 @@ export function PigYieldFormModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Nova línia">
       <div className="flex flex-col gap-4">
-        <SelectFilter
+        <SimpleDropdown
           label="Agrupació Rendiment"
           options={agrupacioRendimentOptions}
           value={agrupacioRendiment}
@@ -213,7 +213,7 @@ export function PigYieldFormModal({
           }}
         />
         <div>
-          <SelectFilter
+          <SimpleDropdown
             label="Categoria"
             options={categoriaOptions}
             value={categoria}
@@ -227,7 +227,7 @@ export function PigYieldFormModal({
           )}
         </div>
         <div>
-          <SelectFilter
+          <SimpleDropdown
             label="Agrupació Producció"
             options={agrupacioProduccioOptions}
             value={agrupacioProduccio}

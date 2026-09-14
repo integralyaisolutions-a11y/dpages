@@ -9,7 +9,7 @@ import { DateRangeInput } from '@/components/ui/DateRangeInput';
 import { FilterBar } from '@/components/ui/FilterBar';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
-import { SelectFilter } from '@/components/ui/SelectFilter';
+import { SimpleDropdown } from '@/components/ui/SimpleDropdown';
 import { StatCard } from '@/components/ui/StatCard';
 import { useCarriers } from '@/hooks/useCarriers';
 import { usePanellOficina } from '@/hooks/usePanellOficina';
@@ -171,16 +171,14 @@ export default function OfficePage() {
   // les poblacions presents a la pàgina actual (20 comandes), no totes les
   // que existeixen — no hi ha cap fix net possible sense un endpoint nou.
   const destinationOptions = useMemo(
-    () => [
-      ALL_FEM,
-      ...Array.from(
+    () =>
+      Array.from(
         new Set(
           data
             .map((order) => order.poblacioDesti)
             .filter((value): value is string => value !== null),
         ),
       ),
-    ],
     [data],
   );
 
@@ -226,31 +224,35 @@ export default function OfficePage() {
               }));
             }}
           />
-          <SelectFilter
+          <SimpleDropdown
             label="Estat"
-            options={[ALL, ...Object.values(ESTAT_LABELS)]}
+            options={Object.values(ESTAT_LABELS)}
             value={statusFilter}
             onChange={setStatusFilter}
+            allLabel={ALL}
           />
-          <SelectFilter
+          <SimpleDropdown
             label="Transportista"
-            options={[ALL, ...carriers.map((item) => item.nom)]}
+            options={carriers.map((item) => item.nom)}
             value={carrierFilter}
             onChange={setCarrierFilter}
+            allLabel={ALL}
           />
-          <SelectFilter
+          <SimpleDropdown
             label="Tarifa"
-            options={[ALL_FEM, ...tariffColumns.map((item) => item.nom)]}
+            options={tariffColumns.map((item) => item.nom)}
             value={tariffFilter}
             onChange={setTariffFilter}
+            allLabel={ALL_FEM}
           />
         </div>
         <div className="flex w-full flex-wrap gap-4">
-          <SelectFilter
+          <SimpleDropdown
             label="Població de destí"
             options={destinationOptions}
             value={destinationFilter}
             onChange={setDestinationFilter}
+            allLabel={ALL_FEM}
           />
           <DateRangeInput
             label="Data comanda"

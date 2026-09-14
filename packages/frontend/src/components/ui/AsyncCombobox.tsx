@@ -1,7 +1,10 @@
 'use client';
 
-import { X } from 'lucide-react';
+import { ChevronDown, ChevronUp, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useDropdownScrollArrows } from './useDropdownScrollArrows';
+import { DROPDOWN_PANEL_Z_INDEX, useDropdownPosition } from './useDropdownPosition';
 
 export type ComboboxOption = { id: number; label: string };
 
@@ -29,6 +32,18 @@ export type ComboboxOption = { id: number; label: string };
  * activa. `clearable` (default true) agrega una X para volver a `null`
  * — el <select> nativo que reemplaza siempre tenía una opción "Tots"/
  * "Selecciona..." como escape; sin esto sería una regresión real.
+ *
+ * El panel de resultados se renderiza vía portal a `document.body`, con
+ * `position: fixed` calculado desde el input real (useDropdownPosition,
+ * compartido con SimpleDropdown) en vez de `position: absolute` dentro del
+ * propio contenedor — mismo motivo real que en SimpleDropdown: si este
+ * combobox llega a usarse dentro de un Modal (body `overflow-y-auto`), un
+ * descendiente `absolute` que se extiende más allá del contenido normal
+ * cuenta para el "scrollable overflow" de ese ancestro y dispara el scroll
+ * interno del modal entero al abrir el dropdown. El portal con `fixed`
+ * escapa por completo de ese cálculo. Ver useDropdownPosition.ts para el
+ * detalle de la detección de colisión con el viewport (abre hacia arriba si
+ * no entra hacia abajo).
  */
 export function AsyncCombobox({
   label,
@@ -56,6 +71,18 @@ export function AsyncCombobox({
   const [options, setOptions] = useState<ComboboxOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  // El panell de resultats viu al portal (document.body), fora de l'arbre
+  // de containerRef — igual que a SimpleDropdown, cal comprovar tots dos
+  // com a "dins" al click-outside.
+  const portalRef = useRef<HTMLDivElement>(null);
+  const [panelEl, setPanelEl] = useState<HTMLDivElement | null>(null);
+  const showDropdown = isEditing && query.trim() !== '';
+  const panelPosition = useDropdownPosition(containerRef, showDropdown);
+  const { canScrollUp, canScrollDown, startAutoScroll, stopAutoScroll } = useDropdownScrollArrows(
+    panelEl,
+    showDropdown,
+    options.length,
+  );
   // Descarta resultados de una búsqueda vieja que llega tarde (network
   // fuera de orden) — sólo el request más reciente puede escribir `options`.
   const requestIdRef = useRef(0);
@@ -64,7 +91,10 @@ export function AsyncCombobox({
     if (!isEditing) return;
 
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      const insideInput = containerRef.current?.contains(target) ?? false;
+      const insidePanel = portalRef.current?.contains(target) ?? false;
+      if (!insideInput && !insidePanel) {
         setIsEditing(false);
         setQuery('');
         setOptions([]);
@@ -122,11 +152,18 @@ export function AsyncCombobox({
     setIsEditing(false);
   }
 
-  const showDropdown = isEditing && query.trim() !== '';
   const showClearButton = clearable && !disabled && !isEditing && value !== null;
 
   return (
-    <label className="flex flex-col gap-1.5 text-sm">
+    // Mateixes classes d'ample que la resta de camps de FilterBar
+    // (SelectFilter, SearchInput, DateInput, DateRangeInput, i ara
+    // SimpleDropdown): abans faltaven acá, així que dins d'un FilterBar
+    // (office/page.tsx, packaging/page.tsx, workshop/page.tsx,
+    // production/page.tsx) el camp Client/Producte no s'apilava a ample
+    // complet en mobile ni es repartia l'espai igual que els seus veïns en
+    // desktop. Inofensiu fora d'un FilterBar (OrderForm.tsx, un grid):
+    // `sm:flex-1`/`sm:w-auto` només fan res dins d'un contenidor flex.
+    <label className="flex w-full flex-col gap-1.5 text-sm sm:w-auto sm:min-w-[110px] sm:flex-1">
       {label && <span className="font-medium text-gray-900">{label}</span>}
       <div ref={containerRef} className="relative">
         <input
@@ -150,28 +187,79 @@ export function AsyncCombobox({
             <X className="h-4 w-4" />
           </button>
         )}
-        {showDropdown && (
-          <div className="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg">
-            {isLoading && <p className="px-3 py-2 text-sm text-gray-500">Cercant...</p>}
-            {!isLoading && options.length === 0 && (
-              <p className="px-3 py-2 text-sm text-gray-500">Sense resultats.</p>
-            )}
-            {!isLoading &&
-              options.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => selectOption(option)}
-                  className={`block w-full px-3 py-2 text-left text-sm hover:bg-gray-50 ${
-                    option.id === value ? 'bg-gray-50 font-medium text-gray-900' : 'text-gray-900'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-          </div>
-        )}
       </div>
+
+      {showDropdown &&
+        panelPosition &&
+        createPortal(
+          <div
+            ref={portalRef}
+            className="fixed"
+            style={{
+              left: panelPosition.left,
+              width: panelPosition.width,
+              zIndex: DROPDOWN_PANEL_Z_INDEX,
+              ...(panelPosition.direction === 'down'
+                ? { top: panelPosition.top }
+                : { bottom: panelPosition.bottom }),
+            }}
+          >
+            <div
+              ref={setPanelEl}
+              className="dropdown-panel-scroll overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg"
+              style={{ maxHeight: panelPosition.maxHeight }}
+            >
+              {isLoading && <p className="px-3 py-2 text-sm text-gray-500">Cercant...</p>}
+              {!isLoading && options.length === 0 && (
+                <p className="px-3 py-2 text-sm text-gray-500">Sense resultats.</p>
+              )}
+              {!isLoading &&
+                options.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => selectOption(option)}
+                    className={`block w-full px-3 py-2 text-left text-sm hover:bg-gray-50 ${
+                      option.id === value ? 'bg-gray-50 font-medium text-gray-900' : 'text-gray-900'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+            </div>
+
+            {/* Fletxes d'auto-scroll: mateix patró que SimpleDropdown (extret a
+                useDropdownScrollArrows) — única senyal de "hi ha més
+                resultats" ara que la barra de scroll nativa està amagada. */}
+            {canScrollUp && (
+              <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center rounded-t-md bg-gradient-to-b from-white via-white/90 to-transparent pt-1 pb-1.5">
+                <button
+                  type="button"
+                  aria-label="Desplaça amunt"
+                  onMouseEnter={() => startAutoScroll(-1)}
+                  onMouseLeave={stopAutoScroll}
+                  className="pointer-events-auto flex h-6 w-6 items-center justify-center rounded-full bg-gray-900/85 text-white shadow-sm hover:bg-gray-900"
+                >
+                  <ChevronUp className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+            {canScrollDown && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center rounded-b-md bg-gradient-to-t from-white via-white/90 to-transparent pt-1.5 pb-1">
+                <button
+                  type="button"
+                  aria-label="Desplaça avall"
+                  onMouseEnter={() => startAutoScroll(1)}
+                  onMouseLeave={stopAutoScroll}
+                  className="pointer-events-auto flex h-6 w-6 items-center justify-center rounded-full bg-gray-900/85 text-white shadow-sm hover:bg-gray-900"
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>,
+          document.body,
+        )}
     </label>
   );
 }

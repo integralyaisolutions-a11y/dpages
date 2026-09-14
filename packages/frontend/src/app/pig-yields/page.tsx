@@ -9,7 +9,7 @@ import { ClearFiltersButton, FilterBar } from '@/components/ui/FilterBar';
 import { IconButton } from '@/components/ui/IconButton';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
-import { SelectFilter } from '@/components/ui/SelectFilter';
+import { SimpleDropdown } from '@/components/ui/SimpleDropdown';
 import { useCategories } from '@/hooks/useCategories';
 import { useEditableRow } from '@/hooks/useEditableRow';
 import { usePigYields, type PigYieldPatch } from '@/hooks/usePigYields';
@@ -216,10 +216,7 @@ export default function PigYieldsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const categoryOptions = useMemo(
-    () => [
-      ALL_CATEGORIES,
-      ...categories.filter((c) => c.agrupacioRendiment !== null).map((c) => c.nom),
-    ],
+    () => categories.filter((c) => c.agrupacioRendiment !== null).map((c) => c.nom),
     [categories],
   );
 
@@ -252,8 +249,9 @@ export default function PigYieldsPage() {
       />
 
       <FilterBar>
-        <SelectFilter
+        <SimpleDropdown
           label="Categoria"
+          allLabel={ALL_CATEGORIES}
           options={categoryOptions}
           value={categoryFilter}
           onChange={setCategoryFilter}
