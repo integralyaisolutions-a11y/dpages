@@ -36,8 +36,10 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId, unitatsDemanades: 2 }],
+          linies: [{ dataProduccio: '2026-08-01T00:00:00Z', producteId, unitatsDemanades: 2 }],
         },
       });
     }
@@ -91,7 +93,12 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
     const creada = await fastify.inject({
       method: 'POST',
       url: '/api/v1/comandes',
-      payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 1 }] },
+      payload: {
+        dataComanda: '2026-08-01',
+        dataLliurament: '2026-08-30T00:00:00Z',
+        origen: 'manual',
+        linies: [{ dataProduccio: '2026-08-01T00:00:00Z', producteId, unitatsDemanades: 1 }],
+      },
     });
     const comandaId = cuerpoJson<{ id: number }>(creada).id;
     const comandaUuid = await entorn.poolTest.query<{ id: string }>(
@@ -128,7 +135,13 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
     const creada = await fastify.inject({
       method: 'POST',
       url: '/api/v1/comandes',
-      payload: { origen: 'manual', clientId, linies: [{ producteId, unitatsDemanades: 3 }] },
+      payload: {
+        dataComanda: '2026-08-01',
+        dataLliurament: '2026-08-30T00:00:00Z',
+        origen: 'manual',
+        clientId,
+        linies: [{ dataProduccio: '2026-08-01T00:00:00Z', producteId, unitatsDemanades: 3 }],
+      },
     });
     const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
     const liniaCreada = comandaCreada.linies[0]!;
@@ -175,8 +188,16 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
+        dataComanda: '2026-08-01',
+        dataLliurament: '2026-08-30T00:00:00Z',
         origen: 'manual',
-        linies: [{ producteId: producteFiltratId, unitatsDemanades: 1 }],
+        linies: [
+          {
+            dataProduccio: '2026-08-01T00:00:00Z',
+            producteId: producteFiltratId,
+            unitatsDemanades: 1,
+          },
+        ],
       },
     });
 
@@ -235,7 +256,12 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
       const creada = await fastify.inject({
         method: 'POST',
         url: '/api/v1/comandes',
-        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 1 }] },
+        payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen: 'manual',
+          linies: [{ dataProduccio: '2026-08-01T00:00:00Z', producteId, unitatsDemanades: 1 }],
+        },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
       expect(comandaCreada.obsProduccio).toBeNull(); // capçalera buida
@@ -259,7 +285,12 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
       const creada = await fastify.inject({
         method: 'POST',
         url: '/api/v1/comandes',
-        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 1 }] },
+        payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen: 'manual',
+          linies: [{ dataProduccio: '2026-08-01T00:00:00Z', producteId, unitatsDemanades: 1 }],
+        },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
 
@@ -278,9 +309,11 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
           obsLliurament: 'Entregar pels matins',
-          linies: [{ producteId, unitatsDemanades: 1 }],
+          linies: [{ dataProduccio: '2026-08-01T00:00:00Z', producteId, unitatsDemanades: 1 }],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -309,10 +342,12 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
           clientId: clientIdPublic,
           tarifaId: tarifaIdPublic,
-          linies: [{ producteId, unitatsDemanades: 1 }],
+          linies: [{ dataProduccio: '2026-08-01T00:00:00Z', producteId, unitatsDemanades: 1 }],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -339,7 +374,12 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
       const creada = await fastify.inject({
         method: 'POST',
         url: '/api/v1/comandes',
-        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 1 }] },
+        payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen: 'manual',
+          linies: [{ dataProduccio: '2026-08-01T00:00:00Z', producteId, unitatsDemanades: 1 }],
+        },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
       await fastify.inject({
@@ -372,7 +412,12 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
       const creada = await fastify.inject({
         method: 'POST',
         url: '/api/v1/comandes',
-        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 1 }] },
+        payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen: 'manual',
+          linies: [{ dataProduccio: '2026-08-01T00:00:00Z', producteId, unitatsDemanades: 1 }],
+        },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
 
@@ -404,9 +449,10 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
           origen: 'manual',
           dataLliurament: '2026-08-20T00:00:00Z',
-          linies: [{ producteId, unitatsDemanades: 1 }],
+          linies: [{ dataProduccio: '2026-08-01T00:00:00Z', producteId, unitatsDemanades: 1 }],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -435,7 +481,12 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
       const creada = await fastify.inject({
         method: 'POST',
         url: '/api/v1/comandes',
-        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 1 }] },
+        payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen: 'manual',
+          linies: [{ dataProduccio: '2026-08-01T00:00:00Z', producteId, unitatsDemanades: 1 }],
+        },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
       expect(comandaCreada.bultos).toBeNull();
@@ -466,7 +517,12 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
       const creada = await fastify.inject({
         method: 'POST',
         url: '/api/v1/comandes',
-        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 1 }] },
+        payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen: 'manual',
+          linies: [{ dataProduccio: '2026-08-01T00:00:00Z', producteId, unitatsDemanades: 1 }],
+        },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
       await fastify.inject({
@@ -486,16 +542,23 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
       await fastify.close();
     });
 
-    it('GET /panells/oficina?dataComandaDes=avui&dataComandaFins=avui: un pedido creado HOY (con hora real) matchea', async () => {
+    it('GET /panells/oficina?dataComandaDes=avui&dataComandaFins=avui: un pedido con dataComanda=HOY matchea', async () => {
+      // Issue #16 — dataComanda ya NO es comanda.creat_en: se fija explícito
+      // con "avui" en el body, no se deriva del momento del INSERT.
+      const avui = new Date().toISOString().slice(0, 10);
       const fastify = construirServidor();
       const creada = await fastify.inject({
         method: 'POST',
         url: '/api/v1/comandes',
-        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 1 }] },
+        payload: {
+          dataComanda: avui,
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen: 'manual',
+          linies: [{ dataProduccio: '2026-08-01T00:00:00Z', producteId, unitatsDemanades: 1 }],
+        },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
 
-      const avui = new Date().toISOString().slice(0, 10);
       const cuerpo = cuerpoJson<PanellOficinaApi>(
         await fastify.inject({
           method: 'GET',
@@ -513,9 +576,10 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
           origen: 'manual',
           dataLliurament: '2026-08-28T14:14:00Z',
-          linies: [{ producteId, unitatsDemanades: 1 }],
+          linies: [{ dataProduccio: '2026-08-01T00:00:00Z', producteId, unitatsDemanades: 1 }],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -536,7 +600,12 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
       const creada = await fastify.inject({
         method: 'POST',
         url: '/api/v1/comandes',
-        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 1 }] },
+        payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen: 'manual',
+          linies: [{ dataProduccio: '2026-08-01T00:00:00Z', producteId, unitatsDemanades: 1 }],
+        },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
       await entorn.poolTest.query(
@@ -560,7 +629,12 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
       const creada = await fastify.inject({
         method: 'POST',
         url: '/api/v1/comandes',
-        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 1 }] },
+        payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen: 'manual',
+          linies: [{ dataProduccio: '2026-08-01T00:00:00Z', producteId, unitatsDemanades: 1 }],
+        },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
       await fastify.inject({
@@ -590,7 +664,12 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
       const creada = await fastify.inject({
         method: 'POST',
         url: '/api/v1/comandes',
-        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 2.5 }] },
+        payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen: 'manual',
+          linies: [{ dataProduccio: '2026-08-01T00:00:00Z', producteId, unitatsDemanades: 2.5 }],
+        },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
 
@@ -609,7 +688,12 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
       const creada = await fastify.inject({
         method: 'POST',
         url: '/api/v1/comandes',
-        payload: { origen: 'manual', linies: [{ producteId, unitatsDemanades: 2.5 }] },
+        payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen: 'manual',
+          linies: [{ dataProduccio: '2026-08-01T00:00:00Z', producteId, unitatsDemanades: 2.5 }],
+        },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
       await fastify.inject({
@@ -644,9 +728,10 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
           origen: 'manual',
           dataLliurament: '2026-08-28T14:14:00Z',
-          linies: [{ producteId, unitatsDemanades: 1 }],
+          linies: [{ dataProduccio: '2026-08-01T00:00:00Z', producteId, unitatsDemanades: 1 }],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -682,8 +767,16 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFiltratId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFiltratId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
 

@@ -192,7 +192,11 @@ interface PreuSeed {
 // productes, SEED-REST només per 5, SEED-BOT només per 4 — deixa forats
 // perquè la matriu de tarifes real (GET /tarifes/matriu) els mostri en null.
 const PREUS: PreuSeed[] = [
-  ...PRODUCTES.map((p): PreuSeed => ({ tarifaCodi: 'SEED-GEN', producteCodi: p.codi, preu: p.preuVenda })),
+  ...PRODUCTES.map((p): PreuSeed => ({
+    tarifaCodi: 'SEED-GEN',
+    producteCodi: p.codi,
+    preu: p.preuVenda,
+  })),
   { tarifaCodi: 'SEED-REST', producteCodi: 'SEED-LLOM', preu: 8.9 },
   { tarifaCodi: 'SEED-REST', producteCodi: 'SEED-COST', preu: 6.5 },
   { tarifaCodi: 'SEED-REST', producteCodi: 'SEED-SECR', preu: 11.0 },
@@ -215,9 +219,24 @@ interface ClientSeed {
 
 // 2 con tarifa asignada, 2 sin — pedido explícito.
 const CLIENTS: ClientSeed[] = [
-  { codi: 'SEED-CLI001', nom: '[SEED] Restaurant Can Prova', poblacio: 'Manresa', tarifaCodi: 'SEED-REST' },
-  { codi: 'SEED-CLI002', nom: '[SEED] Botiga Prova Centre', poblacio: 'Vic', tarifaCodi: 'SEED-BOT' },
-  { codi: 'SEED-CLI003', nom: '[SEED] Client sense tarifa assignada', poblacio: 'Igualada', tarifaCodi: null },
+  {
+    codi: 'SEED-CLI001',
+    nom: '[SEED] Restaurant Can Prova',
+    poblacio: 'Manresa',
+    tarifaCodi: 'SEED-REST',
+  },
+  {
+    codi: 'SEED-CLI002',
+    nom: '[SEED] Botiga Prova Centre',
+    poblacio: 'Vic',
+    tarifaCodi: 'SEED-BOT',
+  },
+  {
+    codi: 'SEED-CLI003',
+    nom: '[SEED] Client sense tarifa assignada',
+    poblacio: 'Igualada',
+    tarifaCodi: null,
+  },
   { codi: 'SEED-CLI004', nom: '[SEED] Client ocasional', poblacio: 'Terrassa', tarifaCodi: null },
 ];
 
@@ -233,6 +252,8 @@ interface ComandaSeed {
   clientCodi: string;
   tarifaCodi: string | null;
   estat: 'oberta' | 'en_proces' | 'tancada' | 'amb_incidencia';
+  /** Issue #16 — comanda.data_comanda és NOT NULL des de la migració 0019. */
+  dataComanda: string;
   dataProduccio: string;
   dataExpedicio: string;
   dataLliurament: string;
@@ -251,6 +272,7 @@ const COMANDES: ComandaSeed[] = [
     clientCodi: 'SEED-CLI001',
     tarifaCodi: 'SEED-REST',
     estat: 'oberta',
+    dataComanda: '2026-08-28',
     dataProduccio: '2026-09-01',
     dataExpedicio: '2026-09-03',
     dataLliurament: '2026-09-05',
@@ -267,6 +289,7 @@ const COMANDES: ComandaSeed[] = [
     clientCodi: 'SEED-CLI003',
     tarifaCodi: null,
     estat: 'en_proces',
+    dataComanda: '2026-08-29',
     dataProduccio: '2026-09-02',
     dataExpedicio: '2026-09-04',
     dataLliurament: '2026-09-06',
@@ -282,6 +305,7 @@ const COMANDES: ComandaSeed[] = [
     clientCodi: 'SEED-CLI002',
     tarifaCodi: 'SEED-BOT',
     estat: 'amb_incidencia',
+    dataComanda: '2026-08-27',
     dataProduccio: '2026-09-01',
     dataExpedicio: '2026-09-02',
     dataLliurament: '2026-09-04',
@@ -294,7 +318,8 @@ const COMANDES: ComandaSeed[] = [
     ],
     incidencia: {
       tipus: 'preu_no_trobat',
-      detall: '[SEED] SEED-XORI no té preu a la tarifa SEED-BOT — cal confirmar-lo a mà abans de tancar la comanda.',
+      detall:
+        '[SEED] SEED-XORI no té preu a la tarifa SEED-BOT — cal confirmar-lo a mà abans de tancar la comanda.',
     },
   },
 ];
@@ -344,7 +369,16 @@ async function sembrarProductes(client: PoolClient): Promise<void> {
     await client.query(
       `INSERT INTO producte (codi, descripcio, categoria_id, agrupacio_produccio, format, envasat, pes_kg, preu_venda)
        VALUES ($1, $2, (SELECT id FROM categoria_producte WHERE nom = $3), $4, $5, $6, $7, $8)`,
-      [p.codi, p.descripcio, p.categoriaNom, p.agrupacioProduccio, p.format, p.envasat, p.pesKg, p.preuVenda],
+      [
+        p.codi,
+        p.descripcio,
+        p.categoriaNom,
+        p.agrupacioProduccio,
+        p.format,
+        p.envasat,
+        p.pesKg,
+        p.preuVenda,
+      ],
     );
   }
 }
@@ -383,17 +417,18 @@ async function sembrarComanda(client: PoolClient, c: ComandaSeed): Promise<void>
 
   const inserida = await client.query<{ id: string }>(
     `INSERT INTO comanda (
-       origen_id, estat, client_id, tarifa_id, data_produccio, data_expedicio,
+       origen_id, estat, client_id, tarifa_id, data_comanda, data_produccio, data_expedicio,
        data_lliurament, bultos, obs_produccio, poblacio_desti, total
      ) VALUES (
        (SELECT id FROM origen_comanda WHERE codi = 'manual'),
        $1, (SELECT id FROM client WHERE codi = $2), (SELECT id FROM tarifa WHERE codi = $3),
-       $4, $5, $6, $7, $8, $9, $10
+       $4, $5, $6, $7, $8, $9, $10, $11
      ) RETURNING id`,
     [
       c.estat,
       c.clientCodi,
       c.tarifaCodi,
+      c.dataComanda,
       c.dataProduccio,
       c.dataExpedicio,
       c.dataLliurament,
@@ -437,11 +472,10 @@ async function sembrarComanda(client: PoolClient, c: ComandaSeed): Promise<void>
   }
 
   if (c.incidencia) {
-    await client.query(`INSERT INTO incidencia_comanda (comanda_id, tipus, detall) VALUES ($1, $2, $3)`, [
-      comandaId,
-      c.incidencia.tipus,
-      c.incidencia.detall,
-    ]);
+    await client.query(
+      `INSERT INTO incidencia_comanda (comanda_id, tipus, detall) VALUES ($1, $2, $3)`,
+      [comandaId, c.incidencia.tipus, c.incidencia.detall],
+    );
   }
 }
 
@@ -519,13 +553,17 @@ async function main(): Promise<void> {
     );
   }
 
-  const [{ rows: totalProductes }, { rows: totalTarifes }, { rows: totalClients }, { rows: totalComandes }] =
-    await Promise.all([
-      poolPerDefecte.query<{ count: string }>('SELECT count(*) FROM producte'),
-      poolPerDefecte.query<{ count: string }>('SELECT count(*) FROM tarifa'),
-      poolPerDefecte.query<{ count: string }>('SELECT count(*) FROM client'),
-      poolPerDefecte.query<{ count: string }>('SELECT count(*) FROM comanda'),
-    ]);
+  const [
+    { rows: totalProductes },
+    { rows: totalTarifes },
+    { rows: totalClients },
+    { rows: totalComandes },
+  ] = await Promise.all([
+    poolPerDefecte.query<{ count: string }>('SELECT count(*) FROM producte'),
+    poolPerDefecte.query<{ count: string }>('SELECT count(*) FROM tarifa'),
+    poolPerDefecte.query<{ count: string }>('SELECT count(*) FROM client'),
+    poolPerDefecte.query<{ count: string }>('SELECT count(*) FROM comanda'),
+  ]);
 
   console.log(
     'Aquest script ESBORRARÀ TOT el que hi ha avui a producte ' +

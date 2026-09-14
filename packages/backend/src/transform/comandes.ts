@@ -142,8 +142,8 @@ async function crearComanda(
 ): Promise<string> {
   const origenId = await resolverOrigenWoocommerceUuid(client);
   const res = await client.query<{ id: string }>(
-    `INSERT INTO comanda (woo_order_id, origen_id, estat, estat_web, poblacio_desti, total, data_modificacio_woo, client_id)
-     VALUES ($1, $2, 'oberta', $3, $4, $5, $6, $7)
+    `INSERT INTO comanda (woo_order_id, origen_id, estat, estat_web, poblacio_desti, total, data_modificacio_woo, client_id, data_comanda)
+     VALUES ($1, $2, 'oberta', $3, $4, $5, $6, $7, $8)
      RETURNING id`,
     [
       wooOrder.id,
@@ -153,6 +153,13 @@ async function crearComanda(
       wooOrder.total,
       parsearFechaGmt(wooOrder.date_modified_gmt),
       clientId,
+      // Issue #16 — comanda.data_comanda es NOT NULL desde la migración
+      // 0019. Para un pedido que entra por WooCommerce, date_created_gmt
+      // (cuándo el cliente hizo el pedido de verdad, en la tienda) es el
+      // proxy correcto — mejor que date_modified_gmt (cambia con cada
+      // actualización posterior) o que "ahora" (el momento del sync, que
+      // puede ir minutos u horas detrás del pedido real).
+      parsearFechaGmt(wooOrder.date_created_gmt),
     ],
   );
   return res.rows[0]!.id;

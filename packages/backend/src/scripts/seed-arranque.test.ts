@@ -70,7 +70,7 @@ describe('sembrarOrigensComanda (Postgres real, esquema aislado)', () => {
       `SELECT id FROM origen_comanda WHERE codi = 'manual'`,
     );
     const comanda = await poolTest.query<{ id: string }>(
-      `INSERT INTO comanda (num, origen_id) VALUES ('CLI-1', $1) RETURNING id`,
+      `INSERT INTO comanda (num, origen_id, data_comanda) VALUES ('CLI-1', $1, '2026-08-01') RETURNING id`,
       [origenManual.rows[0]!.id],
     );
 

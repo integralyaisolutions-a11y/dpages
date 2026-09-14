@@ -1,6 +1,28 @@
-import { Pool } from 'pg';
+import { Pool, types } from 'pg';
 import { env } from '../config/env.js';
 import { logger } from '../lib/logger.js';
+
+/**
+ * Issue #16 — comanda.data_comanda es la primera columna DATE (OID 1082)
+ * que la API expone. El parser por defecto de `pg` para DATE construye un
+ * `Date` con el constructor `new Date(año, mes, día)` — HORA LOCAL del
+ * proceso, no UTC — así que el mismo valor de fila sale distinto según en
+ * qué huso horario corra el proceso (encontrado en desarrollo local,
+ * huso ≠ UTC: '2026-08-01' volvía como '2026-08-01T06:00:00Z'). Cloud Run
+ * corre en UTC, así que en producción nunca se hubiera notado — pero
+ * segundos accidentes de huso horario en dev/CI son exactamente el tipo de
+ * bug que no hay que dejar pasar. Se registra ACÁ (no en cada consulta)
+ * porque `pg-types` es un registro global del proceso — alcanza con
+ * registrarlo una vez, antes de la primera consulta, para que aplique a
+ * cualquier Pool/Client que use este mismo proceso (incluidos los que
+ * crean los tests directamente, sin pasar por este pool).
+ *
+ * Se devuelve el string crudo ("YYYY-MM-DD"), sin convertir a Date: es
+ * justamente lo que `formatearDataApi` (rutes/api/comu.ts) ya sabe
+ * interpretar bien — `new Date("YYYY-MM-DD")` es UTC medianoche por
+ * especificación (ECMA-262), sin la ambigüedad del constructor Y/M/D.
+ */
+types.setTypeParser(1082, (valor: string) => valor);
 
 export const pool = new Pool({
   connectionString: env.DATABASE_URL,

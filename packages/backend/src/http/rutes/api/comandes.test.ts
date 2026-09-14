@@ -45,8 +45,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
+        dataComanda: '2026-08-01',
+        dataLliurament: '2026-08-30T00:00:00Z',
         origen: 'manual',
-        linies: [{ producteId: producteAMidaId, unitatsDemanades: 4 }],
+        linies: [
+          {
+            dataProduccio: '2026-08-01T00:00:00Z',
+            producteId: producteAMidaId,
+            unitatsDemanades: 4,
+          },
+        ],
       },
     });
     expect(sinKg.statusCode).toBe(400);
@@ -56,11 +64,22 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
+        dataComanda: '2026-08-01',
+        dataLliurament: '2026-08-30T00:00:00Z',
         origen: 'manual',
         clientId,
         linies: [
-          { producteId: producteFitxaId, unitatsDemanades: 10 },
-          { producteId: producteAMidaId, unitatsDemanades: 4, kgDemanats: '3.200' },
+          {
+            dataProduccio: '2026-08-01T00:00:00Z',
+            producteId: producteFitxaId,
+            unitatsDemanades: 10,
+          },
+          {
+            dataProduccio: '2026-08-01T00:00:00Z',
+            producteId: producteAMidaId,
+            unitatsDemanades: 4,
+            kgDemanats: '3.200',
+          },
         ],
       },
     });
@@ -86,7 +105,12 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
     const res = await fastify.inject({
       method: 'POST',
       url: '/api/v1/comandes',
-      payload: { origen: 'manual', linies: [] },
+      payload: {
+        dataComanda: '2026-08-01',
+        dataLliurament: '2026-08-30T00:00:00Z',
+        origen: 'manual',
+        linies: [],
+      },
     });
 
     expect(res.statusCode).toBe(400);
@@ -102,8 +126,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
+        dataComanda: '2026-08-01',
+        dataLliurament: '2026-08-30T00:00:00Z',
         origen: 'manual',
-        linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        linies: [
+          {
+            dataProduccio: '2026-08-01T00:00:00Z',
+            producteId: producteFitxaId,
+            unitatsDemanades: 1,
+          },
+        ],
       },
     });
     const idOberta = cuerpoJson<ComandaDetallApi>(oberta).id;
@@ -112,8 +144,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
+        dataComanda: '2026-08-01',
+        dataLliurament: '2026-08-30T00:00:00Z',
         origen: 'manual',
-        linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        linies: [
+          {
+            dataProduccio: '2026-08-01T00:00:00Z',
+            producteId: producteFitxaId,
+            unitatsDemanades: 1,
+          },
+        ],
       },
     });
     const idIncidencia = cuerpoJson<ComandaDetallApi>(incidencia).id;
@@ -139,8 +179,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
+        dataComanda: '2026-08-01',
+        dataLliurament: '2026-08-30T00:00:00Z',
         origen: 'manual',
-        linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        linies: [
+          {
+            dataProduccio: '2026-08-01T00:00:00Z',
+            producteId: producteFitxaId,
+            unitatsDemanades: 1,
+          },
+        ],
       },
     });
     const id = cuerpoJson<ComandaDetallApi>(creada).id;
@@ -169,8 +217,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
+        dataComanda: '2026-08-01',
+        dataLliurament: '2026-08-30T00:00:00Z',
         origen: 'manual',
-        linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        linies: [
+          {
+            dataProduccio: '2026-08-01T00:00:00Z',
+            producteId: producteFitxaId,
+            unitatsDemanades: 1,
+          },
+        ],
       },
     });
     const cosCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -199,8 +255,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
+        dataComanda: '2026-08-01',
+        dataLliurament: '2026-08-30T00:00:00Z',
         origen: 'manual',
-        linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        linies: [
+          {
+            dataProduccio: '2026-08-01T00:00:00Z',
+            producteId: producteFitxaId,
+            unitatsDemanades: 1,
+          },
+        ],
       },
     });
     const comandaId = cuerpoJson<ComandaDetallApi>(creada).id;
@@ -263,8 +327,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
+        dataComanda: '2026-08-01',
+        dataLliurament: '2026-08-30T00:00:00Z',
         origen: 'manual',
-        linies: [{ producteId: producteAmbCategoriaId, unitatsDemanades: 2 }],
+        linies: [
+          {
+            dataProduccio: '2026-08-01T00:00:00Z',
+            producteId: producteAmbCategoriaId,
+            unitatsDemanades: 2,
+          },
+        ],
       },
     });
     const comandaId = cuerpoJson<ComandaDetallApi>(creada).id;
@@ -284,8 +356,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
+        dataComanda: '2026-08-01',
+        dataLliurament: '2026-08-30T00:00:00Z',
         origen: 'manual',
-        linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        linies: [
+          {
+            dataProduccio: '2026-08-01T00:00:00Z',
+            producteId: producteFitxaId,
+            unitatsDemanades: 1,
+          },
+        ],
       },
     });
     const comandaSenseId = cuerpoJson<ComandaDetallApi>(sense).id;
@@ -306,8 +386,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
+        dataComanda: '2026-08-01',
+        dataLliurament: '2026-08-30T00:00:00Z',
         origen: 'manual',
-        linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+        linies: [
+          {
+            dataProduccio: '2026-08-01T00:00:00Z',
+            producteId: producteFitxaId,
+            unitatsDemanades: 1,
+          },
+        ],
       },
     });
     const comandaId = cuerpoJson<ComandaDetallApi>(creada).id;
@@ -339,8 +427,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -366,30 +462,26 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       await fastify.close();
     });
 
-    it('dataProduccio por línea: null por defecto, GET /comandes/:id la refleja cuando está cargada', async () => {
+    // Issue #16 (Francesc) — BREAKING: antes dataProduccio de línia era
+    // opcional (null por defecto, cargable después). Ahora es OBLIGATORIA,
+    // sin valor por defecto — este test reemplaza al que verificaba el
+    // comportamiento viejo (ya no reproducible vía la API: POST /comandes
+    // rechaza una línia sin dataProduccio antes de escribir nada).
+    it('POST /comandes amb una línia sense dataProduccio rebutja amb 400 VALIDACIO', async () => {
       const fastify = construirServidor();
-      const creada = await fastify.inject({
+      const res = await fastify.inject({
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
           linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
         },
       });
-      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
-      expect(comandaCreada.linies[0]?.dataProduccio).toBeNull();
 
-      // Sin endpoint de escritura todavía (no pedido en esta capa) — se
-      // carga directo, como ya se hace con obs_produccio en este mismo nivel.
-      await entorn.poolTest.query(
-        `UPDATE comanda_linia SET data_produccio = '2026-08-20T07:00:00Z' WHERE id_seq = $1`,
-        [comandaCreada.linies[0]!.id],
-      );
-
-      const detall = cuerpoJson<ComandaDetallApi>(
-        await fastify.inject({ method: 'GET', url: `/api/v1/comandes/${comandaCreada.id}` }),
-      );
-      expect(detall.linies[0]?.dataProduccio).toBe('2026-08-20T07:00:00Z');
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
 
       await fastify.close();
     });
@@ -402,10 +494,21 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
           linies: [
-            { producteId: producteFitxaId, unitatsDemanades: 1 },
-            { producteId: producteAMidaId, unitatsDemanades: 2, kgDemanats: '1.000' },
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteAMidaId,
+              unitatsDemanades: 2,
+              kgDemanats: '1.000',
+            },
           ],
         },
       });
@@ -430,10 +533,21 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
           linies: [
-            { producteId: producteFitxaId, unitatsDemanades: 1 },
-            { producteId: producteAMidaId, unitatsDemanades: 2, kgDemanats: '1.000' },
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteAMidaId,
+              unitatsDemanades: 2,
+              kgDemanats: '1.000',
+            },
           ],
         },
       });
@@ -467,11 +581,30 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      // Issue #16 — dataProduccio ya no puede quedar NULL vía la API (POST
+      // /comandes la exige siempre): se fuerza a mano por SQL directo sólo
+      // para probar que el formateo de datesProduccioLinies sigue devolviendo
+      // `[]`, no `null`, cuando ninguna línea activa tiene fecha (el mismo
+      // caso podría darse igual vía POST /comandes/:comandaId/linies, que
+      // todavía no exige dataProduccio — ver LiniaAfegidaApi).
+      await entorn.poolTest.query(
+        `UPDATE comanda_linia SET data_produccio = NULL WHERE id_seq = $1`,
+        [comandaCreada.linies[0]!.id],
+      );
 
       const llistat = cuerpoJson<RespostaPaginada<ComandaResumApi>>(
         await fastify.inject({ method: 'GET', url: '/api/v1/comandes' }),
@@ -488,8 +621,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -524,9 +665,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
           origen: 'manual',
           dataLliurament: '2026-08-20T00:00:00Z',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -572,9 +720,17 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
           clientId: clientAmbTarifaId,
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 2 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 2,
+            },
+          ],
         },
       });
 
@@ -592,8 +748,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
 
@@ -617,8 +781,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteSensePreuId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteSensePreuId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
 
@@ -653,9 +825,18 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
           clientId: clientCap30Id,
-          linies: [{ producteId: producteAMidaId, unitatsDemanades: 1, kgDemanats: '1.000' }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteAMidaId,
+              unitatsDemanades: 1,
+              kgDemanats: '1.000',
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -702,8 +883,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -731,8 +920,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -758,8 +955,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 2 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 2,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -791,8 +996,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -815,8 +1028,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -842,8 +1063,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 2 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 2,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -874,8 +1103,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -917,8 +1154,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -950,8 +1195,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -977,8 +1230,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -1004,8 +1265,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -1053,10 +1322,18 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
           clientId: clientCap32Id,
           tarifaId: tarifaBodyIdPublic,
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 2 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 2,
+            },
+          ],
         },
       });
 
@@ -1088,9 +1365,17 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
           clientId: clientId32,
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
 
@@ -1108,9 +1393,17 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
           tarifaId: 999999,
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
 
@@ -1151,10 +1444,18 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
           clientId: clientId3230,
           tarifaId: tarifaBodyIdPublic,
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -1186,10 +1487,21 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
           linies: [
-            { producteId: producteFitxaId, unitatsDemanades: 1 },
-            { producteId: producteAMidaId, unitatsDemanades: 2, kgDemanats: '1.500' },
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteAMidaId,
+              unitatsDemanades: 2,
+              kgDemanats: '1.500',
+            },
           ],
         },
       });
@@ -1223,8 +1535,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -1259,6 +1579,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
           origen: 'manual',
           dataLliurament: '2026-08-20T00:00:00Z',
           linies: [
@@ -1283,6 +1604,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
           origen: 'manual',
           dataLliurament: '2026-08-20T00:00:00Z',
           linies: [
@@ -1300,12 +1622,18 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       await fastify.close();
     });
 
-    it('POST /comandes: dataProduccio de línia sense dataLliurament a la capçalera no bloqueja res', async () => {
+    // Issue #16 (Francesc) — BREAKING: antes dataLliurament de capçalera era
+    // opcional al crear (la regla 5 simplemente no aplicaba sin ella). Ahora
+    // es OBLIGATORIA — el mismo escenario de antes ("línia con dataProduccio,
+    // capçalera sin dataLliurament") ya no es alcanzable vía la API, así que
+    // este test pasa a verificar exactamente eso: el rechazo.
+    it('POST /comandes sense dataLliurament rebutja amb 400 VALIDACIO', async () => {
       const fastify = construirServidor();
       const res = await fastify.inject({
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
           origen: 'manual',
           linies: [
             {
@@ -1317,7 +1645,8 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         },
       });
 
-      expect(res.statusCode).toBe(201);
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
 
       await fastify.close();
     });
@@ -1328,8 +1657,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -1355,8 +1692,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -1382,8 +1727,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -1409,8 +1762,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -1437,11 +1798,14 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       expect(res.statusCode).toBe(400);
       expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
 
-      // I la capçalera no va quedar a mig aplicar.
+      // I la capçalera no va quedar a mig aplicar — segueix amb el valor que
+      // ja tenia (issue #16: dataLliurament ja no pot ser null, el fixture
+      // el va crear amb '2026-08-30T00:00:00Z' — el PATCH rebutjat no el va
+      // tocar, no és que hagi quedat buit).
       const detall = cuerpoJson<ComandaDetallApi>(
         await fastify.inject({ method: 'GET', url: `/api/v1/comandes/${comandaCreada.id}` }),
       );
-      expect(detall.dataLliurament).toBeNull();
+      expect(detall.dataLliurament).toBe('2026-08-30T00:00:00Z');
 
       await fastify.close();
     });
@@ -1452,8 +1816,20 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              // Ha de ser >= a la dataProduccio de capçalera que es fixa més
+              // avall (20/08) perquè el PATCH de capçalera no violi la regla
+              // 4 contra AQUESTA línia (ja existent) — el test vol provar la
+              // violació amb la línia NOVA, no amb aquesta.
+              dataProduccio: '2026-08-22T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -1487,8 +1863,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -1515,24 +1899,38 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
   });
 
   describe('capa 36 — els filtres "...Fins" inclouen el dia complet (bug sistèmic trobat a la capa 35)', () => {
-    it('GET /comandes?dataDes=avui&dataFins=avui: un pedido creado HOY (con hora real, no medianoche) aparece', async () => {
+    it('GET /comandes?dataDes=avui&dataFins=avui: un pedido con dataComanda=HOY aparece', async () => {
+      // Issue #16 — dataComanda ya NO es comanda.creat_en (now() al INSERT),
+      // es una columna DATE propia que viaja en el body — por eso ahora se
+      // fija explícito con "avui", en vez de depender del momento del
+      // INSERT. El bug sistémico original de esta capa (36) — "...Fins" se
+      // interpretaba como medianoche del día, cortando afuera cualquier
+      // hora real — ya no aplica LITERALMENTE a este filtro puntual (DATE no
+      // tiene componente de hora que cortar), pero el mecanismo compartido
+      // (condicioDataFinsInclusiva) sigue siendo el mismo que usan el resto
+      // de los filtros "...Fins" sobre columnas TIMESTAMPTZ — este test
+      // queda como regresión de que covertir data_comanda (DATE) a través
+      // de ese mismo mecanismo sigue matcheando "hoy" correctamente.
+      const avui = new Date().toISOString().slice(0, 10);
       const fastify = construirServidor();
       const creada = await fastify.inject({
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: avui,
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
 
-      // dataComanda = comanda.creat_en = now() en el momento del INSERT —
-      // no se puede fijar por API, por eso "avui" en vez de una fecha fija.
-      // Antes del fix, esto fallaba salvo que el test corriera exactamente
-      // a medianoche UTC (bug reproducido: dataFins=avui se interpretaba
-      // como avui a las 00:00:00, cortando afuera cualquier hora real).
-      const avui = new Date().toISOString().slice(0, 10);
       const res = await fastify.inject({
         method: 'GET',
         url: `/api/v1/comandes?dataDes=${avui}&dataFins=${avui}`,
@@ -1550,8 +1948,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -1579,9 +1985,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
           origen: 'manual',
           dataLliurament: '2026-08-28T14:14:00Z',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -1605,8 +2018,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 2.5 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 2.5,
+            },
+          ],
         },
       });
 
@@ -1628,8 +2049,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 2.567 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 2.567,
+            },
+          ],
         },
       });
 
@@ -1645,8 +2074,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -1674,8 +2111,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
-          linies: [{ producteId: producteFitxaId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
@@ -1688,6 +2133,98 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       expect(typeof linia.unitatsLliurades).toBe('string');
       expect(linia.unitatsDemanades).toBe('1.00');
       expect(linia.unitatsLliurades).toBe('0.00');
+
+      await fastify.close();
+    });
+  });
+
+  describe('issue #16 (Francesc, Bloqueant) — dataComanda obligatòria i editable', () => {
+    it('POST /comandes sense dataComanda rebutja amb 400 VALIDACIO', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen: 'manual',
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+      await fastify.close();
+    });
+
+    it('PATCH /comandes/:id canvia dataComanda després de creada — a diferència d’altres camps identificadors, aquest SÍ és editable', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen: 'manual',
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+      expect(comandaCreada.dataComanda).toBe('2026-08-01T00:00:00Z');
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { dataComanda: '2026-08-10' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const cuerpo = cuerpoJson<ComandaDetallApi>(res);
+      expect(cuerpo.dataComanda).toBe('2026-08-10T00:00:00Z');
+
+      await fastify.close();
+    });
+
+    it('PATCH /comandes/:id amb dataComanda buida rebutja amb 400 VALIDACIO — no es pot deixar sense valor', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen: 'manual',
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { dataComanda: '' },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
 
       await fastify.close();
     });

@@ -147,9 +147,17 @@ describe('API negoci — /tarifes (Postgres real, esquema aislado)', () => {
         method: 'POST',
         url: '/api/v1/comandes',
         payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
           origen: 'manual',
           clientId,
-          linies: [{ producteId: producteCatalegId, unitatsDemanades: 1 }],
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteCatalegId,
+              unitatsDemanades: 1,
+            },
+          ],
         },
       });
       expect(comanda.statusCode).toBe(201);

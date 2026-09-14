@@ -168,11 +168,11 @@ describe('transformarComanda (Postgres real, esquema aislado)', () => {
     const comanda = await poolTest.query<{ id: string }>(
       `INSERT INTO comanda (
          woo_order_id, origen_id, estat, estat_web, poblacio_desti, total, data_modificacio_woo,
-         data_produccio, data_expedicio, data_lliurament, transportista_id, obs_produccio
+         data_comanda, data_produccio, data_expedicio, data_lliurament, transportista_id, obs_produccio
        ) VALUES (
          777001, (SELECT id FROM origen_comanda WHERE codi = 'woocommerce'), 'en_proces', 'processing',
          'Manresa', '10.00', '2026-01-01T00:00:00Z',
-         '2026-01-05T00:00:00Z', '2026-01-06T00:00:00Z', '2026-01-07T00:00:00Z', $1, 'Tallar més gruixut'
+         '2026-01-01', '2026-01-05T00:00:00Z', '2026-01-06T00:00:00Z', '2026-01-07T00:00:00Z', $1, 'Tallar més gruixut'
        ) RETURNING id`,
       [transportista.rows[0]?.id],
     );

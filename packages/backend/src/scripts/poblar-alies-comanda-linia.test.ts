@@ -55,7 +55,7 @@ describe('poblar-alies-comanda-linia (Postgres real, esquema aislado por test)',
        ON CONFLICT (codi) DO UPDATE SET nom = EXCLUDED.nom RETURNING id`,
     );
     const comanda = await poolTest.query<{ id: string }>(
-      `INSERT INTO comanda (num, origen_id) VALUES ($1, $2) RETURNING id`,
+      `INSERT INTO comanda (num, origen_id, data_comanda) VALUES ($1, $2, '2026-08-01') RETURNING id`,
       [`CLI-${randomUUID().slice(0, 8)}`, origen.rows[0]!.id],
     );
     const linia = await poolTest.query<{ id: string }>(

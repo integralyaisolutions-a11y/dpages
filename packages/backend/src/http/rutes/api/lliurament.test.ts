@@ -37,8 +37,16 @@ describe('API negoci — PATCH .../lliurament (Postgres real, esquema aislado)',
       method: 'POST',
       url: '/api/v1/comandes',
       payload: {
+        dataComanda: '2026-08-01',
+        dataLliurament: '2026-08-30T00:00:00Z',
         origen: 'manual',
-        linies: [{ producteId: Number(producte.rows[0]!.id_seq), unitatsDemanades: 8 }],
+        linies: [
+          {
+            dataProduccio: '2026-08-01T00:00:00Z',
+            producteId: Number(producte.rows[0]!.id_seq),
+            unitatsDemanades: 8,
+          },
+        ],
       },
     });
     const cos = cuerpoJson<ComandaDetallApi>(res);

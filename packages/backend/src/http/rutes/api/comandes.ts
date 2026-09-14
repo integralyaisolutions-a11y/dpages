@@ -42,7 +42,9 @@ interface FilaComandaResum {
   transportista_nom: string | null;
   poblacio_desti: string | null;
   adreca_lliurament: string | null;
-  data_comanda: Date;
+  // string, no Date: DATE (no TIMESTAMPTZ) — ver el comentario en db/pool.ts
+  // sobre por qué se registra un parser propio para esta columna.
+  data_comanda: string;
   data_produccio: Date | null;
   dates_produccio_linies: Date[];
   data_expedicio: Date | null;
@@ -93,10 +95,12 @@ function aApiResum(fila: FilaComandaResum): ComandaResumApi {
   };
 }
 
-// data_comanda = comanda.creat_en (cuándo entró al sistema): para pedidos web es
-// prácticamente el momento real del pedido (sync casi en tiempo real); para los
-// capturados a mano (email/WhatsApp/teléfono) es exactamente ese momento. No hay
-// ninguna otra columna que represente mejor "cuándo se hizo el pedido".
+// data_comanda (issue #16, Francesc): YA NO es comanda.creat_en. Es una
+// columna propia (DATE, migración 0019), dato de negocio EDITABLE que el
+// usuario carga/corrige — distinta de creat_en, que sigue siendo el
+// timestamp real e inalterable de auditoría (cuándo entró la fila a la
+// base, nunca expuesto en la API). El cambio fue consciente: antes de esta
+// capa no existía como campo de entrada en absoluto.
 // tipus_incidencia: sólo se completa cuando TODAS las incidencias de la
 // comanda comparten el mismo tipus (min() de un conjunto de un solo valor
 // distinto); si hay más de un tipo mezclado, queda null — "resumen liviano",
@@ -106,7 +110,7 @@ const SELECT_COMANDA_RESUM = `
          cl.id_seq AS client_id_seq, cl.nom AS client_nom, cl.poblacio AS client_poblacio,
          t.id_seq AS tarifa_id_seq, t.nom AS tarifa_nom,
          tr.id_seq AS transportista_id_seq, tr.nom AS transportista_nom,
-         c.poblacio_desti, c.adreca_lliurament, c.creat_en AS data_comanda, c.data_produccio,
+         c.poblacio_desti, c.adreca_lliurament, c.data_comanda, c.data_produccio,
          COALESCE(dp.dates, '{}') AS dates_produccio_linies, c.data_expedicio,
          c.data_lliurament, c.bultos, c.congelat_a, c.obs_produccio, c.obs_lliurament,
          COALESCE(agg.total_linies, 0) AS total_linies,
@@ -439,12 +443,17 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       condicions.push(`c.client_id = $${valors.length + 1}`);
       valors.push(clientUuid ?? '00000000-0000-0000-0000-000000000000');
     }
+    // Issue #16: dataDes/dataFins filtran por dataComanda (docs/contrato-api.md
+    // § 4.5) — desde la migración 0019 eso es c.data_comanda, ya NO
+    // c.creat_en (que ahora divergen: data_comanda es editable por el
+    // usuario, creat_en sigue siendo el timestamp real e inalterable de
+    // cuándo se guardó la fila).
     if (typeof query.dataDes === 'string' && query.dataDes !== '') {
-      condicions.push(`c.creat_en >= $${valors.length + 1}`);
+      condicions.push(`c.data_comanda >= $${valors.length + 1}`);
       valors.push(query.dataDes);
     }
     if (typeof query.dataFins === 'string' && query.dataFins !== '') {
-      condicions.push(condicioDataFinsInclusiva('c.creat_en', valors.length + 1));
+      condicions.push(condicioDataFinsInclusiva('c.data_comanda', valors.length + 1));
       valors.push(query.dataFins);
     }
     // Capa 21 — filtra "el pedido tiene AL MENOS UNA línea cuya
@@ -511,6 +520,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       origen: string;
       clientId: number;
       tarifaId: number;
+      dataComanda: string;
       dataLliurament: string;
       transportistaId: number;
       obsLliurament: string;
@@ -518,16 +528,33 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
         producteId: number;
         unitatsDemanades: number;
         kgDemanats?: string;
-        dataProduccio?: string | null;
+        dataProduccio: string;
       }[];
     }>;
 
+    // Issue #16 (Francesc, bloqueant) — dataComanda/dataLliurament de
+    // capçalera i dataProduccio de cada línia passen a ser OBLIGATÒRIES,
+    // sense valor per defecte al backend (el frontend precarrega HOY, però
+    // qui garanteix que arriba és aquesta validació, no un default silenciós
+    // acá). Mateix estil que la resta d'aquest bloc (origen/linies).
     const detalls: { camp: string; missatge: string }[] = [];
     if (!cos.origen || cos.origen.trim() === '') {
       detalls.push({ camp: 'origen', missatge: 'és obligatori' });
     }
+    if (!cos.dataComanda || cos.dataComanda.trim() === '') {
+      detalls.push({ camp: 'dataComanda', missatge: 'és obligatori' });
+    }
+    if (!cos.dataLliurament || cos.dataLliurament.trim() === '') {
+      detalls.push({ camp: 'dataLliurament', missatge: 'és obligatori' });
+    }
     if (!cos.linies || cos.linies.length === 0) {
       detalls.push({ camp: 'linies', missatge: 'la comanda ha de tenir com a mínim una línia' });
+    } else {
+      cos.linies.forEach((linia, i) => {
+        if (!linia.dataProduccio || linia.dataProduccio.trim() === '') {
+          detalls.push({ camp: `linies[${i}].dataProduccio`, missatge: 'és obligatori' });
+        }
+      });
     }
     if (detalls.length > 0) {
       return enviarValidacio(reply, 'Falten dades obligatòries', detalls);
@@ -538,7 +565,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
     // que de les 6 regles, aquí només poden arribar a disparar-se les que
     // depenen de dataLliurament (regla 5 per a cada línia).
     const violacioCreacio = validarCoherenciaDatesComanda(
-      { dataProduccio: null, dataExpedicio: null, dataLliurament: cos.dataLliurament ?? null },
+      { dataProduccio: null, dataExpedicio: null, dataLliurament: cos.dataLliurament! },
       cos.linies!.map((l, i) => ({ etiqueta: `línia ${i + 1}`, dataProduccio: l.dataProduccio })),
     );
     if (violacioCreacio) {
@@ -610,7 +637,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       pesFitxaKg: string | null;
       pesCalculatKg: string;
       pesEditable: boolean;
-      dataProduccio: string | null;
+      dataProduccio: string;
     }[] = [];
 
     for (let i = 0; i < cos.linies!.length; i++) {
@@ -675,7 +702,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
         pesFitxaKg,
         pesCalculatKg,
         pesEditable,
-        dataProduccio: linia.dataProduccio ?? null,
+        dataProduccio: linia.dataProduccio,
       });
     }
 
@@ -694,8 +721,8 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
 
       const comanda = await client.query<{ id: string }>(
         `INSERT INTO comanda (origen_id, estat, client_id, tarifa_id, poblacio_desti, total,
-                               data_lliurament, transportista_id, obs_lliurament)
-         VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8)
+                               data_lliurament, transportista_id, obs_lliurament, data_comanda)
+         VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9)
          RETURNING id`,
         [
           origenUuid,
@@ -703,9 +730,10 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
           clientUuid,
           tarifaUuid,
           totalEur,
-          cos.dataLliurament ?? null,
+          cos.dataLliurament!,
           transportistaUuid,
           cos.obsLliurament ?? null,
+          cos.dataComanda!,
         ],
       );
       comandaUuid = comanda.rows[0]!.id;
@@ -764,6 +792,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       clientId: number | null;
       tarifaId: number | null;
       transportistaId: number | null;
+      dataComanda: string;
       dataProduccio: string | null;
       dataExpedicio: string | null;
       dataLliurament: string | null;
@@ -775,6 +804,18 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       estat: string;
       detall: string;
     }>;
+
+    // Issue #16 — dataComanda SÍ es editable después de creada (a diferencia
+    // de producteId/categoriaId en otros endpoints): regla de negocio
+    // confirmada. Pero a diferencia de dataProduccio/dataExpedicio/
+    // dataLliurament (nullable en la base, se pueden "vaciar" con `null`),
+    // dataComanda es NOT NULL — no tiene sentido vaciarla, se rechaza en vez
+    // de dejar que el INSERT/UPDATE falle con un error crudo de Postgres.
+    if (cos.dataComanda !== undefined && (!cos.dataComanda || cos.dataComanda.trim() === '')) {
+      return enviarValidacio(reply, 'dataComanda no pot estar buida', [
+        { camp: 'dataComanda', missatge: 'no pot estar buida' },
+      ]);
+    }
 
     if (cos.estat !== undefined) {
       if (!ESTATS_COMANDA_VALIDS.includes(cos.estat as (typeof ESTATS_COMANDA_VALIDS)[number])) {
@@ -890,7 +931,8 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
            obs_lliurament = CASE WHEN $18 THEN $19 ELSE obs_lliurament END,
            poblacio_desti = CASE WHEN $20 THEN $21 ELSE poblacio_desti END,
            adreca_lliurament = CASE WHEN $22 THEN $23 ELSE adreca_lliurament END,
-           estat = CASE WHEN $24 THEN $25 ELSE estat END
+           estat = CASE WHEN $24 THEN $25 ELSE estat END,
+           data_comanda = CASE WHEN $26 THEN $27 ELSE data_comanda END
          WHERE id = $1`,
         [
           comandaUuid,
@@ -918,6 +960,8 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
           cos.adrecaLliurament ?? null,
           cos.estat !== undefined,
           cos.estat ?? null,
+          cos.dataComanda !== undefined,
+          cos.dataComanda ?? null,
         ],
       );
 

@@ -127,8 +127,8 @@ describe('netejarCargaInicial (Postgres real, esquema aislado por test)', () => 
       [categoria.rows[0]!.id],
     );
     const comanda = await poolTest.query<{ id: string }>(
-      `INSERT INTO comanda (origen_id, estat)
-       VALUES ((SELECT id FROM origen_comanda WHERE codi = 'manual'), 'oberta') RETURNING id`,
+      `INSERT INTO comanda (origen_id, estat, data_comanda)
+       VALUES ((SELECT id FROM origen_comanda WHERE codi = 'manual'), 'oberta', '2026-08-01') RETURNING id`,
     );
     await poolTest.query(
       `INSERT INTO comanda_linia (comanda_id, ordinal, producte_id, unitats_demanades, preu_unitari, pes_calculat_kg)
@@ -161,8 +161,8 @@ describe('netejarCargaInicial (Postgres real, esquema aislado por test)', () => 
       [producte.rows[0]!.id],
     );
     const comanda = await poolTest.query<{ id: string }>(
-      `INSERT INTO comanda (origen_id, estat)
-       VALUES ((SELECT id FROM origen_comanda WHERE codi = 'manual'), 'oberta') RETURNING id`,
+      `INSERT INTO comanda (origen_id, estat, data_comanda)
+       VALUES ((SELECT id FROM origen_comanda WHERE codi = 'manual'), 'oberta', '2026-08-01') RETURNING id`,
     );
     await poolTest.query(
       `INSERT INTO comanda_linia (comanda_id, ordinal, producte_id, unitats_demanades, preu_unitari, pes_calculat_kg)
@@ -191,8 +191,8 @@ describe('netejarCargaInicial (Postgres real, esquema aislado por test)', () => 
       [tarifaProtegidaPerClient.rows[0]!.id],
     );
     await poolTest.query(
-      `INSERT INTO comanda (origen_id, estat, client_id)
-       VALUES ((SELECT id FROM origen_comanda WHERE codi = 'manual'), 'oberta', $1)`,
+      `INSERT INTO comanda (origen_id, estat, client_id, data_comanda)
+       VALUES ((SELECT id FROM origen_comanda WHERE codi = 'manual'), 'oberta', $1, '2026-08-01')`,
       [client.rows[0]!.id],
     );
 
@@ -264,8 +264,8 @@ describe('netejarCargaInicial (Postgres real, esquema aislado por test)', () => 
       `INSERT INTO client (codi, nom, poblacio) VALUES ('C02', 'Client protegit', 'Manresa') RETURNING id`,
     );
     const comanda = await poolTest.query<{ id: string }>(
-      `INSERT INTO comanda (origen_id, estat, client_id)
-       VALUES ((SELECT id FROM origen_comanda WHERE codi = 'manual'), 'oberta', $1) RETURNING id`,
+      `INSERT INTO comanda (origen_id, estat, client_id, data_comanda)
+       VALUES ((SELECT id FROM origen_comanda WHERE codi = 'manual'), 'oberta', $1, '2026-08-01') RETURNING id`,
       [client.rows[0]!.id],
     );
     await poolTest.query(
@@ -300,8 +300,8 @@ describe('netejarCargaInicial (Postgres real, esquema aislado por test)', () => 
       `INSERT INTO client (codi, nom, poblacio) VALUES ('C03', 'Protegit', 'Manresa') RETURNING id`,
     );
     const comanda = await poolTest.query<{ id: string }>(
-      `INSERT INTO comanda (origen_id, estat, client_id)
-       VALUES ((SELECT id FROM origen_comanda WHERE codi = 'manual'), 'oberta', $1) RETURNING id`,
+      `INSERT INTO comanda (origen_id, estat, client_id, data_comanda)
+       VALUES ((SELECT id FROM origen_comanda WHERE codi = 'manual'), 'oberta', $1, '2026-08-01') RETURNING id`,
       [clientProtegit.rows[0]!.id],
     );
     await poolTest.query(

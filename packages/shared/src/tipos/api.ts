@@ -351,14 +351,16 @@ export interface LiniaCreacioApi {
   /** Sólo tiene sentido si el artículo es "a medida" — se ignora si tiene peso de ficha. */
   kgDemanats?: string;
   /**
-   * Capa 34. Opcional. Se valida contra las fechas de cabecera del pedido
-   * (las 6 reglas de coherencia temporal, ver docs/contrato-api.md § 4.5) —
-   * en `POST /comandes` sólo contra `dataLliurament` (única fecha de
-   * cabecera que existe en ese body); en
-   * `POST /comandes/:comandaId/linies` contra las 3 fechas de cabecera ya
-   * guardadas del pedido.
+   * Issue #16 (Francesc) — BREAKING: pasó de opcional a OBLIGATORIA, sin
+   * valor por defecto (regla de negocio confirmada con Michelle/Francesc).
+   * Antes (capa 34) era opcional; antes de eso sólo se podía fijar después,
+   * vía `PATCH /comandes/:comandaId/linies/:liniaId`. Se sigue validando
+   * contra las fechas de cabecera del pedido (las 6 reglas de coherencia
+   * temporal, ver docs/contrato-api.md § 4.5) — en `POST /comandes` sólo
+   * contra `dataLliurament` (única fecha de cabecera que existe en ese
+   * body).
    */
-  dataProduccio?: string | null;
+  dataProduccio: string;
 }
 
 export interface ComandaCreacioApi {
@@ -370,7 +372,20 @@ export interface ComandaCreacioApi {
    * Editarlo después vía `PATCH /comandes/:id` NO recalcula estas líneas.
    */
   tarifaId?: number;
-  dataLliurament?: string;
+  /**
+   * Issue #16 (Francesc) — nuevo, OBLIGATORIO. Fecha de negocio editable
+   * (columna `comanda.dataComanda`, DATE), distinta de `creat_en` (timestamp
+   * real e inalterable de cuándo se guardó la fila, nunca expuesto en la
+   * API). El frontend la precarga con HOY por defecto, pero es editable
+   * antes de enviar — por eso viaja en el body, no se deriva sola.
+   */
+  dataComanda: string;
+  /**
+   * Issue #16 (Francesc) — BREAKING: pasó de opcional a OBLIGATORIA (regla
+   * de negocio confirmada). El frontend la precarga con HOY por defecto,
+   * igual que dataComanda.
+   */
+  dataLliurament: string;
   transportistaId?: number;
   obsLliurament?: string;
   linies: LiniaCreacioApi[];
@@ -378,11 +393,25 @@ export interface ComandaCreacioApi {
 
 /**
  * Capa 30 — `POST /comandes/:comandaId/linies` (agregar línea a un pedido
- * ya creado). Mismo shape que `LiniaCreacioApi`: la resolución de precio
- * usa la misma cascada que al crear el pedido (tarifa del cliente →
- * precio de catálogo → "0.00" + incidencia).
+ * ya creado). Mismo shape que `LiniaCreacioApi` para producteId/
+ * unitatsDemanades/kgDemanats — la resolución de precio usa la misma
+ * cascada que al crear el pedido (tarifa del cliente → precio de catálogo →
+ * "0.00" + incidencia).
+ *
+ * Ya NO es un simple alias de `LiniaCreacioApi` (issue #16): acá
+ * `dataProduccio` SIGUE siendo opcional — el endpoint de backend
+ * (`POST /comandes/:comandaId/linies`) no cambió, sólo `POST /comandes`
+ * (alta en bloque) pasó a exigirla. Dejado así a propósito, señalado como
+ * pendiente de confirmar con Francesc si agregar una línea después de
+ * creado el pedido también debería exigir dataProduccio — ver el reporte
+ * de la capa que introdujo esto.
  */
-export type LiniaAfegidaApi = LiniaCreacioApi;
+export interface LiniaAfegidaApi {
+  producteId: number;
+  unitatsDemanades: number;
+  kgDemanats?: string;
+  dataProduccio?: string | null;
+}
 
 /**
  * Capa 30 — `PATCH /comandes/:comandaId/linies/:liniaId` (editar línea

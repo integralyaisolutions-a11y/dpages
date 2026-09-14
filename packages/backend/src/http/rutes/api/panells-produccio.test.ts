@@ -83,8 +83,8 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
     construirServidor = entorn.construirServidor;
 
     const comanda = await entorn.poolTest.query<{ id: string }>(
-      `INSERT INTO comanda (origen_id, estat)
-       VALUES ((SELECT id FROM origen_comanda WHERE codi = 'manual'), 'oberta') RETURNING id`,
+      `INSERT INTO comanda (origen_id, estat, data_comanda)
+       VALUES ((SELECT id FROM origen_comanda WHERE codi = 'manual'), 'oberta', '2026-08-01') RETURNING id`,
     );
     const comandaId = comanda.rows[0]!.id;
 
@@ -442,8 +442,8 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
     );
 
     const comanda = await entorn.poolTest.query<{ id: string }>(
-      `INSERT INTO comanda (origen_id, estat)
-       VALUES ((SELECT id FROM origen_comanda WHERE codi = 'manual'), 'oberta') RETURNING id`,
+      `INSERT INTO comanda (origen_id, estat, data_comanda)
+       VALUES ((SELECT id FROM origen_comanda WHERE codi = 'manual'), 'oberta', '2026-08-01') RETURNING id`,
     );
     await entorn.poolTest.query(
       `INSERT INTO comanda_linia (

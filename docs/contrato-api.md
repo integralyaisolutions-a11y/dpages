@@ -653,9 +653,14 @@ Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-
 > en el mismo punto único donde ya hace esa conversión para el resto de las
 > fechas. No hay una razón para que este campo rompa esa convención.
 >
-> **`dataDes`/`dataFins`** filtran por `dataComanda` (cuándo entró el
-> pedido al sistema — `comanda.creat_en`), sin cambios. Los tres pares
-> nuevos son independientes entre sí y de éste:
+> **`dataDes`/`dataFins`** filtran por `dataComanda`. **Issue #16 (Francesc)
+> — BREAKING:** hasta ahora `dataComanda` era directamente `comanda.creat_en`
+> (cuándo entró el pedido al sistema); desde la migración 0019 es
+> `comanda.dataComanda` (columna `DATE` propia, obligatoria, EDITABLE por el
+> usuario, con HOY como valor por defecto en el frontend). `creat_en` sigue
+> existiendo como timestamp real e inalterable de auditoría, pero ya no se
+> expone en la API — los dos ya pueden divergir. Los tres pares nuevos son
+> independientes entre sí y de éste:
 >
 > - **`dataProduccioDes`/`dataProduccioFins`** — mismo nombre que ya usa
 >   `GET /panells/obrador` (sección 4.7), pero acá filtra por el PEDIDO
@@ -804,22 +809,42 @@ correo y WhatsApp, que son la mayoría del volumen real.
   "origen": "manual",
   "clientId": 45,
   "tarifaId": 3,
+  "dataComanda": "2026-08-14",
   "dataLliurament": "2026-08-20T00:00:00Z",
   "transportistaId": 1,
   "obsLliurament": "Entregar pels matins",
   "linies": [
-    { "producteId": 12, "unitatsDemanades": 10 },
-    { "producteId": 13, "unitatsDemanades": 4, "kgDemanats": "3.200" },
+    { "producteId": 12, "unitatsDemanades": 10, "dataProduccio": "2026-08-19T00:00:00Z" },
+    {
+      "producteId": 13,
+      "unitatsDemanades": 4,
+      "kgDemanats": "3.200",
+      "dataProduccio": "2026-08-19T00:00:00Z"
+    },
     { "producteId": 14, "unitatsDemanades": 2, "dataProduccio": "2026-08-19T00:00:00Z" }
   ]
 }
 ```
 
-> **`linies[].dataProduccio` (capa 34) es opcional en la alta**, igual que en
-> `POST /comandes/:comandaId/linies` (más abajo) — antes de esta capa sólo se
-> podía fijar después, vía `PATCH /comandes/:comandaId/linies/:liniaId`. Se
-> valida contra las 6 reglas de coherencia de fechas — ver el bloque
-> dedicado más abajo.
+> **Issue #16 (Francesc, Bloqueante) — BREAKING: `dataComanda`, `dataLliurament`
+> y `linies[].dataProduccio` pasan a ser OBLIGATORIOS**, sin valor por
+> defecto en el backend (el frontend precarga `dataComanda`/`dataLliurament`
+> con HOY, pero quien lo garantiza es esta validación, `400 VALIDACIO` si
+> falta cualquiera). Antes (capa 34), `linies[].dataProduccio` era opcional
+> en la alta — dejó de serlo acá; `dataComanda` es un campo nuevo (antes ni
+> existía como entrada, ver la nota de `dataDes`/`dataFins` más arriba).
+>
+> **`POST /comandes/:comandaId/linies` (más abajo) NO cambió** — ahí
+> `dataProduccio` sigue siendo opcional, a propósito: agregar una línea a un
+> pedido ya creado es un caso distinto, y no había pedido explícito de
+> extenderle esta obligatoriedad. Pendiente de confirmar con Francesc si
+> también debería exigirse ahí.
+>
+> `linies[].dataProduccio` se sigue validando contra las 6 reglas de
+> coherencia de fechas — ver el bloque dedicado más abajo. `dataComanda` NO
+> participa de esas 6 reglas (no se validó ningún orden cronológico para
+> ella — pendiente de confirmar con Francesc si debería, por ejemplo, no
+> poder ser posterior a `dataLliurament`).
 
 > **`tarifaId` (capa 32) es opcional.** Si viene, se usa ESA tarifa (no la
 > del cliente) para resolver el precio de **todas** las líneas de esta alta,
@@ -873,6 +898,13 @@ correo y WhatsApp, que son la mayoría del volumen real.
 > práctica ahí sólo puede dispararse la regla 5 (línea vs. `dataLliurament`).
 
 **`PATCH /comandes/:id`** · **`DELETE /comandes/:id/linies/:liniaId`**
+
+> **Issue #16 (Francesc) — `dataComanda` es editable acá**, a diferencia de
+> `producteId`/`categoriaId` en otros endpoints (regla de negocio
+> confirmada): se puede corregir después de creado el pedido. NO se puede
+> vaciar — `null` o string vacío rechaza con `400 VALIDACIO` (es
+> obligatoria, a diferencia de `dataProduccio`/`dataExpedicio`/
+> `dataLliurament`, que sí admiten `null` para "vaciar" el campo).
 
 > **Dos reglas que afectan la pantalla:**
 >

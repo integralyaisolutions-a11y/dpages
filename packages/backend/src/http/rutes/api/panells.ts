@@ -79,13 +79,15 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       valors.push(query.dataExpedicioFins);
     }
     // Capa 35 — mismo criterio que dataExpedicioDes/Fins de arriba, sobre
-    // las otras dos fechas de cabecera del pedido.
+    // las otras dos fechas de cabecera del pedido. Issue #16: dataComanda ya
+    // NO es c.creat_en — es c.data_comanda (columna propia, editable,
+    // migración 0019); creat_en sigue siendo sólo el timestamp de auditoría.
     if (typeof query.dataComandaDes === 'string' && query.dataComandaDes !== '') {
-      condicions.push(`c.creat_en >= $${valors.length + 1}`);
+      condicions.push(`c.data_comanda >= $${valors.length + 1}`);
       valors.push(query.dataComandaDes);
     }
     if (typeof query.dataComandaFins === 'string' && query.dataComandaFins !== '') {
-      condicions.push(condicioDataFinsInclusiva('c.creat_en', valors.length + 1));
+      condicions.push(condicioDataFinsInclusiva('c.data_comanda', valors.length + 1));
       valors.push(query.dataComandaFins);
     }
     if (typeof query.dataLliuramentDes === 'string' && query.dataLliuramentDes !== '') {
@@ -175,7 +177,9 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       tarifa_nom: string | null;
       transportista_nom: string | null;
       estat: string;
-      data_comanda: Date;
+      // string, no Date: DATE (no TIMESTAMPTZ) — ver el comentario en
+      // db/pool.ts sobre el parser propio para esta columna.
+      data_comanda: string;
       data_expedicio: Date | null;
       data_lliurament: Date | null;
       bultos: number | null;
@@ -188,7 +192,7 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       tipus_incidencia: string | null;
     }>(
       `SELECT c.id_seq, c.num, cl.nom AS client_nom, c.poblacio_desti, t.nom AS tarifa_nom,
-              tr.nom AS transportista_nom, c.estat, c.creat_en AS data_comanda, c.data_expedicio,
+              tr.nom AS transportista_nom, c.estat, c.data_comanda, c.data_expedicio,
               c.data_lliurament, c.bultos, COALESCE(agg.linies, 0) AS linies,
               COALESCE(agg.total_kg, 0)::numeric(14,3) AS total_kg,
               COALESCE(agg.total_eur, 0)::numeric(14,2) AS total_eur,
