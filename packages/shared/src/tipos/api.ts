@@ -85,17 +85,18 @@ export interface ProducteApi {
 // ── 4.2b · Rendiments Porcs ──────────────────────────────────────────────
 
 /**
- * Ficha de rendimiento por producto: cuántas unidades salen de un cerdo y
- * cuánto pesa cada una — la base del cálculo del Panell Producció (KG,
- * PAQ, MAGRE). `agrupacioRendiment`, `categoria` y `agrupacioProduccio`
- * son de sólo lectura acá: se derivan del producto/categoría asociados,
- * no se editan en este CRUD.
+ * Ficha de rendimiento por grupo (categoria + agrupacioProduccio, issues
+ * #3/#4): cuántas unidades salen de un cerdo y cuánto pesa cada una — la
+ * base del cálculo del Panell Producció (KG, PAQ, MAGRE). `agrupacioRendiment`
+ * y `categoria` son de sólo lectura acá: se derivan de la categoria
+ * asociada, no se editan en este CRUD.
  *
  * BREAKING (capa 22): ya no trae `producte` — Francesc sacó esa columna de
  * la pantalla (con datos reales, no aporta nada que `agrupacioProduccio`
- * no diga mejor). `producteId` sigue existiendo como campo de ENTRADA del
- * alta/edición (`POST /rendiments-porcs`, ver más abajo) — sólo se sacó de
- * la respuesta.
+ * no diga mejor). El campo de ENTRADA del alta (`POST /rendiments-porcs`,
+ * ver `RendimentPorcEntradaApi` más abajo) es `categoriaId` +
+ * `agrupacioProduccio` — `producteId` no existe ni como entrada ni como
+ * salida desde la migración de issues #3/#4.
  */
 export interface RendimentPorcApi {
   id: number;
