@@ -323,6 +323,17 @@ async function recalcularTotalComanda(client: PoolClient, comandaUuid: string): 
 }
 
 interface CapcaleraDatesComanda {
+  /**
+   * Issue #16 (Francesc/Michelle, confirmat) — opcional a propòsit: la
+   * regla nova (7) que la compara amb dataLliurament només aplica a
+   * `POST /comandes` i `PATCH /comandes/:id` (els dos únics llocs on
+   * dataComanda es fixa o pot canviar). `POST .../linies` i
+   * `PATCH .../linies/:liniaId` no toquen dataComanda ni dataLliurament de
+   * capçalera, així que no cal que la passin — s'omet la clau i la regla 7
+   * simplement no s'avalua (mateix criteri que "si falta una data, la regla
+   * no bloqueja res").
+   */
+  dataComanda?: string | Date | null;
   dataProduccio: string | Date | null;
   dataExpedicio: string | Date | null;
   dataLliurament: string | Date | null;
@@ -335,11 +346,12 @@ interface LiniaPerValidarDates {
 }
 
 /**
- * Capa 34 — les 6 regles de coherència temporal entre les dates de
- * capçalera d'un pedido i les dates de producció de les seves línies
- * (documentades a `docs/contrato-api.md`, secció 4.5). Punt únic de
- * veritat: NO duplicar aquesta comparació als 4 llocs que la criden
- * (`POST /comandes`, `POST .../linies`, `PATCH .../linies/:liniaId`,
+ * Capa 34 — les 6 regles originals de coherència temporal entre les dates
+ * de capçalera d'un pedido i les dates de producció de les seves línies
+ * (documentades a `docs/contrato-api.md`, secció 4.5), més la regla 7
+ * (issue #16, confirmada) que compara dataComanda amb dataLliurament. Punt
+ * únic de veritat: NO duplicar aquesta comparació als 4 llocs que la
+ * criden (`POST /comandes`, `POST .../linies`, `PATCH .../linies/:liniaId`,
  * `PATCH /comandes/:id`).
  *
  * Cada regla només aplica si AMBDUES dates comparades tenen valor — si en
@@ -356,11 +368,19 @@ function validarCoherenciaDatesComanda(
   capcalera: CapcaleraDatesComanda,
   linies: LiniaPerValidarDates[],
 ): { camp: string; missatge: string } | null {
+  // dataComanda ?? null normalitza el cas "no s'ha passat" (undefined) al
+  // mateix "no hi ha valor" (null) que ja fan servir les altres 3 dates.
+  const dcRaw = capcalera.dataComanda ?? null;
+  const dc = dcRaw !== null ? new Date(dcRaw).getTime() : null;
   const dp = capcalera.dataProduccio !== null ? new Date(capcalera.dataProduccio).getTime() : null;
   const de = capcalera.dataExpedicio !== null ? new Date(capcalera.dataExpedicio).getTime() : null;
   const dl =
     capcalera.dataLliurament !== null ? new Date(capcalera.dataLliurament).getTime() : null;
 
+  // Regla 7 (issue #16): dataComanda no pot ser posterior a dataLliurament.
+  if (dc !== null && dl !== null && dc > dl) {
+    return { camp: 'dataComanda', missatge: 'no pot ser posterior a dataLliurament' };
+  }
   // Regla 1: dataLliurament no anterior a dataProduccio (capçalera).
   if (dp !== null && dl !== null && dl < dp) {
     return { camp: 'dataLliurament', missatge: 'no pot ser anterior a dataProduccio' };
@@ -561,11 +581,18 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
     }
 
     // Capa 34 — al crear, la comanda encara no té dataProduccio/dataExpedicio
-    // de capçalera (no són camps d'aquest body, només dataLliurament), així
-    // que de les 6 regles, aquí només poden arribar a disparar-se les que
-    // depenen de dataLliurament (regla 5 per a cada línia).
+    // de capçalera (no són camps d'aquest body), així que de les 7 regles,
+    // aquí només poden arribar a disparar-se les que depenen de
+    // dataLliurament (regla 5 per a cada línia) o de dataComanda (regla 7,
+    // issue #16 — dataComanda no pot ser posterior a dataLliurament; ambdues
+    // sempre venen al body des que són obligatòries).
     const violacioCreacio = validarCoherenciaDatesComanda(
-      { dataProduccio: null, dataExpedicio: null, dataLliurament: cos.dataLliurament! },
+      {
+        dataComanda: cos.dataComanda!,
+        dataProduccio: null,
+        dataExpedicio: null,
+        dataLliurament: cos.dataLliurament!,
+      },
       cos.linies!.map((l, i) => ({ etiqueta: `línia ${i + 1}`, dataProduccio: l.dataProduccio })),
     );
     if (violacioCreacio) {
@@ -842,19 +869,33 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
     // línies actives del pedido (regles 4/5/6) — encara que cap d'elles
     // s'estigui tocant en aquest request. Un canvi de data de capçalera pot
     // invalidar una línia de la qual ningú s'està ocupant ara mateix.
+    //
+    // Issue #16 (Francesc/Michelle, confirmat) — dataComanda entra al mateix
+    // càlcul de "resultant" per la regla 7 (dataComanda no pot ser posterior
+    // a dataLliurament): si el PATCH només canvia UNA de les dues (per
+    // exemple, només dataComanda), cal comparar-la contra el valor ACTUAL a
+    // la base de l'altra — mai contra null ni assumir que la regla no
+    // aplica. Per això aquest bloc ara també es dispara quan només ve
+    // dataComanda al body (abans només mirava dataProduccio/dataExpedicio/
+    // dataLliurament).
     if (
       cos.dataProduccio !== undefined ||
       cos.dataExpedicio !== undefined ||
-      cos.dataLliurament !== undefined
+      cos.dataLliurament !== undefined ||
+      cos.dataComanda !== undefined
     ) {
       const actual = await pool.query<{
+        data_comanda: string;
         data_produccio: Date | null;
         data_expedicio: Date | null;
         data_lliurament: Date | null;
-      }>('SELECT data_produccio, data_expedicio, data_lliurament FROM comanda WHERE id = $1', [
-        comandaUuid,
-      ]);
+      }>(
+        'SELECT data_comanda, data_produccio, data_expedicio, data_lliurament FROM comanda WHERE id = $1',
+        [comandaUuid],
+      );
       const filaActual = actual.rows[0]!;
+      const dataComandaResultant =
+        cos.dataComanda !== undefined ? cos.dataComanda : filaActual.data_comanda;
       const dataProduccioResultant =
         cos.dataProduccio !== undefined ? cos.dataProduccio : filaActual.data_produccio;
       const dataExpedicioResultant =
@@ -869,6 +910,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
 
       const violacio = validarCoherenciaDatesComanda(
         {
+          dataComanda: dataComandaResultant,
           dataProduccio: dataProduccioResultant,
           dataExpedicio: dataExpedicioResultant,
           dataLliurament: dataLliuramentResultant,
@@ -1001,12 +1043,16 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
    * NUNCA lo consulta, siempre usa `client.tarifa_id`. No es un descuido:
    * la capa 32 sólo tocó el momento de creación, a propósito.
    *
-   * Capa 34 — el body ahora acepta `dataProduccio` opcional para la línea
-   * nueva (antes no existía este campo acá, sólo se podía fijar después vía
-   * `PATCH .../linies/:liniaId` — lo agregué porque si no, la validación de
-   * coherencia de fechas pedida para este endpoint no tenía nada real que
-   * validar). Si viene, se valida contra las fechas de cabecera YA
+   * Capa 34 — el body acepta `dataProduccio` para la línea nueva (antes no
+   * existía este campo acá, sólo se podía fijar después vía
+   * `PATCH .../linies/:liniaId`). Se valida contra las fechas de cabecera YA
    * GUARDADAS del pedido (reglas 4/5/6 de `validarCoherenciaDatesComanda`).
+   *
+   * Issue #16 (Francesc/Michelle, confirmado en segunda ronda) —
+   * `dataProduccio` pasó de opcional a OBLIGATORIA acá también: el issue
+   * original sólo lo exigió en `POST /comandes` (alta en bloque) y dejó
+   * este endpoint explícitamente afuera; se confirmó después que el mismo
+   * criterio aplica a agregar una línea a un pedido ya existente.
    */
   fastify.post('/comandes/:comandaId/linies', async (req, reply) => {
     const comandaUuid = await resolverComandaOResponder(
@@ -1023,12 +1069,20 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       producteId: number;
       unitatsDemanades: number;
       kgDemanats: string;
-      dataProduccio: string | null;
+      dataProduccio: string;
     }>;
 
     if (cos.producteId === undefined) {
       return enviarValidacio(reply, 'producteId és obligatori', [
         { camp: 'producteId', missatge: 'és obligatori' },
+      ]);
+    }
+    // Issue #16 (Francesc/Michelle) — ver nota a la JSDoc d'aquest endpoint:
+    // dataProduccio passa a ser obligatòria també acá, mateix criteri que
+    // POST /comandes.
+    if (!cos.dataProduccio || cos.dataProduccio.trim() === '') {
+      return enviarValidacio(reply, 'dataProduccio és obligatori', [
+        { camp: 'dataProduccio', missatge: 'és obligatori' },
       ]);
     }
     // Capa 38 — ver nota equivalente en POST /comandes.
@@ -1069,9 +1123,11 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       pesEditable = true;
     }
 
-    // Capa 34 — si la línia nova porta dataProduccio, validar-la contra les
-    // dates de capçalera JA GUARDADES d'aquest pedido, abans d'inserir res.
-    if (cos.dataProduccio !== undefined) {
+    // Capa 34 — validar la dataProduccio de la línia nova contra les dates
+    // de capçalera JA GUARDADES d'aquest pedido, abans d'inserir res. Issue
+    // #16: ja no cal el guard `dataProduccio !== undefined` d'abans — ara és
+    // obligatòria, sempre hi és en aquest punt.
+    {
       const capcalera = await pool.query<{
         data_produccio: Date | null;
         data_expedicio: Date | null;
@@ -1130,7 +1186,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
           pesFitxaKg,
           pesCalculatKg,
           pesEditable,
-          cos.dataProduccio ?? null,
+          cos.dataProduccio,
         ],
       );
 

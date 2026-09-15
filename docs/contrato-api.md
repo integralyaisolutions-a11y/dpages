@@ -834,17 +834,16 @@ correo y WhatsApp, que son la mayoría del volumen real.
 > en la alta — dejó de serlo acá; `dataComanda` es un campo nuevo (antes ni
 > existía como entrada, ver la nota de `dataDes`/`dataFins` más arriba).
 >
-> **`POST /comandes/:comandaId/linies` (más abajo) NO cambió** — ahí
-> `dataProduccio` sigue siendo opcional, a propósito: agregar una línea a un
-> pedido ya creado es un caso distinto, y no había pedido explícito de
-> extenderle esta obligatoriedad. Pendiente de confirmar con Francesc si
-> también debería exigirse ahí.
+> **Actualización — `POST /comandes/:comandaId/linies` (más abajo) TAMBIÉN
+> exige `dataProduccio` ahora.** El issue #16 original lo dejó afuera a
+> propósito (agregar una línea a un pedido ya creado se consideró un caso
+> distinto); Francesc/Michelle confirmaron después que el mismo criterio
+> aplica ahí también — ver el bloque de ese endpoint más abajo.
 >
-> `linies[].dataProduccio` se sigue validando contra las 6 reglas de
-> coherencia de fechas — ver el bloque dedicado más abajo. `dataComanda` NO
-> participa de esas 6 reglas (no se validó ningún orden cronológico para
-> ella — pendiente de confirmar con Francesc si debería, por ejemplo, no
-> poder ser posterior a `dataLliurament`).
+> `linies[].dataProduccio` se sigue validando contra las reglas de
+> coherencia de fechas — ver el bloque dedicado más abajo. **Actualización —
+> `dataComanda` SÍ participa ahora (regla 7, confirmada):** no puede ser
+> posterior a `dataLliurament`.
 
 > **`tarifaId` (capa 32) es opcional.** Si viene, se usa ESA tarifa (no la
 > del cliente) para resolver el precio de **todas** las líneas de esta alta,
@@ -861,10 +860,13 @@ correo y WhatsApp, que son la mayoría del volumen real.
 > si se fijó al crear como si se editó después. Si en algún momento hace
 > falta que ambos casos sigan `comanda.tarifaId`, es un cambio aparte.
 
-> **Coherencia temporal entre fechas (capa 34) — 6 reglas, aplicadas en TODOS
-> los puntos de entrada que pueden fijar una de estas fechas** (`POST
-/comandes`, `POST /comandes/:comandaId/linies`,
-> `PATCH /comandes/:comandaId/linies/:liniaId`, `PATCH /comandes/:id`):
+> **Coherencia temporal entre fechas (capa 34, + regla 7 del issue #16) — 7
+> reglas.** Las 6 originales aplican en TODOS los puntos de entrada que
+> pueden fijar una de estas fechas (`POST /comandes`,
+> `POST /comandes/:comandaId/linies`,
+> `PATCH /comandes/:comandaId/linies/:liniaId`, `PATCH /comandes/:id`); la
+> regla 7 sólo aplica en `POST /comandes` y `PATCH /comandes/:id` — son los
+> únicos dos puntos donde `dataComanda` se fija o puede cambiar:
 >
 > 1. `dataLliurament` no anterior a `dataProduccio` (cabecera).
 > 2. `dataExpedicio` no anterior a `dataProduccio` (cabecera).
@@ -872,6 +874,7 @@ correo y WhatsApp, que son la mayoría del volumen real.
 > 4. `linies[].dataProduccio` no anterior a `dataProduccio` de cabecera.
 > 5. `linies[].dataProduccio` no posterior a `dataLliurament`.
 > 6. `linies[].dataProduccio` no posterior a `dataExpedicio`.
+> 7. `dataComanda` no posterior a `dataLliurament` (issue #16, confirmada).
 >
 > Cada regla sólo aplica cuando **ambas** fechas comparadas tienen valor —
 > si falta alguna de las dos, esa regla puntual no bloquea nada. "anterior"/
@@ -881,21 +884,29 @@ correo y WhatsApp, que son la mayoría del volumen real.
 > detalle de qué regla falló.
 >
 > **El caso delicado es `PATCH /comandes/:id`:** si el body cambia
-> `dataProduccio`/`dataExpedicio`/`dataLliurament` de cabecera, se valida el
-> estado **resultante** (valor nuevo si vino, si no el que ya estaba
-> guardado) contra las reglas 1/2/3, pero también las reglas 4/5/6 contra
-> **todas** las líneas activas del pedido — no sólo las que este PATCH esté
-> tocando (no toca ninguna: este endpoint no edita líneas). Un cambio de
-> fecha de cabecera puede volver inválida una línea de la que nadie se está
-> ocupando en ese momento, y el pedido lo rechaza igual.
+> `dataProduccio`/`dataExpedicio`/`dataLliurament`/`dataComanda` de
+> cabecera, se valida el estado **resultante** (valor nuevo si vino, si no
+> el que ya estaba guardado) contra las reglas 1/2/3/7, pero también las
+> reglas 4/5/6 contra **todas** las líneas activas del pedido — no sólo las
+> que este PATCH esté tocando (no toca ninguna: este endpoint no edita
+> líneas). Un cambio de fecha de cabecera puede volver inválida una línea de
+> la que nadie se está ocupando en ese momento, y el pedido lo rechaza
+> igual. Esto incluye el caso donde el PATCH sólo trae `dataComanda` (o sólo
+> `dataLliurament`): la regla 7 se evalúa igual, comparando contra el valor
+> **ya guardado en la base** de la fecha que no vino en el body — nunca
+> contra `null`, nunca asumiendo que la regla no aplica porque sólo cambió
+> una de las dos.
 >
 > En `POST /comandes/:comandaId/linies` y
 > `PATCH /comandes/:comandaId/linies/:liniaId`, la comparación es contra las
 > fechas de cabecera **ya guardadas** del pedido (no las del propio body,
-> que en esos dos endpoints no toca cabecera). En `POST /comandes`
-> (alta), como `dataProduccio`/`dataExpedicio` de cabecera no son campos de
-> ese body (sólo existen después, vía `PATCH /comandes/:id`), en la
-> práctica ahí sólo puede dispararse la regla 5 (línea vs. `dataLliurament`).
+> que en esos dos endpoints no toca cabecera) — y sólo las reglas 4/5/6
+> (la 7 no aplica ahí: ninguno de los dos toca `dataComanda`/
+> `dataLliurament`). En `POST /comandes` (alta), como
+> `dataProduccio`/`dataExpedicio` de cabecera no son campos de ese body
+> (sólo existen después, vía `PATCH /comandes/:id`), en la práctica ahí sólo
+> pueden dispararse la regla 5 (línea vs. `dataLliurament`) y la regla 7
+> (`dataComanda` vs. `dataLliurament`, ambas siempre presentes en este body).
 
 **`PATCH /comandes/:id`** · **`DELETE /comandes/:id/linies/:liniaId`**
 
@@ -904,7 +915,11 @@ correo y WhatsApp, que son la mayoría del volumen real.
 > confirmada): se puede corregir después de creado el pedido. NO se puede
 > vaciar — `null` o string vacío rechaza con `400 VALIDACIO` (es
 > obligatoria, a diferencia de `dataProduccio`/`dataExpedicio`/
-> `dataLliurament`, que sí admiten `null` para "vaciar" el campo).
+> `dataLliurament`, que sí admiten `null` para "vaciar" el campo). Cambiarla
+> dispara la regla 7 de coherencia (`dataComanda` no posterior a
+> `dataLliurament`, ver el bloque dedicado más arriba) — comparada contra el
+> `dataLliurament` que venga en el mismo body, o si no vino, contra el que
+> ya estaba guardado.
 
 > **Dos reglas que afectan la pantalla:**
 >
@@ -949,11 +964,10 @@ pedido original.
 
 Mismo shape que una línea de `POST /comandes` (`producteId`,
 `unitatsDemanades`, `kgDemanats` opcional — sólo tiene sentido si el
-artículo es "a medida" —, `dataProduccio` opcional, capa 34). Respuesta
-`201`, **la comanda completa actualizada** (mismo shape que
-`GET /comandes/:id`), no sólo la línea nueva — para refrescar toda la
-pantalla de una. `409 CONFLICTE` si la comanda está congelada, igual que el
-resto de las escrituras sobre un pedido.
+artículo es "a medida"). Respuesta `201`, **la comanda completa actualizada**
+(mismo shape que `GET /comandes/:id`), no sólo la línea nueva — para
+refrescar toda la pantalla de una. `409 CONFLICTE` si la comanda está
+congelada, igual que el resto de las escrituras sobre un pedido.
 
 > El precio de la línea nueva se resuelve con la **misma cascada** que al
 > crear el pedido (tarifa del cliente → precio de catálogo → `"0.00"` con
@@ -961,10 +975,14 @@ resto de las escrituras sobre un pedido.
 > incidencia `sense_preu` y el pedido pasa a `amb_incidencia` si no lo
 > estaba ya — mismo criterio que un pedido que nace con una línea así.
 >
-> **`dataProduccio` (capa 34)** se valida contra las 6 reglas de coherencia
-> de fechas (ver el bloque dedicado más arriba) — contra las fechas de
-> cabecera ya guardadas del pedido, no las de este mismo body (este endpoint
-> no toca cabecera).
+> **`dataProduccio` es OBLIGATORIA (issue #16, confirmado en segunda
+> ronda).** La versión original del issue dejó este endpoint explícitamente
+> afuera de la obligatoriedad (sólo `POST /comandes` la exigía); Francesc/
+> Michelle confirmaron después que agregar una línea a un pedido existente
+> debe seguir el mismo criterio. Falta o vacía → `400 VALIDACIO`. Se sigue
+> validando además contra las reglas 4/5/6 de coherencia de fechas (ver el
+> bloque dedicado más arriba) — contra las fechas de cabecera ya guardadas
+> del pedido, no las de este mismo body (este endpoint no toca cabecera).
 
 **`PATCH /comandes/:comandaId/linies/:liniaId`** (capa 30) — editar una
 línea existente.

@@ -398,19 +398,20 @@ export interface ComandaCreacioApi {
  * cascada que al crear el pedido (tarifa del cliente → precio de catálogo →
  * "0.00" + incidencia).
  *
- * Ya NO es un simple alias de `LiniaCreacioApi` (issue #16): acá
- * `dataProduccio` SIGUE siendo opcional — el endpoint de backend
- * (`POST /comandes/:comandaId/linies`) no cambió, sólo `POST /comandes`
- * (alta en bloque) pasó a exigirla. Dejado así a propósito, señalado como
- * pendiente de confirmar con Francesc si agregar una línea después de
- * creado el pedido también debería exigir dataProduccio — ver el reporte
- * de la capa que introdujo esto.
+ * Dejó de ser un simple alias de `LiniaCreacioApi` cuando el issue #16
+ * original hizo `dataProduccio` obligatoria sólo en `POST /comandes`, dejando
+ * este endpoint (agregar línea a un pedido ya existente) sin tocar. Michelle/
+ * Francesc confirmaron después que el mismo criterio aplica acá también —
+ * `dataProduccio` pasa a OBLIGATORIA con el mismo criterio que
+ * `LiniaCreacioApi`. Se mantiene como interfaz propia (no se vuelve a
+ * alias-ear) porque el resto de la forma (sin `producteId` como parte de un
+ * array, endpoint distinto) sigue siendo conceptualmente independiente.
  */
 export interface LiniaAfegidaApi {
   producteId: number;
   unitatsDemanades: number;
   kgDemanats?: string;
-  dataProduccio?: string | null;
+  dataProduccio: string;
 }
 
 /**
