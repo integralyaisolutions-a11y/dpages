@@ -552,7 +552,16 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
         url: '/api/v1/comandes',
         payload: {
           dataComanda: avui,
-          dataLliurament: '2026-08-30T00:00:00Z',
+          // Issue #16 (segona ronda) — regla 7: dataComanda no pot ser
+          // posterior a dataLliurament. No es pot fixar dataLliurament amb
+          // una data fixa del passat (aquest test compara contra "avui", el
+          // rellotge REAL del sistema, que avança), així que cal una data
+          // sempre posterior a "avui" — es tria un any llunyà fora de
+          // qualsevol rang que altres tests d'aquest fitxer facin servir
+          // (tots amb dates fixes de 2026), per no fer-los matchear per
+          // accident (els pedidos que crea cada test queden a la mateixa
+          // base — no hi ha neteja entre tests d'aquest fitxer).
+          dataLliurament: '2030-01-01T00:00:00Z',
           origen: 'manual',
           linies: [{ dataProduccio: '2026-08-01T00:00:00Z', producteId, unitatsDemanades: 1 }],
         },

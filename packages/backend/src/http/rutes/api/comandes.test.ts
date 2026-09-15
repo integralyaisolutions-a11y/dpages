@@ -845,7 +845,11 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       const res = await fastify.inject({
         method: 'POST',
         url: `/api/v1/comandes/${comandaCreada.id}/linies`,
-        payload: { producteId: producteFitxaId, unitatsDemanades: 3 },
+        payload: {
+          producteId: producteFitxaId,
+          unitatsDemanades: 3,
+          dataProduccio: '2026-08-05T00:00:00Z',
+        },
       });
 
       expect(res.statusCode).toBe(201);
@@ -901,7 +905,11 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       const res = await fastify.inject({
         method: 'POST',
         url: `/api/v1/comandes/${comandaCreada.id}/linies`,
-        payload: { producteId: producteSensePreuId, unitatsDemanades: 1 },
+        payload: {
+          producteId: producteSensePreuId,
+          unitatsDemanades: 1,
+          dataProduccio: '2026-08-05T00:00:00Z',
+        },
       });
 
       expect(res.statusCode).toBe(201);
@@ -940,7 +948,11 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       const res = await fastify.inject({
         method: 'POST',
         url: `/api/v1/comandes/${comandaCreada.id}/linies`,
-        payload: { producteId: producteFitxaId, unitatsDemanades: 1 },
+        payload: {
+          producteId: producteFitxaId,
+          unitatsDemanades: 1,
+          dataProduccio: '2026-08-05T00:00:00Z',
+        },
       });
 
       expect(res.statusCode).toBe(409);
@@ -1468,7 +1480,11 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       const res = await fastify.inject({
         method: 'POST',
         url: `/api/v1/comandes/${comandaCreada.id}/linies`,
-        payload: { producteId: producteFitxaId, unitatsDemanades: 1 },
+        payload: {
+          producteId: producteFitxaId,
+          unitatsDemanades: 1,
+          dataProduccio: '2026-08-05T00:00:00Z',
+        },
       });
 
       expect(res.statusCode).toBe(201);
@@ -1559,7 +1575,12 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       const res = await fastify.inject({
         method: 'POST',
         url: `/api/v1/comandes/${comandaCreada.id}/linies`,
-        payload: { producteId: producteAMidaId, unitatsDemanades: 1, kgDemanats: '1.000' },
+        payload: {
+          producteId: producteAMidaId,
+          unitatsDemanades: 1,
+          kgDemanats: '1.000',
+          dataProduccio: '2026-08-05T00:00:00Z',
+        },
       });
 
       expect(res.statusCode).toBe(201);
@@ -1918,7 +1939,16 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         url: '/api/v1/comandes',
         payload: {
           dataComanda: avui,
-          dataLliurament: '2026-08-30T00:00:00Z',
+          // Issue #16 (segona ronda) — regla 7: dataComanda no pot ser
+          // posterior a dataLliurament. No es pot fixar dataLliurament amb
+          // una data fixa del passat (aquest test compara contra "avui", el
+          // rellotge REAL del sistema, que avança), així que cal una data
+          // sempre posterior a "avui" — es tria un any llunyà expressament
+          // fora de qualsevol rang que altres tests d'aquest fitxer facin
+          // servir (tots amb dates fixes de 2026), per no fer-los matchear
+          // per accident (els pedidos que crea cada test queden a la
+          // mateixa base — no hi ha neteja entre tests d'aquest fitxer).
+          dataLliurament: '2030-01-01T00:00:00Z',
           origen: 'manual',
           linies: [
             {
@@ -2221,6 +2251,165 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'PATCH',
         url: `/api/v1/comandes/${comandaCreada.id}`,
         payload: { dataComanda: '' },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+      await fastify.close();
+    });
+  });
+
+  // Segona ronda de confirmació amb Francesc/Michelle sobre l'issue #16
+  // (docs/contrato-api.md): (1) dataComanda no pot ser posterior a
+  // dataLliurament (regla 7, nova) i (2) dataProduccio també passa a ser
+  // obligatòria a POST /comandes/:comandaId/linies (abans quedava fora
+  // d'aquest abast a propòsit).
+  describe('issue #16 (segona ronda) — regla 7 (dataComanda vs dataLliurament) i dataProduccio obligatòria a .../linies', () => {
+    it('POST /comandes amb dataComanda posterior a dataLliurament rebutja amb 400 VALIDACIO', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          dataComanda: '2026-08-31',
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen: 'manual',
+          linies: [
+            {
+              dataProduccio: '2026-08-25T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+      await fastify.close();
+    });
+
+    it('POST /comandes amb dataComanda = dataLliurament està permès — "posterior" és estricte', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          dataComanda: '2026-08-30',
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen: 'manual',
+          linies: [
+            {
+              dataProduccio: '2026-08-25T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
+        },
+      });
+
+      expect(res.statusCode).toBe(201);
+
+      await fastify.close();
+    });
+
+    it('PATCH /comandes/:id que canvia només dataComanda a una data posterior al dataLliurament JA EXISTENT rebutja amb 400 VALIDACIO', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen: 'manual',
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      // Aquest PATCH només porta dataComanda — dataLliurament NO ve al
+      // body, així que la validació ha d'anar a buscar el valor ja guardat
+      // (30/08) a la base, no assumir que la regla no aplica perquè només
+      // ha canviat una de les dues dates.
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { dataComanda: '2026-09-05' },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+      await fastify.close();
+    });
+
+    it('PATCH /comandes/:id que canvia només dataLliurament a una data anterior al dataComanda JA EXISTENT rebutja amb 400 VALIDACIO', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          dataComanda: '2026-08-20',
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen: 'manual',
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      // Aquest PATCH només porta dataLliurament — dataComanda NO ve al
+      // body (mateix cas que l'anterior, en l'altra direcció): ha de
+      // comparar-se contra el 20/08 ja guardat, no contra null.
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { dataLliurament: '2026-08-15T00:00:00Z' },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+      await fastify.close();
+    });
+
+    it('POST /comandes/:comandaId/linies sense dataProduccio rebutja amb 400 VALIDACIO', async () => {
+      const fastify = construirServidor();
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen: 'manual',
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const res = await fastify.inject({
+        method: 'POST',
+        url: `/api/v1/comandes/${comandaCreada.id}/linies`,
+        payload: { producteId: producteFitxaId, unitatsDemanades: 1 },
       });
 
       expect(res.statusCode).toBe(400);
