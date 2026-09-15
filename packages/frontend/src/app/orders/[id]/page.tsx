@@ -1,14 +1,15 @@
 'use client';
 
 import { ArrowLeft } from 'lucide-react';
-import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { GuardedLink } from '@/components/ui/GuardedLink';
 import { useCarriers } from '@/hooks/useCarriers';
 import { useCatalog } from '@/hooks/useCatalog';
 import { useClientTariffs } from '@/hooks/useClientTariffs';
+import { useNavigationGuard } from '@/hooks/useNavigationGuard';
 import { extractComandaErrorMessage, type OrderLineChanges, useOrders } from '@/hooks/useOrders';
 import { useOrigensComanda } from '@/hooks/useOrigensComanda';
 import { useRates } from '@/hooks/useRates';
@@ -25,6 +26,7 @@ export default function OrderDetailPage() {
   const { data: products } = useCatalog();
   const { data: origins } = useOrigensComanda();
   const formRef = useRef<OrderFormHandle>(null);
+  const { setIsDirty } = useNavigationGuard();
 
   const [order, setOrder] = useState<ComandaDetallApi | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -38,6 +40,10 @@ export default function OrderDetailPage() {
   const [incidenceDetall, setIncidenceDetall] = useState('');
   const [incidenceError, setIncidenceError] = useState<string | null>(null);
   const [isMarkingIncidence, setIsMarkingIncidence] = useState(false);
+
+  // Issue #15 — mateix criteri que orders/new/page.tsx: neteja el flag
+  // global en desmuntar-se perquè no quedi bloquejant la resta de l'app.
+  useEffect(() => () => setIsDirty(false), [setIsDirty]);
 
   // Se pide por id directo (GET /comandes/:id), no se busca en una lista ya
   // cargada — mismo criterio que Catàleg. `congelada` viene ya resuelto acá
@@ -151,15 +157,18 @@ export default function OrderDetailPage() {
 
   return (
     <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+      {/* Issue #15 — mateix patró que orders/new/page.tsx: sticky (no
+          fixed), sense marge negatiu, top-14 a mòbil per la barra fixa
+          del Sidebar, lg:top-0 en desktop. */}
+      <div className="sticky top-14 z-20 mb-8 flex flex-wrap items-center justify-between gap-4 bg-[var(--background)] py-3 lg:top-0">
         <div className="flex items-center gap-4">
-          <Link
+          <GuardedLink
             href="/orders"
             className="flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-700"
           >
             <ArrowLeft className="h-4 w-4" />
             Tornar
-          </Link>
+          </GuardedLink>
           <h1 className="text-2xl font-bold text-gray-900 lg:text-3xl">
             Comanda {order?.num ?? params.id}
           </h1>
@@ -225,6 +234,7 @@ export default function OrderDetailPage() {
           onSave={handleSave}
           onDeleteLine={handleDeleteLine}
           onDateErrorsChange={setHasDateErrors}
+          onDirtyChange={setIsDirty}
         />
       )}
 

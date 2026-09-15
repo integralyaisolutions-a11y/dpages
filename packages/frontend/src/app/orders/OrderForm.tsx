@@ -16,6 +16,7 @@ import {
   type ClientApi,
   type ComandaDetallApi,
   type ComandaLiniaApi,
+  type FilaMatriuTarifesApi,
   type LiniaCreacioApi,
   type LiniaEdicioApi,
   type OrigenComandaApi,
@@ -34,6 +35,12 @@ const NO_TARIFF = 'Sense tarifa';
 const NO_CARRIER = 'Selecciona transportista...';
 const NO_PRODUCT = 'Selecciona producte...';
 const NO_ORIGIN = 'Selecciona origen...';
+
+// Avís preventiu de preu (ver resolvePriceRisk) — quan hi ha tarifa vigent i
+// cal confirmar-ho contra GET /tarifes/matriu, no es dispara una crida per
+// cada tecla en triar producte/tarifa; s'espera aquest marge des de l'últim
+// canvi rellevant.
+const TARIFF_COVERAGE_DEBOUNCE_MS = 300;
 
 // Capa 43 — un pedido NUEVO sólo puede cargarse manualmente por estos 3
 // canales (whatsapp/telefon/correu, ver origen_comanda). "manual" y
@@ -248,9 +255,60 @@ function applyProduct(line: LineDraft, product: ProducteApi | undefined): LineDr
   };
 }
 
+/** null = encara no se sap (petició en curs o pendent de debounce). */
+type TariffCoverageStatus = 'covered' | 'not-covered';
+
+function tariffCoverageKey(tarifaId: number, producteId: number): string {
+  return `${tarifaId}:${producteId}`;
+}
+
+/**
+ * Avís preventiu (no bloquejant) del cas que caurà en amb_incidencia per
+ * falta de preu — mirall exacte de la cascada real de `resolverPreuLinia`
+ * (comandes.ts): (1) preu de la tarifa vigent, (2) si no n'hi ha,
+ * `producte.preuVenda`, (3) si tampoc, incidència.
+ *
+ * Dos casos:
+ * - Sense tarifa (`tarifaId === null`): certesa local, no cal cap crida —
+ *   si `preuVenda` també és null, els dos passos de la cascada fallen sí o
+ *   sí (cas original, capa anterior).
+ * - Amb tarifa vigent i `preuVenda === null` (l'únic altre cas on el pas 2
+ *   no serveix de xarxa de seguretat): abans es callava perquè el
+ *   frontend no tenia manera de saber si aquesta tarifa concreta cobreix
+ *   el producte. Ara sí es pot saber, consultant GET /tarifes/matriu
+ *   (mateixa font que Llistat de Tarifes) — `tariffCoverage` és la cache
+ *   ja resolta per l'efecte de OrderForm, `isChecking: true` mentre
+ *   encara no hi ha resposta (no s'afirma res mentrestant, ni true ni
+ *   false).
+ * - Si `preuVenda` NO és null, el pas 2 sempre és una xarxa de seguretat
+ *   vàlida encara que la tarifa no cobreixi el producte — mai hi ha risc
+ *   cert acá, per això no cal ni consultar la matriu.
+ */
+function resolvePriceRisk(
+  line: LineDraft,
+  tarifaId: number | null,
+  products: ProducteApi[],
+  tariffCoverage: Map<string, TariffCoverageStatus>,
+): { risk: boolean; isChecking: boolean } {
+  if (line.producte === null) return { risk: false, isChecking: false };
+  const product = products.find((p) => p.id === line.producte!.id);
+  if (!product) return { risk: false, isChecking: false };
+
+  if (tarifaId === null) {
+    return { risk: product.preuVenda === null, isChecking: false };
+  }
+  if (product.preuVenda !== null) return { risk: false, isChecking: false };
+
+  const status = tariffCoverage.get(tariffCoverageKey(tarifaId, product.id));
+  if (status === undefined) return { risk: false, isChecking: true };
+  return { risk: status === 'not-covered', isChecking: false };
+}
+
 function LineFormCard({
   line,
   products,
+  tarifaId,
+  tariffCoverage,
   disabled,
   headerDates,
   onUpdate,
@@ -258,6 +316,8 @@ function LineFormCard({
 }: {
   line: LineDraft;
   products: ProducteApi[];
+  tarifaId: number | null;
+  tariffCoverage: Map<string, TariffCoverageStatus>;
   disabled: boolean;
   headerDates: { dataProduccio: string; dataLliurament: string; dataExpedicio: string };
   onUpdate: (patch: Partial<LineDraft>) => void;
@@ -270,6 +330,7 @@ function LineFormCard({
     headerDates.dataLliurament,
     headerDates.dataExpedicio,
   );
+  const { risk: priceRisk } = resolvePriceRisk(line, tarifaId, products, tariffCoverage);
   // Línia ja existent (persistida, id>0): PATCH /comandes/:id/linies/:liniaId
   // (capa 30) no accepta producteId — no hi ha manera de comunicar un canvi
   // de producte al backend en una línia ja creada. Es desactiva el selector
@@ -292,6 +353,11 @@ function LineFormCard({
               onUpdate(applyProduct({ ...line }, selected));
             }}
           />
+          {priceRisk && (
+            <p className="mt-1.5 text-xs text-amber-700">
+              Aquest producte no té preu assignat — la comanda es marcarà amb incidència.
+            </p>
+          )}
         </div>
         <IconButton
           variant="delete"
@@ -423,6 +489,14 @@ export const OrderForm = forwardRef<
      * booleà d'estat al pare que es recalcula amb cada render d'acá.
      */
     onDateErrorsChange?: (hasErrors: boolean) => void;
+    /**
+     * Notifica al pare cada cop que canvia si hi ha canvis sense desar
+     * (issue #15) — mateix patró que `onDateErrorsChange`: el pare (viu a
+     * NavigationGuardContext) necessita aquest booleà per bloquejar
+     * beforeunload/navegació interna, però la font de veritat de "què s'ha
+     * tocat" viu acá dins, no té sentit duplicar-la al pare.
+     */
+    onDirtyChange?: (isDirty: boolean) => void;
   }
 >(function OrderForm(
   {
@@ -437,6 +511,7 @@ export const OrderForm = forwardRef<
     onSave,
     onDeleteLine,
     onDateErrorsChange,
+    onDirtyChange,
   },
   ref,
 ) {
@@ -473,12 +548,25 @@ export const OrderForm = forwardRef<
   // falso positivo por comparación de tipo/formato: si el id no está acá,
   // el usuario no tocó esa línea, punto.
   const [dirtyLineIds, setDirtyLineIds] = useState<Set<number>>(new Set());
+  // Mateix criteri que dirtyLineIds: es marca EXPLÍCITAMENT a l'acció de
+  // l'usuari (cada onChange de capçalera), mai comparant valors contra
+  // initialData més tard — evita falsos positius de tipus/format.
+  const [headerTouched, setHeaderTouched] = useState(false);
+  // Cache de "aquesta tarifa cobreix aquest producte?" (avís preventiu de
+  // preu, ver resolvePriceRisk) — clau `${tarifaId}:${producteId}`, mai
+  // s'esborra durant la sessió del formulari: si l'usuari torna a una
+  // combinació ja consultada (per exemple, canvia de tarifa i torna a la
+  // d'abans), es reaprofita sense repetir la crida a GET /tarifes/matriu.
+  const [tariffCoverage, setTariffCoverage] = useState<Map<string, TariffCoverageStatus>>(
+    new Map(),
+  );
   const [error, setError] = useState<string | null>(null);
   const [lineToDelete, setLineToDelete] = useState<LineDraft | null>(null);
   const [lineDeleteError, setLineDeleteError] = useState<string | null>(null);
   const [isDeletingLine, setIsDeletingLine] = useState(false);
 
   function handleClientChange(id: number | null) {
+    setHeaderTouched(true);
     setClientId(id);
     const client = clients.find((item) => item.id === id);
     if (!tariffTouched) {
@@ -559,6 +647,72 @@ export const OrderForm = forwardRef<
   useEffect(() => {
     onDateErrorsChange?.(hasDateErrors);
   }, [hasDateErrors, onDateErrorsChange]);
+
+  // isDirty = capçalera tocada O alguna línia tocada/afegida/eliminada
+  // (dirtyLineIds) — eliminar una línia existent (mode edit) NO hi compta
+  // (és un DELETE real i immediat, ver removeLine, no una part pendent de
+  // "Desar" que es pugui perdre en navegar).
+  const isDirty = headerTouched || dirtyLineIds.size > 0;
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  // Avís preventiu de preu (ver resolvePriceRisk) — quan hi ha tarifa
+  // vigent i el producte d'una línia no té `preuVenda` de respaldo, l'únic
+  // cas amb risc cert que encara falta resoldre és si aquesta tarifa
+  // concreta cobreix aquest producte concret. Es resol amb GET
+  // /tarifes/matriu?cerca=<codi> (mateix endpoint que Llistat de Tarifes),
+  // amb `cerca` fent coincidència EXACTA (regla 3.1) — per això `mida` no
+  // necessita ser gran, però es deixa un marge (50) per si dos productes
+  // comparteixen descripció exacta i cal desempatar per producteId.
+  useEffect(() => {
+    if (tarifaId === null) return;
+
+    const missing = new Map<string, ProducteApi>();
+    for (const line of lines) {
+      if (line.producte === null) continue;
+      const product = products.find((p) => p.id === line.producte!.id);
+      if (!product || product.preuVenda !== null) continue;
+      const key = tariffCoverageKey(tarifaId, product.id);
+      if (!tariffCoverage.has(key)) missing.set(key, product);
+    }
+    if (missing.size === 0) return;
+
+    let cancelled = false;
+    const timeoutId = setTimeout(() => {
+      void Promise.all(
+        Array.from(missing.entries()).map(async ([key, product]) => {
+          try {
+            const resposta = await api.get<{ dades: FilaMatriuTarifesApi[] }>('/tarifes/matriu', {
+              cerca: product.codi ?? product.descripcio,
+              mida: 50,
+            });
+            const fila = resposta.dades.find((d) => d.producteId === product.id);
+            const preu = fila?.preus[String(tarifaId)] ?? null;
+            return [key, preu !== null ? ('covered' as const) : ('not-covered' as const)] as const;
+          } catch {
+            // Error de xarxa: no s'afirma res (la key queda fora de la
+            // cache) — el proper efecte que la detecti com a "missing" la
+            // tornarà a intentar, en comptes d'assumir "no coberta".
+            return null;
+          }
+        }),
+      ).then((results) => {
+        if (cancelled) return;
+        setTariffCoverage((current) => {
+          const next = new Map(current);
+          for (const result of results) if (result) next.set(result[0], result[1]);
+          return next;
+        });
+      });
+    }, TARIFF_COVERAGE_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [lines, tarifaId, products, tariffCoverage]);
 
   useImperativeHandle(ref, () => ({
     submit: () => {
@@ -696,6 +850,7 @@ export const OrderForm = forwardRef<
               options={originOptions}
               value={originValue}
               onChange={(label) => {
+                setHeaderTouched(true);
                 const origin = eligibleOrigins.find((item) => item.nom === label);
                 setOrigenCodi(origin?.codi ?? null);
               }}
@@ -720,6 +875,7 @@ export const OrderForm = forwardRef<
             value={ESTAT_LABELS[estat] ?? estat}
             onChange={(label) => {
               if (isFrozen) return;
+              setHeaderTouched(true);
               const value = estatOptions.find((option) => ESTAT_LABELS[option] === label);
               if (value) setEstat(value);
             }}
@@ -731,6 +887,7 @@ export const OrderForm = forwardRef<
             value={tariffValue}
             onChange={(label) => {
               if (isFrozen) return;
+              setHeaderTouched(true);
               setTariffTouched(true);
               const tariff = tariffs.find((item) => tariffLabel(item) === label);
               setTarifaId(tariff?.id ?? null);
@@ -743,6 +900,7 @@ export const OrderForm = forwardRef<
             value={carrierValue}
             onChange={(label) => {
               if (isFrozen) return;
+              setHeaderTouched(true);
               const carrier = carriers.find((item) => carrierLabel(item) === label);
               setTransportistaId(carrier?.id ?? null);
             }}
@@ -763,14 +921,20 @@ export const OrderForm = forwardRef<
             type="date"
             disabled={isFrozen}
             value={dataProduccio}
-            onChange={(event) => setDataProduccio(event.target.value)}
+            onChange={(event) => {
+              setHeaderTouched(true);
+              setDataProduccio(event.target.value);
+            }}
           />
           <TextField
             label="Data expedició"
             type="date"
             disabled={isFrozen}
             value={dataExpedicio}
-            onChange={(event) => setDataExpedicio(event.target.value)}
+            onChange={(event) => {
+              setHeaderTouched(true);
+              setDataExpedicio(event.target.value);
+            }}
             error={headerDateErrors.dataExpedicio}
           />
           <TextField
@@ -778,7 +942,10 @@ export const OrderForm = forwardRef<
             type="date"
             disabled={isFrozen}
             value={dataLliurament}
-            onChange={(event) => setDataLliurament(event.target.value)}
+            onChange={(event) => {
+              setHeaderTouched(true);
+              setDataLliurament(event.target.value);
+            }}
             error={headerDateErrors.dataLliurament}
           />
           <TextField
@@ -786,13 +953,17 @@ export const OrderForm = forwardRef<
             type="number"
             disabled={isFrozen}
             value={bultos ?? 0}
-            onChange={(event) => setBultos(Number(event.target.value))}
+            onChange={(event) => {
+              setHeaderTouched(true);
+              setBultos(Number(event.target.value));
+            }}
           />
           <TextField
             label="Població de destí"
             disabled={isFrozen}
             value={poblacioDesti}
             onChange={(event) => {
+              setHeaderTouched(true);
               setPoblacioTouched(true);
               setPoblacioDesti(event.target.value);
             }}
@@ -804,7 +975,10 @@ export const OrderForm = forwardRef<
             label="Adreça de lliurament"
             disabled={isFrozen}
             value={adrecaLliurament}
-            onChange={(event) => setAdrecaLliurament(event.target.value)}
+            onChange={(event) => {
+              setHeaderTouched(true);
+              setAdrecaLliurament(event.target.value);
+            }}
           />
         </div>
 
@@ -814,7 +988,10 @@ export const OrderForm = forwardRef<
             <textarea
               value={obsProduccio}
               disabled={isFrozen}
-              onChange={(event) => setObsProduccio(event.target.value)}
+              onChange={(event) => {
+                setHeaderTouched(true);
+                setObsProduccio(event.target.value);
+              }}
               rows={2}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
             />
@@ -824,7 +1001,10 @@ export const OrderForm = forwardRef<
             <textarea
               value={obsLliurament}
               disabled={isFrozen}
-              onChange={(event) => setObsLliurament(event.target.value)}
+              onChange={(event) => {
+                setHeaderTouched(true);
+                setObsLliurament(event.target.value);
+              }}
               rows={2}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
             />
@@ -854,6 +1034,8 @@ export const OrderForm = forwardRef<
               key={line.id}
               line={line}
               products={products}
+              tarifaId={tarifaId}
+              tariffCoverage={tariffCoverage}
               disabled={isFrozen}
               headerDates={{ dataProduccio, dataLliurament, dataExpedicio }}
               onUpdate={(patch) => updateLine(line.id, patch)}
@@ -930,6 +1112,11 @@ export const OrderForm = forwardRef<
                           updateLine(line.id, applyProduct({ ...line }, selected));
                         }}
                       />
+                      {resolvePriceRisk(line, tarifaId, products, tariffCoverage).risk && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          Sense preu assignat — caurà en incidència.
+                        </p>
+                      )}
                     </td>
                     <td className="px-1.5 py-2 break-words text-gray-500">
                       {line.categoria ?? '—'}
