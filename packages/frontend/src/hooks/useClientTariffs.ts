@@ -10,6 +10,7 @@ import {
   type Paginacio,
   type RespostaPaginada,
 } from '@/lib/api';
+import { usePageClamp } from './usePageClamp';
 
 export type ClientFormValues = {
   nom: string;
@@ -134,6 +135,10 @@ export function useClientTariffs(
   }, [reloadToken, pagina, mida, filtersKey, esTaulaCompleta]);
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
+
+  // Hallazgo A (auditoria de paginació) — desactivat al mode "taula
+  // completa" (`esTaulaCompleta`), mateix criteri que useCatalog.ts.
+  usePageClamp(paginacio, setPagina, !esTaulaCompleta);
 
   const createClient = useCallback(
     async (values: ClientFormValues) => {

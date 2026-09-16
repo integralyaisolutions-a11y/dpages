@@ -53,12 +53,6 @@ export default function ClientTariffsPage() {
     client?: ClientApi;
   } | null>(null);
 
-  // Cerca migrada a server-side (paginació real 2026-08-30): GET /clients ja
-  // accepta `cerca` (ILIKE sobre nom/codi, confirmat contra clients.ts) —
-  // abans es filtrava client-side sobre els 200 ja carregats.
-  const clientFilters = useMemo(() => (search.trim() ? { cerca: search.trim() } : {}), [search]);
-  const { data, paginacio, setPagina, isLoading, error, refetch, createClient, editClient } =
-    useClientTariffs(clientFilters, { mida: 20 });
   // useRates() només per `tariffColumns` (llista completa, no paginada —
   // ver comentari a useRates.ts), no es toca `data` d'acá.
   const { tariffColumns } = useRates();
@@ -67,16 +61,29 @@ export default function ClientTariffsPage() {
     () => [ALL_FEM, ...tariffColumns.map((tariff) => tariff.nom)],
     [tariffColumns],
   );
+  const tarifaId = useMemo(
+    () =>
+      tariffFilter !== ALL_FEM
+        ? tariffColumns.find((item) => item.nom === tariffFilter)?.id
+        : undefined,
+    [tariffFilter, tariffColumns],
+  );
 
-  // `search` ja no es filtra acá: viatja com a `cerca` server-side.
-  // `tariffFilter` es manté client-side sobre la pàgina actual, fora de
-  // l'abast d'aquesta tasca (encara que /clients ja accepta `tarifaId`).
-  const filtered = data.filter((client) => {
-    if (tariffFilter !== ALL_FEM) {
-      if ((client.tarifa?.nom ?? null) !== tariffFilter) return false;
-    }
-    return true;
-  });
+  // Migració server-side (bug reportat per Francesc): `tariffFilter` es
+  // filtrava client-side sobre `data` (només els 20 clients de la pàgina
+  // actual) — `useClientTariffs()` mai detectava el canvi (no formava part
+  // de `clientFilters`) i `pagina` no es resetejava mai. Ara viatja com a
+  // `tarifaId` real (GET /clients?tarifaId=, confirmat contra clients.ts),
+  // mateix criteri que `cerca` (ja server-side des d'abans).
+  const clientFilters = useMemo(
+    () => ({
+      ...(search.trim() ? { cerca: search.trim() } : {}),
+      ...(tarifaId !== undefined ? { tarifaId } : {}),
+    }),
+    [search, tarifaId],
+  );
+  const { data, paginacio, setPagina, isLoading, error, refetch, createClient, editClient } =
+    useClientTariffs(clientFilters, { mida: 20 });
 
   async function handleSave(values: ClientFormValues) {
     if (formState?.mode === 'edit' && formState.client) {
@@ -128,7 +135,7 @@ export default function ClientTariffsPage() {
       {!isLoading && !error && (
         <>
           <div className="flex flex-col gap-3 md:hidden">
-            {filtered.map((client) => (
+            {data.map((client) => (
               <ClientTariffCard
                 key={client.id}
                 client={client}
@@ -159,7 +166,7 @@ export default function ClientTariffsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((client) => (
+                {data.map((client) => (
                   <tr key={client.id} className="border-b border-gray-100 last:border-0">
                     <td className="px-2 py-3 break-words">
                       <span className="font-semibold text-gray-900">{client.codi}</span>

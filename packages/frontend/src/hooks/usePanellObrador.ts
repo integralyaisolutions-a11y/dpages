@@ -10,6 +10,7 @@ import {
   type TotalsPanellObradorApi,
   type TreballLiniaRespostaApi,
 } from '@/lib/api';
+import { usePageClamp } from './usePageClamp';
 
 /**
  * Els 4 filtres reals de GET /panells/obrador (contrato §4.7, confirmat
@@ -106,6 +107,10 @@ export function usePanellObrador(filters: WorkshopPanelFilters = {}): UsePanellO
   }, [reloadToken, pagina, filtersKey]);
 
   const refetch = () => setReloadToken((token) => token + 1);
+
+  // Hallazgo A (auditoria de paginació) — corregeix `pagina` si un canvi
+  // deixa l'usuari en una pàgina que ja no existeix.
+  usePageClamp(paginacio, setPagina);
 
   // No refetegeix la llista sencera en èxit (a diferència de
   // saveLliurament a usePanellEmpaquetat.ts): la resposta del PATCH ja porta

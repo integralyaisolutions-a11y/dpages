@@ -9,6 +9,7 @@ import {
   type RendimentPorcEntradaApi,
   type RespostaPaginada,
 } from '@/lib/api';
+import { usePageClamp } from './usePageClamp';
 
 export type PigYieldPatch = Partial<Pick<RendimentPorcApi, 'unitatsPerPorc' | 'kgPerUnitat'>>;
 
@@ -91,6 +92,10 @@ export function usePigYields(filters: PigYieldFilters = {}): UsePigYieldsResult 
   }, [reloadToken, pagina, filtersKey]);
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
+
+  // Hallazgo A (auditoria de paginació) — corregeix `pagina` si borrar un
+  // rendiment deixa l'usuari en una pàgina que ja no existeix.
+  usePageClamp(paginacio, setPagina);
 
   // Sin edición optimista, mismo criterio que useCategories.ts/useCatalog.ts:
   // refetch tras mutación. Issues #3/#4 (migració 0018): categoriaId +

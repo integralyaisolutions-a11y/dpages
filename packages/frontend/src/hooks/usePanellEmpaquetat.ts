@@ -10,6 +10,7 @@ import {
   type PanellEmpaquetatApi,
   type TotalsPanellEmpaquetatApi,
 } from '@/lib/api';
+import { usePageClamp } from './usePageClamp';
 
 /**
  * Els 5 filtres reals de GET /panells/empaquetat (confirmat contra
@@ -114,6 +115,10 @@ export function usePanellEmpaquetat(
   }, [reloadToken, pagina, filtersKey]);
 
   const refetch = () => setReloadToken((token) => token + 1);
+
+  // Hallazgo A (auditoria de paginació) — corregeix `pagina` si un canvi
+  // deixa l'usuari en una pàgina que ja no existeix.
+  usePageClamp(paginacio, setPagina);
 
   const saveLliurament = useCallback(
     async (

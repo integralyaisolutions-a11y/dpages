@@ -89,16 +89,6 @@ export default function CatalogPage() {
   const [packaging, setPackaging] = useState(ALL);
   const [status, setStatus] = useState(ALL);
 
-  // Cerca migrada a server-side (paginació real 2026-08-30): GET /productes
-  // ja accepta `cerca` (ILIKE sobre descripcio/descripcio_venda/codi,
-  // confirmat contra productes.ts) — abans es filtrava client-side sobre
-  // els 200 ja carregats, cosa que amb paginació de 20 només hauria trobat
-  // resultats dins la pàgina actual.
-  const filters = useMemo(() => (search.trim() ? { cerca: search.trim() } : {}), [search]);
-  const { data, paginacio, setPagina, isLoading, error, refetch } = useCatalog(filters, {
-    mida: 20,
-  });
-
   // Efecte col·lateral de la paginació (2026-08-30) resolt: Categoria i
   // Agrupació producció ja no deriven de `data` (paginat a 20) — es
   // resolen contra fonts completes ja disponibles, mateix patró que
@@ -112,22 +102,49 @@ export default function CatalogPage() {
     () => distinct(allCategories.map((category) => category.nom)),
     [allCategories],
   );
+  // "—" identifica els productes sense agrupació (`agrupacioProduccio ===
+  // null`) — es manté com a opció visible al desplegable, però NO es manda
+  // mai com a query param real: `GET /productes?agrupacioProduccio=` fa
+  // `LOWER(p.agrupacio_produccio) = LOWER($1)`, que mai matcheja una fila
+  // NULL (el backend no té cap manera de demanar "sense agrupació"). Seguir
+  // triant "—" avui simplement no filtra res (mostra tots els productes) —
+  // limitació real del backend, no d'aquest fix.
+  const NO_PRODUCTION_GROUP = '—';
   const productionGroupOptions = useMemo(
-    () => distinct(allProducts.map((product) => product.agrupacioProduccio ?? '—')),
+    () => distinct(allProducts.map((product) => product.agrupacioProduccio ?? NO_PRODUCTION_GROUP)),
     [allProducts],
   );
+  const categoriaId = useMemo(
+    () =>
+      category !== ALL_FEM ? allCategories.find((item) => item.nom === category)?.id : undefined,
+    [category, allCategories],
+  );
 
-  // Format/Envasat/Estat: filtre client-side sobre la pàgina actual, mateix
-  // criteri d'abans (fora de l'abast d'aquesta tasca migrar-los a
-  // server-side, tot i que /productes ja els accepta com a query param).
-  const filtered = data.filter((product) => {
-    if (category !== ALL_FEM && (product.categoria?.nom ?? '—') !== category) return false;
-    if (productionGroup !== ALL && (product.agrupacioProduccio ?? '—') !== productionGroup)
-      return false;
-    if (format !== ALL && (product.format ?? '—') !== format) return false;
-    if (packaging !== ALL && (product.envasat ?? '—') !== packaging) return false;
-    if (status !== ALL && (product.actiu ? 'Actiu' : 'Inactiu') !== status) return false;
-    return true;
+  // Migració server-side dels 5 filtres (bug reportat per Francesc): abans
+  // Categoria/Agrupació producció/Format/Envasat/Estat es filtraven
+  // client-side sobre `data` (només els 20 items de la pàgina actual), així
+  // que `useCatalog()` mai detectava un canvi de filtre (no formaven part
+  // de `filters`) i `pagina` no es resetejava mai — el total mostrat
+  // quedava desfasat i la pàgina 1 podia sortir buida. Mateix criteri que
+  // `cerca` (ja server-side des d'abans): tots viatgen com a query params
+  // reals de GET /productes (categoriaId/agrupacioProduccio/format/
+  // envasat/actiu, confirmat contra productes.ts), `useCatalog()` els
+  // detecta via `filtersKey` i reseteja la pàgina sol.
+  const filters = useMemo(
+    () => ({
+      ...(search.trim() ? { cerca: search.trim() } : {}),
+      ...(categoriaId !== undefined ? { categoriaId } : {}),
+      ...(productionGroup !== ALL && productionGroup !== NO_PRODUCTION_GROUP
+        ? { agrupacioProduccio: productionGroup }
+        : {}),
+      ...(format !== ALL ? { format } : {}),
+      ...(packaging !== ALL ? { envasat: packaging } : {}),
+      ...(status !== ALL ? { actiu: status === 'Actiu' } : {}),
+    }),
+    [search, categoriaId, productionGroup, format, packaging, status],
+  );
+  const { data, paginacio, setPagina, isLoading, error, refetch } = useCatalog(filters, {
+    mida: 20,
   });
 
   return (
@@ -200,7 +217,7 @@ export default function CatalogPage() {
       {!isLoading && !error && (
         <>
           <div className="flex flex-col gap-3 md:hidden">
-            {filtered.map((product) => (
+            {data.map((product) => (
               <CatalogCard
                 key={product.id}
                 product={product}
@@ -246,7 +263,7 @@ export default function CatalogPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((product) => (
+                {data.map((product) => (
                   <tr key={product.id} className="border-b border-gray-100 last:border-0">
                     <td className="px-2 py-3 break-words text-gray-900">
                       {product.categoria?.nom ?? '—'}

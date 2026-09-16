@@ -193,11 +193,36 @@ export default function RatesPage() {
   const [category, setCategory] = useState(ALL_FEM);
   const [format, setFormat] = useState(ALL);
 
-  // Cerca migrada a server-side (paginació real 2026-08-30): GET
-  // /tarifes/matriu ja accepta `cerca` (ILIKE sobre descripcio/codi,
-  // confirmat contra tarifes.ts) — abans es filtrava client-side sobre les
-  // 200 files ja carregades.
-  const ratesFilters = useMemo(() => (search.trim() ? { cerca: search.trim() } : {}), [search]);
+  // useCatalog() SENSE paràmetres: es fa servir com a taula de consulta
+  // completa per resoldre categoria/format de CADA producte de la matriu
+  // (no només els 20 de la pàgina actual) — manté `mida: 200` per defecte,
+  // no es toca. Es carrega ABANS de `ratesFilters` perquè cal per resoldre
+  // `categoriaId` (ver més avall).
+  const { data: catalog } = useCatalog();
+  // "—" = productes sense categoria — igual que a catalog/page.tsx, es manté
+  // com a opció visible però NO es manda com a `categoriaId` real (no hi ha
+  // cap id per a "sense categoria").
+  const NO_CATEGORY = '—';
+  const categoriaId = useMemo(
+    () =>
+      category !== ALL_FEM && category !== NO_CATEGORY
+        ? catalog.find((product) => product.categoria?.nom === category)?.categoria?.id
+        : undefined,
+    [category, catalog],
+  );
+  // Migració server-side parcial (bug reportat per Francesc): Categoria
+  // viatja ara com a `categoriaId` real (GET /tarifes/matriu?categoriaId=,
+  // confirmat contra tarifes.ts). Format es queda client-side A PROPÒSIT —
+  // aquest endpoint NO té cap query param de format (confirmat llegint
+  // tarifes.ts sencer: només accepta categoriaId/cerca), no és un descuit
+  // d'aquest fix, fa falta suport nou al backend abans de poder migrar-lo.
+  const ratesFilters = useMemo(
+    () => ({
+      ...(search.trim() ? { cerca: search.trim() } : {}),
+      ...(categoriaId !== undefined ? { categoriaId } : {}),
+    }),
+    [search, categoriaId],
+  );
   const {
     data,
     tariffColumns,
@@ -210,11 +235,6 @@ export default function RatesPage() {
     savePrices,
     createTariff,
   } = useRates(ratesFilters);
-  // useCatalog() SENSE paràmetres: es fa servir com a taula de consulta
-  // completa per resoldre categoria/format de CADA producte de la matriu
-  // (no només els 20 de la pàgina actual) — manté `mida: 200` per defecte,
-  // no es toca.
-  const { data: catalog } = useCatalog();
   const [scrollContainer, setScrollContainer] = useState<HTMLDivElement | null>(null);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
@@ -274,12 +294,10 @@ export default function RatesPage() {
     [catalog],
   );
 
-  // `search` ja no es filtra acá: viatja com a `cerca` server-side (ver
-  // `ratesFilters` dalt). Categoria/Format es mantenen client-side sobre la
-  // pàgina actual, fora de l'abast d'aquesta tasca.
+  // `search`/Categoria ja no es filtren acá: viatgen server-side (ver
+  // `ratesFilters` dalt). Format es manté client-side sobre la pàgina
+  // actual — `GET /tarifes/matriu` no té cap query param de format encara.
   const filtered = data.filter((product) => {
-    if (category !== ALL_FEM && (categoryByProductId.get(product.producteId) ?? '—') !== category)
-      return false;
     if (format !== ALL && (formatByProductId.get(product.producteId) ?? '—') !== format)
       return false;
     return true;

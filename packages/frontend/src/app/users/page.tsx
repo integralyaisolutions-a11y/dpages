@@ -80,14 +80,16 @@ export default function UsersPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState(ALL);
 
-  // Únic filtre real de GET /usuaris confirmat (contrato §4.12) — la cerca
-  // per nom/email és client-side sobre la pàgina actual (20 usuaris): GET
-  // /usuaris no accepta cerca de text lliure (confirmat contra usuaris.ts,
-  // només `actiu`). Pendent de decidir si val la pena afegir suport real
-  // al backend.
+  // Issue #17 (Michelle/Francesc) — `cerca` ja és real a GET /usuaris
+  // (ILIKE sobre nom/email, confirmat contra usuaris.ts): reemplaça el
+  // filtre client-side que donava totals/resultats inconsistents en
+  // filtrar només sobre la pàgina ja carregada (mateix bug que Catàleg).
   const userFilters = useMemo(
-    () => (statusFilter === ALL ? {} : { actiu: statusFilter === 'Actiu' }),
-    [statusFilter],
+    () => ({
+      ...(search.trim() ? { cerca: search.trim() } : {}),
+      ...(statusFilter !== ALL ? { actiu: statusFilter === 'Actiu' } : {}),
+    }),
+    [search, statusFilter],
   );
 
   const {
@@ -119,12 +121,6 @@ export default function UsersPage() {
     role?: RolApi;
   } | null>(null);
   const [createdUser, setCreatedUser] = useState<UsuariCreatRespostaApi | null>(null);
-
-  const filteredUsers = users.filter((user) => {
-    if (!search) return true;
-    const query = search.toLowerCase();
-    return user.nom.toLowerCase().includes(query) || user.email.toLowerCase().includes(query);
-  });
 
   return (
     <div>
@@ -199,7 +195,7 @@ export default function UsersPage() {
           {!usersLoading && !usersError && (
             <>
               <div className="flex flex-col gap-3 md:hidden">
-                {filteredUsers.map((user) => (
+                {users.map((user) => (
                   <UserCard
                     key={user.id}
                     user={user}
@@ -230,7 +226,7 @@ export default function UsersPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredUsers.map((user) => (
+                    {users.map((user) => (
                       <tr key={user.id} className="border-b border-gray-100 last:border-0">
                         <td className="px-3 py-3 break-words">
                           <span className="font-semibold text-gray-900">{user.nom}</span>

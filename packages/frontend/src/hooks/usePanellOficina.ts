@@ -9,6 +9,7 @@ import {
   type PanellOficinaApi,
   type TotalsPanellOficinaApi,
 } from '@/lib/api';
+import { usePageClamp } from './usePageClamp';
 
 /**
  * Els 8 filtres reals de GET /panells/oficina (contrato §4.6, confirmat
@@ -102,6 +103,10 @@ export function usePanellOficina(filters: OfficePanelFilters = {}): UsePanellOfi
   }, [reloadToken, pagina, filtersKey]);
 
   const refetch = () => setReloadToken((token) => token + 1);
+
+  // Hallazgo A (auditoria de paginació) — corregeix `pagina` si un canvi
+  // deixa l'usuari en una pàgina que ja no existeix.
+  usePageClamp(paginacio, setPagina);
 
   return { data, totals, paginacio, pagina, setPagina, isLoading, error, refetch };
 }

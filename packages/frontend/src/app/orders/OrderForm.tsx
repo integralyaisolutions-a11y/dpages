@@ -565,11 +565,16 @@ export const OrderForm = forwardRef<
   const [dataComanda, setDataComanda] = useState(initialData?.dataComanda?.slice(0, 10) ?? today());
   // Issue #16 — passa a OBLIGATÒRIA només en creació (POST /comandes la
   // rebutja buida); en edició segueix sent nullable de veritat a la base
-  // (PATCH la deixa buidar), per això el default "avui" NOMÉS s'aplica quan
-  // no hi ha `initialData` — mai es fabrica un valor en comandes existents
-  // que legítimament no en tenen.
+  // (PATCH la deixa buidar).
+  //
+  // Sense default d'"avui" (correcció posterior, Michelle): la migració
+  // 0019 i docs/contrato-api.md atribuïen aquest default a una confirmació
+  // de negoci que en realitat no es va donar per a aquest camp concret
+  // (Gerardo ajusta la documentació per separat) — mateix criteri que ja
+  // fan servir dataExpedicio i el dataProduccio de cada línia: obligatori,
+  // sense cap valor precarregat, l'usuari sempre l'omple a mà.
   const [dataLliurament, setDataLliurament] = useState(
-    initialData?.dataLliurament?.slice(0, 10) ?? (mode === 'create' ? today() : ''),
+    initialData?.dataLliurament?.slice(0, 10) ?? '',
   );
   const [dataExpedicio, setDataExpedicio] = useState(
     initialData?.dataExpedicio?.slice(0, 10) ?? '',

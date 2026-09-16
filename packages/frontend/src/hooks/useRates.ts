@@ -8,6 +8,7 @@ import {
   type Paginacio,
   type TarifaResumApi,
 } from '@/lib/api';
+import { usePageClamp } from './usePageClamp';
 
 export type CellSaveResult =
   { tarifaId: string; success: true } | { tarifaId: string; success: false; error: ApiError };
@@ -102,6 +103,10 @@ export function useRates(filters: RatesFilters = {}): UseRatesResult {
   }, [reloadToken, pagina, filtersKey]);
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
+
+  // Hallazgo A (auditoria de paginació) — corregeix `pagina` si un canvi
+  // (ex. crear una tarifa nova) deixa l'usuari en una pàgina buida.
+  usePageClamp(paginacio, setPagina);
 
   // Una PATCH por celda cambiada y un DELETE por celda vaciada (capa 28: el
   // backend ya soporta borrar una fila de tarifa_preu para volver a "sin
