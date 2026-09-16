@@ -2,7 +2,10 @@
 -- sin NINGUNA fecha (ni Data comanda, ni Data lliurament, ni Data producció
 -- de línia). Reglas de negocio confirmadas (Michelle/Francesc):
 --   1. Data comanda: HOY por defecto, EDITABLE, OBLIGATORIA.
---   2. Data lliurament (cabecera): HOY por defecto, OBLIGATORIA.
+--   2. Data lliurament (cabecera): OBLIGATORIA, SIN valor por defecto (el
+--      usuario la completa siempre a mano, corregido tras confirmación de
+--      Michelle — inicialmente se documentó mal con "HOY por defecto",
+--      igualando por error el criterio de Data comanda).
 --   3. Data producció (por línia): OBLIGATORIA, sin valor por defecto.
 -- Esta migración cubre el punto 1 — 2 y 3 son validación de aplicación
 -- (comandes.ts), no tocan esquema (las columnas ya existían y ya admitían

@@ -88,6 +88,42 @@ describe('API negoci — /jo, /usuaris, /rols (Postgres real, esquema aislado)',
     await fastify.close();
   });
 
+  it('GET /usuaris?cerca=: substring (ILIKE) sobre nom O email troba el registre; sense match dona llista buida', async () => {
+    const fastify = construirServidor();
+    const rolAdmin = await entorn.poolTest.query<{ id_seq: string }>(
+      `SELECT id_seq FROM rol WHERE nom = 'Administrador'`,
+    );
+    const rolId = Number(rolAdmin.rows[0]!.id_seq);
+    const email = `cerca17-${randomUUID()}@example.com`;
+    const { firebase } = mockGestioFirebase();
+    const creat = await crearUsuariAmbLink(entorn.poolTest, firebase, {
+      nom: 'Persona Issue Disset',
+      email,
+      rolId,
+    });
+    expect(creat.tipus).toBe('ok');
+
+    const perNom = cuerpoJson<RespostaPaginada<UsuariApi>>(
+      await fastify.inject({
+        method: 'GET',
+        url: `/api/v1/usuaris?cerca=${encodeURIComponent('issue disset')}`,
+      }),
+    );
+    expect(perNom.dades.some((u) => u.email === email)).toBe(true);
+
+    const perEmail = cuerpoJson<RespostaPaginada<UsuariApi>>(
+      await fastify.inject({ method: 'GET', url: `/api/v1/usuaris?cerca=${email.slice(0, 10)}` }),
+    );
+    expect(perEmail.dades.some((u) => u.email === email)).toBe(true);
+
+    const senseMatch = cuerpoJson<RespostaPaginada<UsuariApi>>(
+      await fastify.inject({ method: 'GET', url: '/api/v1/usuaris?cerca=zzz-no-existeix-zzz' }),
+    );
+    expect(senseMatch.dades).toEqual([]);
+
+    await fastify.close();
+  });
+
   it('PATCH /usuaris/:id: edita nom/rolId/actiu, pero no toca firebaseUid ni email', async () => {
     const fastify = construirServidor();
     await promoureAAdministrador(entorn, fastify);

@@ -508,14 +508,28 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       condicions.push(condicioDataFinsInclusiva('c.data_lliurament', valors.length + 1));
       valors.push(query.dataLliuramentFins);
     }
+    // Issue #17 (Michelle/Francesc) — `cerca` ya buscaba por `c.num`; se
+    // AMPLÍA (no se reemplaza) para que también encuentre por nombre de
+    // CLIENTE, reemplazando un filtro client-side que daba totales/
+    // resultados inconsistentes al filtrar sólo sobre la página ya cargada.
+    // Substring (ILIKE), NO exacto — mismo criterio que `cerca` en
+    // clients.ts (buscar un pedido por parte del nombre de su cliente sí
+    // tiene sentido de negocio, a diferencia de productes.ts/tarifes.ts,
+    // regla 3.1). No toca `?clientId=` (filtro exacto, sin cambios).
     if (typeof query.cerca === 'string' && query.cerca.trim() !== '') {
-      condicions.push(`c.num ILIKE $${valors.length + 1}`);
+      condicions.push(`(c.num ILIKE $${valors.length + 1} OR cl.nom ILIKE $${valors.length + 1})`);
       valors.push(`%${query.cerca.trim()}%`);
     }
     const where = condicions.length > 0 ? `WHERE ${condicions.join(' AND ')}` : '';
 
+    // El count necesita el mismo JOIN a `client` que ya usa SELECT_COMANDA_RESUM
+    // (más abajo) porque `where` ahora puede referenciar `cl.nom` — antes
+    // bastaba con `origen_comanda` porque ninguna condición tocaba `client`.
     const total = await pool.query<{ count: string }>(
-      `SELECT count(*) FROM comanda c JOIN origen_comanda oc ON oc.id = c.origen_id ${where}`,
+      `SELECT count(*) FROM comanda c
+       JOIN origen_comanda oc ON oc.id = c.origen_id
+       LEFT JOIN client cl ON cl.id = c.client_id
+       ${where}`,
       valors,
     );
     const files = await pool.query<FilaComandaResum>(

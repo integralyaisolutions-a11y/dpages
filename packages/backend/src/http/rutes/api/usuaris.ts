@@ -161,6 +161,17 @@ export function registrarRutesUsuaris(fastify: FastifyInstance): void {
       condicions.push(`u.actiu = $${valors.length + 1}`);
       valors.push(query.actiu === 'true');
     }
+    // Issue #17 (Michelle/Francesc) — reemplaza un filtro client-side que
+    // daba totales/resultados inconsistentes al filtrar sólo sobre la
+    // página ya cargada. Substring (ILIKE), NO exacto: buscar un usuario
+    // por parte de su nombre o email tiene sentido de negocio, a
+    // diferencia del criterio de productes.ts/tarifes.ts (regla 3.1, LOWER
+    // exacto para no traer "cabeza de lomo" al buscar "lomo"). Mismo
+    // patrón que `cerca` en clients.ts, con OR multi-columna.
+    if (typeof query.cerca === 'string' && query.cerca.trim() !== '') {
+      condicions.push(`(u.nom ILIKE $${valors.length + 1} OR u.email ILIKE $${valors.length + 1})`);
+      valors.push(`%${query.cerca.trim()}%`);
+    }
     const where = condicions.length > 0 ? `WHERE ${condicions.join(' AND ')}` : '';
 
     const total = await pool.query<{ count: string }>(

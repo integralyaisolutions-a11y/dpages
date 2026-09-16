@@ -599,6 +599,14 @@ Filtros: `?estat=oberta&clientId=45&origen=web&dataDes=2026-08-01&dataFins=2026-
 
 > `dataFins`/`dataProduccioFins`/`dataLliuramentFins` incluyen el día
 > completo — ver "Filtros de rango de fecha" en la sección 2 (capa 36).
+>
+> **`cerca` (issue #17, Michelle/Francesc) — substring (`ILIKE`), sobre
+> `num` DEL PEDIDO O nombre del CLIENTE** (`cl.nom`), reemplaza un filtro
+> client-side que daba totales/resultados inconsistentes al filtrar sólo
+> sobre la página ya cargada. No confundir con el criterio de `cerca` en
+> `productes`/`tarifes` (exacto, LOWER — sección 2, regla 3.1): acá
+> buscar por parte del nombre de un cliente sí tiene sentido de negocio.
+> No reemplaza `clientId` (filtro exacto por id, sin cambios).
 
 ```json
 {
@@ -828,9 +836,12 @@ correo y WhatsApp, que son la mayoría del volumen real.
 
 > **Issue #16 (Francesc, Bloqueante) — BREAKING: `dataComanda`, `dataLliurament`
 > y `linies[].dataProduccio` pasan a ser OBLIGATORIOS**, sin valor por
-> defecto en el backend (el frontend precarga `dataComanda`/`dataLliurament`
-> con HOY, pero quien lo garantiza es esta validación, `400 VALIDACIO` si
-> falta cualquiera). Antes (capa 34), `linies[].dataProduccio` era opcional
+> defecto en el backend. El frontend precarga `dataComanda` con HOY
+> (correcto: es la fecha real de creación) — `dataLliurament` NO debe
+> precargarse (corregido tras confirmación de Michelle; se había
+> documentado por error con el mismo criterio que `dataComanda`). Quien
+> garantiza la obligatoriedad de ambas es esta validación, `400 VALIDACIO`
+> si falta cualquiera. Antes (capa 34), `linies[].dataProduccio` era opcional
 > en la alta — dejó de serlo acá; `dataComanda` es un campo nuevo (antes ni
 > existía como entrada, ver la nota de `dataDes`/`dataFins` más arriba).
 >
@@ -1703,7 +1714,13 @@ reasignarlo automáticamente. Sin usuarios asignados, `204` sin cuerpo.
 
 **`GET /usuaris`**
 
-Filtros: `?actiu=true`
+Filtros: `?actiu=true&cerca=anna`
+
+> **`cerca` (issue #17, Michelle/Francesc) — substring (`ILIKE`), sobre
+> `nom` O `email`** (OR multi-columna), reemplaza un filtro client-side que
+> daba resultados inconsistentes al filtrar sólo sobre la página ya
+> cargada. Mismo criterio substring que `cerca` en `clients`/`comandes` —
+> no el de `productes`/`tarifes` (exacto, sección 2, regla 3.1).
 
 ```json
 {

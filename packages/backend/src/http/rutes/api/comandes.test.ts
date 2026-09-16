@@ -2418,4 +2418,61 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       await fastify.close();
     });
   });
+
+  // Issue #17 (Michelle/Francesc) — reemplaza un filtro client-side que daba
+  // totales/resultados inconsistentes al filtrar sólo sobre la página ya
+  // cargada. `cerca` ya buscaba por `num` del pedido (substring); se amplía
+  // para que TAMBIÉN encuentre por nombre de cliente, sin dejar de matchear
+  // por num.
+  describe('issue #17 — GET /comandes?cerca= (substring, num del pedido O nom del client)', () => {
+    it('cerca= per substring del nom del client troba el pedido; text sense match dona llista buida', async () => {
+      const fastify = construirServidor();
+      const client = await entorn.poolTest.query<{ id_seq: string }>(
+        `INSERT INTO client (nom, poblacio) VALUES ('Carnisseria Issue Disset', 'Manresa') RETURNING id_seq`,
+      );
+      const clientCercaId = Number(client.rows[0]!.id_seq);
+
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen: 'manual',
+          clientId: clientCercaId,
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
+        },
+      });
+      const comandaCreada = cuerpoJson<ComandaDetallApi>(creada);
+
+      const perNomClient = cuerpoJson<RespostaPaginada<ComandaResumApi>>(
+        await fastify.inject({
+          method: 'GET',
+          url: `/api/v1/comandes?cerca=${encodeURIComponent('issue disset')}`,
+        }),
+      );
+      expect(perNomClient.dades.some((c) => c.id === comandaCreada.id)).toBe(true);
+
+      const perNum = cuerpoJson<RespostaPaginada<ComandaResumApi>>(
+        await fastify.inject({
+          method: 'GET',
+          url: `/api/v1/comandes?cerca=${comandaCreada.num}`,
+        }),
+      );
+      expect(perNum.dades.some((c) => c.id === comandaCreada.id)).toBe(true);
+
+      const senseMatch = cuerpoJson<RespostaPaginada<ComandaResumApi>>(
+        await fastify.inject({ method: 'GET', url: '/api/v1/comandes?cerca=zzz-no-existeix-zzz' }),
+      );
+      expect(senseMatch.dades).toEqual([]);
+
+      await fastify.close();
+    });
+  });
 });
