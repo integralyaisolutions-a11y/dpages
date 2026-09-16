@@ -41,7 +41,22 @@ export type OrderFormValues = {
    */
   tarifaId: number | null;
   transportistaId: number | null;
-  dataProduccio: string | null;
+  /**
+   * Issue #16 — nova, OBLIGATÒRIA als dos modes (POST i PATCH la rebutgen
+   * buida). Mai `null` a diferència de les altres 3 dates: OrderForm.tsx
+   * bloqueja el submit abans si estigués buida.
+   *
+   * Fusió posterior (decisió de negoci, Michelle, confirmada per
+   * investigació: `comanda.dataProduccio` de capçalera no s'usa en cap
+   * filtre/pantalla més que la pròpia validació de coherència) —
+   * `OrderFormValues` ja NO té cap camp `dataProduccio` de capçalera
+   * separat. `createOrder`/`editOrder` (més avall) l'envien sempre
+   * idèntic a `dataComanda` en construir el body real, sense que
+   * OrderForm.tsx en sàpiga res. El de cada LÍNIA (`LiniaCreacioApi.
+   * dataProduccio`, dins `linies`) és un concepte real i distint que no
+   * es toca.
+   */
+  dataComanda: string;
   dataExpedicio: string | null;
   dataLliurament: string | null;
   bultos: number | null;
@@ -73,18 +88,20 @@ export type OrderLineChanges = {
  * al nivell superior ("Les dates no són coherents") i el detall REAL
  * (quina regla, i per a les línies, quina línia — "línia núm. 38008: ...")
  * dins `detalls[0].missatge`. Sempre és NOMÉS el primer detall (el
- * backend no acumula els 6); el seu `camp` és `dataLliurament`/
- * `dataExpedicio` (capçalera) o el sintètic `linies[].dataProduccio` —
- * cap dels dos coincideix amb el patró de mapeig per camp que fem servir
- * a altres pantalles (ex. ClientFormModal), i el de línia ni tan sols
- * apunta a cap input real. Per això NO s'intenta mapejar: es mostra el
- * missatge sencer (genèric + detall) com a error de formulari.
+ * backend no acumula els 7); el seu `camp` és `dataComanda` (regla 7,
+ * issue #16)/`dataLliurament`/`dataExpedicio` (capçalera) o el sintètic
+ * `linies[].dataProduccio` — cap coincideix amb el patró de mapeig per
+ * camp que fem servir a altres pantalles (ex. ClientFormModal), i el de
+ * línia ni tan sols apunta a cap input real. Per això NO s'intenta
+ * mapejar: es mostra el missatge sencer (genèric + detall) com a error
+ * de formulari.
  */
 function esErrorCoherenciaDates(caught: ApiError): boolean {
   const camp = caught.detalls?.[0]?.camp;
   return (
     caught.codi === 'VALIDACIO' &&
-    (camp === 'dataLliurament' ||
+    (camp === 'dataComanda' ||
+      camp === 'dataLliurament' ||
       camp === 'dataExpedicio' ||
       (camp?.startsWith('linies[') ?? false))
   );
@@ -199,7 +216,9 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
   // Alta real (POST) + PATCH encadenado para los campos que POST no acepta
   // (bultos/poblacioDesti/adrecaLliurament/obsProduccio/dataProduccio/
   // dataExpedicio — fuera de ComandaCreacioApi, contrato §4.5). tarifaId
-  // SÍ viaja directo en el POST (capa 32), ya no en este PATCH. Si el POST
+  // SÍ viaja directo en el POST (capa 32), igual que dataComanda/
+  // dataLliurament desde issue #16 (antes esta última era opcional y podía
+  // ir en cualquiera de los dos, ahora viaja siempre en el POST). Si el POST
   // tiene éxito pero el PATCH falla, la comanda YA existe — nunca se
   // reintenta el POST (evitaría duplicados); se devuelve la comanda creada
   // más el error del PATCH para que la pantalla avise qué campos no se
@@ -209,27 +228,36 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
       // Capa 43 — OrderForm.tsx ya valida que `origen` no sea null antes de
       // llegar acá (mode create); el "manual" de reserva nunca debería
       // disparar en la práctica, sólo defensivo.
-      const cos: ComandaCreacioApi = { origen: values.origen ?? 'manual', linies: values.linies };
+      // Issue #16 — dataComanda/dataLliurament passen a viatjar sempre
+      // (mai condicionals): les dues són ara OBLIGATÒRIES a POST /comandes,
+      // OrderForm.tsx ja bloqueja el submit abans si falten. El `!` de
+      // dataLliurament reflecteix aquesta garantia (el tipus de
+      // OrderFormValues la manté `string | null` perquè en mode edició sí
+      // pot ser null).
+      const cos: ComandaCreacioApi = {
+        origen: values.origen ?? 'manual',
+        dataComanda: values.dataComanda,
+        dataLliurament: values.dataLliurament!,
+        linies: values.linies,
+      };
       if (values.clientId !== null) cos.clientId = values.clientId;
       if (values.tarifaId !== null) cos.tarifaId = values.tarifaId;
-      if (values.dataLliurament !== null) cos.dataLliurament = values.dataLliurament;
       if (values.transportistaId !== null) cos.transportistaId = values.transportistaId;
       if (values.obsLliurament !== null) cos.obsLliurament = values.obsLliurament;
 
       const creada = await api.post<ComandaDetallApi>('/comandes', cos);
 
-      const patchCos: Record<string, unknown> = {};
+      // Fusió Data producció / Data comanda de capçalera (decisió de
+      // negoci, Michelle) — `dataProduccio` de capçalera ja no és un camp
+      // que l'usuari trii per separat (OrderForm.tsx no en té cap input);
+      // sempre viatja idèntic a `dataComanda`, per això és l'única clau
+      // incondicional d'aquest PATCH.
+      const patchCos: Record<string, unknown> = { dataProduccio: values.dataComanda };
       if (values.bultos !== null) patchCos.bultos = values.bultos;
       if (values.poblacioDesti !== null) patchCos.poblacioDesti = values.poblacioDesti;
       if (values.adrecaLliurament !== null) patchCos.adrecaLliurament = values.adrecaLliurament;
       if (values.obsProduccio !== null) patchCos.obsProduccio = values.obsProduccio;
-      if (values.dataProduccio !== null) patchCos.dataProduccio = values.dataProduccio;
       if (values.dataExpedicio !== null) patchCos.dataExpedicio = values.dataExpedicio;
-
-      if (Object.keys(patchCos).length === 0) {
-        refetch();
-        return { order: creada, patchError: null };
-      }
 
       try {
         const actualitzada = await api.patch<ComandaDetallApi>(`/comandes/${creada.id}`, patchCos);
@@ -255,7 +283,14 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
         clientId: values.clientId,
         tarifaId: values.tarifaId,
         transportistaId: values.transportistaId,
-        dataProduccio: values.dataProduccio,
+        // Issue #16 — dataComanda és editable després de creada (PATCH la
+        // rebutja buida, mai null: OrderFormValues.dataComanda ja és
+        // `string`, no cal cap guarda acá).
+        dataComanda: values.dataComanda,
+        // Fusió Data producció / Data comanda de capçalera (Michelle) —
+        // mateix criteri que createOrder: sempre idèntica a dataComanda,
+        // mai un valor triat per separat.
+        dataProduccio: values.dataComanda,
         dataExpedicio: values.dataExpedicio,
         dataLliurament: values.dataLliurament,
         bultos: values.bultos,

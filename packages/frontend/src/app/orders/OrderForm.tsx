@@ -155,7 +155,11 @@ function toLiniaCreacio(line: LineDraft): LiniaCreacioApi {
     // GET), però el body de POST/PATCH segueix esperant un JS number.
     unitatsDemanades: Number(line.unitatsDemanades),
     kgDemanats: line.kgEditable ? line.kgDemanats : undefined,
-    dataProduccio: line.dataProduccio,
+    // Issue #16 — LiniaCreacioApi.dataProduccio ja no admet null (igual que
+    // LiniaAfegidaApi): el `!` és segur perquè submit() bloqueja abans amb
+    // un error clar si alguna línia nova no té data (mateix criteri que
+    // `line.producte!.id` a dalt, ja validat per `validLines`).
+    dataProduccio: line.dataProduccio!,
   };
 }
 
@@ -185,43 +189,62 @@ function dateOnly(value: string | null): string {
   return value ? value.slice(0, 10) : '';
 }
 
+/** Únic default real dels 3 camps de data obligatoris (issue #16) — cap dels dos (dataComanda/dataLliurament) té default al backend, ver docblock de ComandaCreacioApi a @dpages/shared. */
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 /**
- * Regles 1-3 — validació de client per feedback immediat; capa 34 les
+ * Regles 2/3/7 — validació de client per feedback immediat; capa 34 les
  * aplica també al backend (POST /comandes, PATCH /comandes/:id i els dos
  * endpoints de línia) com a última paraula, per si aquest formulari deixa
- * passar algun cas (ver `extractComandaErrorMessage` a useOrders.ts). Es
- * revalida sencer contra les 3 dates de capçalera cada cop, mai comparant
- * només la que s'acaba de tocar contra un valor fix — així queda bé sense
- * importar l'ordre en què l'usuari les completa.
+ * passar algun cas (ver `extractComandaErrorMessage` a useOrders.ts).
+ *
+ * Fusió Data producció / Data comanda de capçalera (decisió de negoci,
+ * Michelle, confirmada per investigació: `dataProduccio` de capçalera no
+ * s'usa en cap filtre/pantalla més que aquesta pròpia validació) — el
+ * formulari ja no té cap input separat per a `dataProduccio` de capçalera,
+ * es manda sempre idèntica a `dataComanda`. Això absorbeix l'antiga regla 1
+ * ("dataLliurament no anterior a dataProduccio de capçalera"), que passa a
+ * ser matemàticament idèntica a la regla 7 un cop `dataProduccio` de
+ * capçalera = `dataComanda` — mantenir-la per separat només duplicaria el
+ * mateix error sota dos camps.
  */
 function validateHeaderDates(
-  dataProduccio: string,
+  dataComanda: string,
   dataLliurament: string,
   dataExpedicio: string,
-): { dataLliurament?: string; dataExpedicio?: string } {
-  const errors: { dataLliurament?: string; dataExpedicio?: string } = {};
-  if (isDateAfter(dataProduccio, dataLliurament)) {
-    errors.dataLliurament = 'Aquesta data no pot ser anterior a la Data de producció.';
+): { dataComanda?: string; dataExpedicio?: string } {
+  const errors: { dataComanda?: string; dataExpedicio?: string } = {};
+  // Regla 7 (issue #16, ja implementada al backend) — dataComanda no pot
+  // ser posterior a dataLliurament.
+  if (isDateAfter(dataComanda, dataLliurament)) {
+    errors.dataComanda = 'Aquesta data no pot ser posterior a la Data de lliurament.';
   }
-  if (isDateAfter(dataProduccio, dataExpedicio)) {
-    errors.dataExpedicio = 'Aquesta data no pot ser anterior a la Data de producció.';
+  // Regla 2 (comparava contra dataProduccio de capçalera, ara fusionada amb dataComanda).
+  if (isDateAfter(dataComanda, dataExpedicio)) {
+    errors.dataExpedicio = 'Aquesta data no pot ser anterior a la Data de comanda.';
   } else if (isDateAfter(dataExpedicio, dataLliurament)) {
     errors.dataExpedicio = 'Aquesta data no pot ser posterior a la Data de lliurament.';
   }
   return errors;
 }
 
-/** Regles 4-6 — la data de producció d'una línia contra les 3 dates de capçalera ja vigents. */
+/**
+ * Regles 4-6 — la data de producció d'una línia contra les dates de
+ * capçalera ja vigents. Regla 4 comparava contra `dataProduccio` de
+ * capçalera; ara fusionada amb `dataComanda` (ver `validateHeaderDates`).
+ */
 function validateLineDate(
   lineDataProduccio: string | null,
-  headerDataProduccio: string,
+  headerDataComanda: string,
   headerDataLliurament: string,
   headerDataExpedicio: string,
 ): string | undefined {
   const lineDate = dateOnly(lineDataProduccio);
   if (lineDate === '') return undefined;
-  if (isDateAfter(headerDataProduccio, lineDate)) {
-    return 'Aquesta data no pot ser anterior a la Data de producció de la comanda.';
+  if (isDateAfter(headerDataComanda, lineDate)) {
+    return 'Aquesta data no pot ser anterior a la Data de comanda.';
   }
   if (isDateAfter(lineDate, headerDataLliurament)) {
     return 'Aquesta data no pot ser posterior a la Data de lliurament.';
@@ -319,14 +342,14 @@ function LineFormCard({
   tarifaId: number | null;
   tariffCoverage: Map<string, TariffCoverageStatus>;
   disabled: boolean;
-  headerDates: { dataProduccio: string; dataLliurament: string; dataExpedicio: string };
+  headerDates: { dataComanda: string; dataLliurament: string; dataExpedicio: string };
   onUpdate: (patch: Partial<LineDraft>) => void;
   onRemove: () => void;
 }) {
   const product = products.find((p) => p.id === line.producte?.id);
   const dateError = validateLineDate(
     line.dataProduccio,
-    headerDates.dataProduccio,
+    headerDates.dataComanda,
     headerDates.dataLliurament,
     headerDates.dataExpedicio,
   );
@@ -528,11 +551,25 @@ export const OrderForm = forwardRef<
   const [transportistaId, setTransportistaId] = useState<number | null>(
     initialData?.transportista?.id ?? null,
   );
-  const [dataProduccio, setDataProduccio] = useState(
-    initialData?.dataProduccio?.slice(0, 10) ?? '',
-  );
+  // Issue #16 — nova, OBLIGATÒRIA (columna real comanda.dataComanda, NOT
+  // NULL). `initialData?.dataComanda` sempre ve informada en mode edició
+  // (el tipus ComandaDetallApi.dataComanda ja no és nullable) — el `?? today()`
+  // només s'activa en mode creació.
+  //
+  // Fusió Data producció / Data comanda de capçalera (decisió de negoci,
+  // Michelle) — ja NO hi ha estat separat per a `dataProduccio` de
+  // capçalera: es manda sempre idèntica a `dataComanda` en construir el
+  // payload (ver useOrders.ts createOrder/editOrder), sense mostrar cap
+  // input separat a l'usuari. El de cada LÍNIA (`line.dataProduccio`) és un
+  // concepte real i distint que NO es toca.
+  const [dataComanda, setDataComanda] = useState(initialData?.dataComanda?.slice(0, 10) ?? today());
+  // Issue #16 — passa a OBLIGATÒRIA només en creació (POST /comandes la
+  // rebutja buida); en edició segueix sent nullable de veritat a la base
+  // (PATCH la deixa buidar), per això el default "avui" NOMÉS s'aplica quan
+  // no hi ha `initialData` — mai es fabrica un valor en comandes existents
+  // que legítimament no en tenen.
   const [dataLliurament, setDataLliurament] = useState(
-    initialData?.dataLliurament?.slice(0, 10) ?? '',
+    initialData?.dataLliurament?.slice(0, 10) ?? (mode === 'create' ? today() : ''),
   );
   const [dataExpedicio, setDataExpedicio] = useState(
     initialData?.dataExpedicio?.slice(0, 10) ?? '',
@@ -633,10 +670,10 @@ export const OrderForm = forwardRef<
   // `error`, i és la MATEIXA constant que consulta submit() més avall
   // (no es recalcula per separat — elimina qualsevol possibilitat de
   // desincronització entre el que es pinta i el que es valida).
-  const headerDateErrors = validateHeaderDates(dataProduccio, dataLliurament, dataExpedicio);
+  const headerDateErrors = validateHeaderDates(dataComanda, dataLliurament, dataExpedicio);
   const hasLineDateErrors = lines.some(
     (line) =>
-      validateLineDate(line.dataProduccio, dataProduccio, dataLliurament, dataExpedicio) !==
+      validateLineDate(line.dataProduccio, dataComanda, dataLliurament, dataExpedicio) !==
       undefined,
   );
   const hasDateErrors = Object.keys(headerDateErrors).length > 0 || hasLineDateErrors;
@@ -733,11 +770,38 @@ export const OrderForm = forwardRef<
         return;
       }
 
+      // Issue #16 — dataComanda és obligatòria sempre (POST i PATCH la
+      // rebutgen buida); dataLliurament només ho és en creació (PATCH
+      // encara la deixa buidar en comandes existents).
+      if (!dataComanda) {
+        setError('Cal indicar la Data comanda.');
+        return;
+      }
+      if (mode === 'create' && !dataLliurament) {
+        setError('Cal indicar la Data lliurament.');
+        return;
+      }
+
       setError(null);
 
       const validLines = lines.filter(
         (line) => line.producte !== null && Number(line.unitatsDemanades) > 0,
       );
+
+      // Issue #16 — dataProduccio passa a OBLIGATÒRIA per a qualsevol línia
+      // NOVA (tant embeguda a la creació com afegida després amb "Afegir
+      // línia"), mai per a línies ja existents que només s'estan editant
+      // (LiniaEdicioApi.dataProduccio segueix sent opcional). Es talla acá
+      // amb un missatge clar en comptes de deixar que el 400 cru del
+      // backend arribi sense context.
+      const newLines =
+        mode === 'create'
+          ? validLines
+          : validLines.filter((line) => dirtyLineIds.has(line.id) && line.id < 0);
+      if (newLines.some((line) => !line.dataProduccio)) {
+        setError('Cal indicar la Data producció de cada línia nova abans de desar.');
+        return;
+      }
 
       // Capa 30 — en edición, las línias nuevas/editadas se guardan por su
       // propio endpoint (POST/PATCH .../linies), nunca embebidas en el
@@ -746,9 +810,7 @@ export const OrderForm = forwardRef<
       const lineChanges: OrderLineChanges =
         mode === 'edit'
           ? {
-              novaLinies: validLines
-                .filter((line) => dirtyLineIds.has(line.id) && line.id < 0)
-                .map(toLiniaCreacio),
+              novaLinies: newLines.map(toLiniaCreacio),
               liniesEditades: validLines
                 .filter((line) => dirtyLineIds.has(line.id) && line.id > 0)
                 .map((line) => ({ liniaId: line.id, patch: toLiniaEdicio(line) })),
@@ -765,7 +827,11 @@ export const OrderForm = forwardRef<
           origen: mode === 'create' ? origenCodi : (initialData?.origen ?? null),
           tarifaId,
           transportistaId,
-          dataProduccio: dataProduccio ? `${dataProduccio}T00:00:00Z` : null,
+          // Issue #16 — sempre non-buida en aquest punt (validat a dalt).
+          // `dataProduccio` de capçalera ja NO viatja des d'acá — es
+          // sintetitza a useOrders.ts (createOrder/editOrder) a partir
+          // d'aquest mateix `dataComanda` (fusió de conceptes, Michelle).
+          dataComanda: `${dataComanda}T00:00:00Z`,
           dataExpedicio: dataExpedicio ? `${dataExpedicio}T00:00:00Z` : null,
           dataLliurament: dataLliurament ? `${dataLliurament}T00:00:00Z` : null,
           bultos,
@@ -905,26 +971,26 @@ export const OrderForm = forwardRef<
               setTransportistaId(carrier?.id ?? null);
             }}
           />
-          {/* Decisió de negoci conscient (confirmada per Michelle): l'etiqueta
-              d'aquest camp és "Data comanda" NOMÉS acá, a Capçalera — l'estat
-              intern (dataProduccio) i el mapeig al backend (comanda.data_
-              produccio) NO canvien. Això reintrodueix a propòsit el mateix
-              xoc de noms que ja es va identificar i revertir en una sessió
-              anterior: "Data comanda" al llistat de Comandes i al Panell
-              d'Oficina és creat_en (data real d'alta del pedido) — un camp
-              totalment diferent. Es fa així per distingir-lo del camp "Data
-              producció" de Línies (ver línia ~865 i ~319), que sí es diu
-              "Data producció" tal qual. Si algun dia sembla un error, NO HO
-              és — no "corregir-ho" sense tornar a llegir aquest comentari. */}
+          {/* Issue #16 (fusió posterior, Michelle) — "Data producció" de
+              capçalera va desaparèixer com a input separat: investigació
+              confirmada, no s'usava en cap filtre/pantalla més que la
+              pròpia validació de coherència (ara fusionada amb dataComanda,
+              ver validateHeaderDates). Columna real comanda.dataComanda
+              (NOT NULL), distinta de creat_en (mai exposada a l'API).
+              Obligatòria: sense default al backend, es precarrega amb avui
+              (ver `today()`), editable abans de desar. El de cada LÍNIA
+              (input més avall, "Data producció" dins de cada fila) és un
+              concepte real i distint que NO es toca. */}
           <TextField
             label="Data comanda"
             type="date"
             disabled={isFrozen}
-            value={dataProduccio}
+            value={dataComanda}
             onChange={(event) => {
               setHeaderTouched(true);
-              setDataProduccio(event.target.value);
+              setDataComanda(event.target.value);
             }}
+            error={headerDateErrors.dataComanda}
           />
           <TextField
             label="Data expedició"
@@ -946,7 +1012,6 @@ export const OrderForm = forwardRef<
               setHeaderTouched(true);
               setDataLliurament(event.target.value);
             }}
-            error={headerDateErrors.dataLliurament}
           />
           <TextField
             label="Núm. bultos"
@@ -1037,7 +1102,7 @@ export const OrderForm = forwardRef<
               tarifaId={tarifaId}
               tariffCoverage={tariffCoverage}
               disabled={isFrozen}
-              headerDates={{ dataProduccio, dataLliurament, dataExpedicio }}
+              headerDates={{ dataComanda, dataLliurament, dataExpedicio }}
               onUpdate={(patch) => updateLine(line.id, patch)}
               onRemove={() => removeLine(line)}
             />
@@ -1089,7 +1154,7 @@ export const OrderForm = forwardRef<
                 const product = products.find((p) => p.id === line.producte?.id);
                 const lineDateError = validateLineDate(
                   line.dataProduccio,
-                  dataProduccio,
+                  dataComanda,
                   dataLliurament,
                   dataExpedicio,
                 );
