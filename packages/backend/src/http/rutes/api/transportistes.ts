@@ -28,7 +28,7 @@ export function registrarRutesTransportistes(fastify: FastifyInstance): void {
 
     const total = await pool.query<{ count: string }>('SELECT count(*) FROM transportista');
     const files = await pool.query<FilaTransportista>(
-      'SELECT id_seq, codi, nom, actiu FROM transportista ORDER BY nom ASC LIMIT $1 OFFSET $2',
+      'SELECT id_seq, codi, nom, actiu FROM transportista ORDER BY nom ASC, id_seq ASC LIMIT $1 OFFSET $2',
       [mida, offset],
     );
 

@@ -63,7 +63,7 @@ export function registrarRutesTarifes(fastify: FastifyInstance): void {
       descripcio: string;
     }>(
       `SELECT p.id, p.id_seq, p.codi, p.descripcio FROM producte p ${where}
-       ORDER BY p.descripcio ASC LIMIT $${valors.length + 1} OFFSET $${valors.length + 2}`,
+       ORDER BY p.descripcio ASC, p.id_seq ASC LIMIT $${valors.length + 1} OFFSET $${valors.length + 2}`,
       [...valors, mida, offset],
     );
 

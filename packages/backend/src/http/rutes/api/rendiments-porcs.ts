@@ -107,7 +107,7 @@ export function registrarRutesRendimentsPorcs(fastify: FastifyInstance): void {
       valors,
     );
     const files = await pool.query<FilaRendimentPorc>(
-      `${SELECT_RENDIMENT} ${where} ORDER BY r.agrupacio_produccio ASC LIMIT $${valors.length + 1} OFFSET $${valors.length + 2}`,
+      `${SELECT_RENDIMENT} ${where} ORDER BY r.agrupacio_produccio ASC, r.id_seq ASC LIMIT $${valors.length + 1} OFFSET $${valors.length + 2}`,
       [...valors, mida, offset],
     );
 

@@ -151,4 +151,40 @@ describe('API negoci — /productes (Postgres real, esquema aislado)', () => {
 
     await fastify.close();
   });
+
+  // Auditoría de Michelle — reproduce con datos reales: "PRESTA TALLADA 330G"
+  // aparecía 2 veces en producte.descripcio, sin un desempate único en el
+  // ORDER BY (sólo descripcio ASC). Con descripciones empatadas, Postgres no
+  // garantiza un orden estable entre páginas — puede repetir o saltear filas.
+  it('GET /productes: paginar amb mida=1 no duplica ni perd files quan dues descripcions són idèntiques', async () => {
+    const fastify = construirServidor();
+    const dup1 = await entorn.poolTest.query<{ id_seq: string }>(
+      `INSERT INTO producte (codi, descripcio, tipus) VALUES ('DUP01', 'PRESTA TALLADA 330G', 'simple') RETURNING id_seq`,
+    );
+    const dup2 = await entorn.poolTest.query<{ id_seq: string }>(
+      `INSERT INTO producte (codi, descripcio, tipus) VALUES ('DUP02', 'PRESTA TALLADA 330G', 'simple') RETURNING id_seq`,
+    );
+
+    const primera = cuerpoJson<RespostaPaginada<ProducteApi>>(
+      await fastify.inject({ method: 'GET', url: '/api/v1/productes?mida=1&pagina=1' }),
+    );
+    const total = primera.paginacio.total;
+
+    const totsElsIds: number[] = [];
+    for (let pagina = 1; pagina <= total; pagina++) {
+      const cuerpo = cuerpoJson<RespostaPaginada<ProducteApi>>(
+        await fastify.inject({ method: 'GET', url: `/api/v1/productes?mida=1&pagina=${pagina}` }),
+      );
+      expect(cuerpo.dades).toHaveLength(1);
+      totsElsIds.push(cuerpo.dades[0]!.id);
+    }
+
+    // Sense duplicats ni forats entre pàgines: tants ids únics com el total,
+    // i els 2 productes amb descripcio duplicada hi apareixen tots dos.
+    expect(new Set(totsElsIds).size).toBe(total);
+    expect(totsElsIds).toContain(Number(dup1.rows[0]!.id_seq));
+    expect(totsElsIds).toContain(Number(dup2.rows[0]!.id_seq));
+
+    await fastify.close();
+  });
 });

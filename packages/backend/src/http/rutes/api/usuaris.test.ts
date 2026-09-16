@@ -124,6 +124,53 @@ describe('API negoci — /jo, /usuaris, /rols (Postgres real, esquema aislado)',
     await fastify.close();
   });
 
+  // Auditoría de Michelle — mismo bug que en productes.ts: ORDER BY u.nom ASC
+  // sin desempate único puede duplicar o perder filas entre páginas cuando
+  // dos usuarios comparten el mismo nom.
+  it('GET /usuaris: paginar amb mida=1 no duplica ni perd files quan dos usuaris tenen el mateix nom', async () => {
+    const fastify = construirServidor();
+    const rolAdmin = await entorn.poolTest.query<{ id_seq: string }>(
+      `SELECT id_seq FROM rol WHERE nom = 'Administrador'`,
+    );
+    const rolId = Number(rolAdmin.rows[0]!.id_seq);
+    const nomDuplicat = 'Persona Nom Duplicat';
+    const { firebase: firebase1 } = mockGestioFirebase();
+    const creat1 = await crearUsuariAmbLink(entorn.poolTest, firebase1, {
+      nom: nomDuplicat,
+      email: `dup1-${randomUUID()}@example.com`,
+      rolId,
+    });
+    const { firebase: firebase2 } = mockGestioFirebase();
+    const creat2 = await crearUsuariAmbLink(entorn.poolTest, firebase2, {
+      nom: nomDuplicat,
+      email: `dup2-${randomUUID()}@example.com`,
+      rolId,
+    });
+    expect(creat1.tipus).toBe('ok');
+    expect(creat2.tipus).toBe('ok');
+    if (creat1.tipus !== 'ok' || creat2.tipus !== 'ok') throw new Error('esperava tipus ok');
+
+    const primera = cuerpoJson<RespostaPaginada<UsuariApi>>(
+      await fastify.inject({ method: 'GET', url: '/api/v1/usuaris?mida=1&pagina=1' }),
+    );
+    const total = primera.paginacio.total;
+
+    const totsElsIds: number[] = [];
+    for (let pagina = 1; pagina <= total; pagina++) {
+      const cuerpo = cuerpoJson<RespostaPaginada<UsuariApi>>(
+        await fastify.inject({ method: 'GET', url: `/api/v1/usuaris?mida=1&pagina=${pagina}` }),
+      );
+      expect(cuerpo.dades).toHaveLength(1);
+      totsElsIds.push(cuerpo.dades[0]!.id);
+    }
+
+    expect(new Set(totsElsIds).size).toBe(total);
+    expect(totsElsIds).toContain(creat1.usuari.id);
+    expect(totsElsIds).toContain(creat2.usuari.id);
+
+    await fastify.close();
+  });
+
   it('PATCH /usuaris/:id: edita nom/rolId/actiu, pero no toca firebaseUid ni email', async () => {
     const fastify = construirServidor();
     await promoureAAdministrador(entorn, fastify);

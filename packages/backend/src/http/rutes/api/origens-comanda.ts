@@ -38,7 +38,7 @@ export function registrarRutesOrigensComanda(fastify: FastifyInstance): void {
 
     const total = await pool.query<{ count: string }>('SELECT count(*) FROM origen_comanda');
     const files = await pool.query<FilaOrigenComanda>(
-      'SELECT id_seq, codi, nom, actiu FROM origen_comanda ORDER BY nom ASC LIMIT $1 OFFSET $2',
+      'SELECT id_seq, codi, nom, actiu FROM origen_comanda ORDER BY nom ASC, id_seq ASC LIMIT $1 OFFSET $2',
       [mida, offset],
     );
 

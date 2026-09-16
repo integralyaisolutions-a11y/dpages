@@ -91,7 +91,7 @@ export function registrarRutesClients(fastify: FastifyInstance): void {
       valors,
     );
     const files = await pool.query<FilaClient>(
-      `${SELECT_CLIENT} ${where} ORDER BY cl.nom ASC NULLS LAST LIMIT $${valors.length + 1} OFFSET $${valors.length + 2}`,
+      `${SELECT_CLIENT} ${where} ORDER BY cl.nom ASC NULLS LAST, cl.id_seq ASC LIMIT $${valors.length + 1} OFFSET $${valors.length + 2}`,
       [...valors, mida, offset],
     );
 

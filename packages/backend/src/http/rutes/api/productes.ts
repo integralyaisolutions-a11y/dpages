@@ -131,7 +131,7 @@ export function registrarRutesProductes(fastify: FastifyInstance): void {
       valors,
     );
     const files = await pool.query<FilaProducte>(
-      `${SELECT_PRODUCTE} ${where} ORDER BY p.descripcio ASC LIMIT $${valors.length + 1} OFFSET $${valors.length + 2}`,
+      `${SELECT_PRODUCTE} ${where} ORDER BY p.descripcio ASC, p.id_seq ASC LIMIT $${valors.length + 1} OFFSET $${valors.length + 2}`,
       [...valors, mida, offset],
     );
 

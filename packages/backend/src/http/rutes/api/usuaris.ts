@@ -179,7 +179,7 @@ export function registrarRutesUsuaris(fastify: FastifyInstance): void {
       valors,
     );
     const files = await pool.query<FilaUsuari>(
-      `${SELECT_USUARI} ${where} ORDER BY u.nom ASC LIMIT $${valors.length + 1} OFFSET $${valors.length + 2}`,
+      `${SELECT_USUARI} ${where} ORDER BY u.nom ASC, u.id_seq ASC LIMIT $${valors.length + 1} OFFSET $${valors.length + 2}`,
       [...valors, mida, offset],
     );
 

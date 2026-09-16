@@ -533,7 +533,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       valors,
     );
     const files = await pool.query<FilaComandaResum>(
-      `${SELECT_COMANDA_RESUM} ${where} ORDER BY c.creat_en DESC LIMIT $${valors.length + 1} OFFSET $${valors.length + 2}`,
+      `${SELECT_COMANDA_RESUM} ${where} ORDER BY c.creat_en DESC, c.id_seq ASC LIMIT $${valors.length + 1} OFFSET $${valors.length + 2}`,
       [...valors, mida, offset],
     );
 

@@ -482,4 +482,110 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
 
     await fastify.close();
   });
+
+  // Confirmado por Francesc (WhatsApp, evidencia de Michelle): "sin datos =
+  // todos los datos", principio general para TODOS los filtros del sistema.
+  // Antes, sin dataDes/dataFins el backend sustituía por un rango oculto
+  // interno (mañana a +7 días) — eso ocultaba líneas elegibles fuera de ese
+  // rango sin que nadie lo hubiera pedido. Fixtures propios con fechas MUY
+  // separadas (2020 y 2030) para no depender de la fecha real del sistema.
+  describe('"sin datos = todos los datos" — GET /panells/produccio sin dataDes/dataFins', () => {
+    let comandaFiltreId: string;
+
+    beforeAll(async () => {
+      const categoria = await entorn.poolTest.query<{ id: string }>(
+        `INSERT INTO categoria_producte (nom, elaborat_porc, agrupacio_rendiment)
+         VALUES ('Categoria Filtre Dates', true, 'KG') RETURNING id`,
+      );
+      const antiga = await entorn.poolTest.query<{ id: string }>(
+        `INSERT INTO producte (codi, descripcio, tipus, categoria_id, agrupacio_produccio)
+         VALUES ('FILTRE-ANTIGA', 'FILTRE-ANTIGA', 'simple', $1, 'FILTRE-ANTIGA') RETURNING id`,
+        [categoria.rows[0]!.id],
+      );
+      const futura = await entorn.poolTest.query<{ id: string }>(
+        `INSERT INTO producte (codi, descripcio, tipus, categoria_id, agrupacio_produccio)
+         VALUES ('FILTRE-FUTURA', 'FILTRE-FUTURA', 'simple', $1, 'FILTRE-FUTURA') RETURNING id`,
+        [categoria.rows[0]!.id],
+      );
+      const comanda = await entorn.poolTest.query<{ id: string }>(
+        `INSERT INTO comanda (origen_id, estat, data_comanda)
+         VALUES ((SELECT id FROM origen_comanda WHERE codi = 'manual'), 'oberta', '2020-01-01') RETURNING id`,
+      );
+      comandaFiltreId = comanda.rows[0]!.id;
+      await entorn.poolTest.query(
+        `INSERT INTO comanda_linia (
+           comanda_id, ordinal, producte_id, unitats_demanades, preu_unitari,
+           pes_calculat_kg, data_produccio
+         ) VALUES ($1, 0, $2, 1, '0.00', '5.000', '2020-01-01')`,
+        [comandaFiltreId, antiga.rows[0]!.id],
+      );
+      await entorn.poolTest.query(
+        `INSERT INTO comanda_linia (
+           comanda_id, ordinal, producte_id, unitats_demanades, preu_unitari,
+           pes_calculat_kg, data_produccio
+         ) VALUES ($1, 1, $2, 1, '0.00', '5.000', '2030-01-01')`,
+        [comandaFiltreId, futura.rows[0]!.id],
+      );
+    });
+
+    it('sense dataDes ni dataFins: apareixen línies amb data_produccio molt separades (2020 i 2030)', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'GET',
+        url: '/api/v1/panells/produccio?nombrePorcs=5&mida=200',
+      });
+
+      expect(res.statusCode).toBe(200);
+      const cuerpo = cuerpoJson<PanellProduccioApi>(res);
+      expect(cuerpo.dades.some((f) => f.agrupacioProduccio === 'FILTRE-ANTIGA')).toBe(true);
+      expect(cuerpo.dades.some((f) => f.agrupacioProduccio === 'FILTRE-FUTURA')).toBe(true);
+
+      await fastify.close();
+    });
+
+    it('només dataDes: aplica només el límit inferior', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'GET',
+        url: '/api/v1/panells/produccio?nombrePorcs=5&mida=200&dataDes=2025-01-01',
+      });
+
+      expect(res.statusCode).toBe(200);
+      const cuerpo = cuerpoJson<PanellProduccioApi>(res);
+      expect(cuerpo.dades.some((f) => f.agrupacioProduccio === 'FILTRE-FUTURA')).toBe(true);
+      expect(cuerpo.dades.some((f) => f.agrupacioProduccio === 'FILTRE-ANTIGA')).toBe(false);
+
+      await fastify.close();
+    });
+
+    it('només dataFins: aplica només el límit superior', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'GET',
+        url: '/api/v1/panells/produccio?nombrePorcs=5&mida=200&dataFins=2025-01-01',
+      });
+
+      expect(res.statusCode).toBe(200);
+      const cuerpo = cuerpoJson<PanellProduccioApi>(res);
+      expect(cuerpo.dades.some((f) => f.agrupacioProduccio === 'FILTRE-ANTIGA')).toBe(true);
+      expect(cuerpo.dades.some((f) => f.agrupacioProduccio === 'FILTRE-FUTURA')).toBe(false);
+
+      await fastify.close();
+    });
+
+    it('amb dataDes i dataFins: sense canvis de comportament (regressió) — sólo la línia dentro del rango', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'GET',
+        url: '/api/v1/panells/produccio?nombrePorcs=5&mida=200&dataDes=2019-12-01&dataFins=2020-02-01',
+      });
+
+      expect(res.statusCode).toBe(200);
+      const cuerpo = cuerpoJson<PanellProduccioApi>(res);
+      expect(cuerpo.dades.some((f) => f.agrupacioProduccio === 'FILTRE-ANTIGA')).toBe(true);
+      expect(cuerpo.dades.some((f) => f.agrupacioProduccio === 'FILTRE-FUTURA')).toBe(false);
+
+      await fastify.close();
+    });
+  });
 });

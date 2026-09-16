@@ -42,13 +42,6 @@ function esAgrupacioRendimentValida(valor: unknown): valor is AgrupacioRendiment
   return typeof valor === 'string' && AGRUPACIONS_RENDIMENT.includes(valor as AgrupacioRendiment);
 }
 
-/** `YYYY-MM-DD`, día actual del servidor + offset — para los defaults de dataDes/dataFins. */
-function dataIsoAmbOffset(diesOffset: number): string {
-  const data = new Date();
-  data.setUTCDate(data.getUTCDate() + diesOffset);
-  return data.toISOString().slice(0, 10);
-}
-
 /**
  * Rendimiento fijo por cerdo — Francesc, WhatsApp 25/08/2026: "De media, de
  * 1 cerdo salen 12Kg de jamón, 6Kg de recortes, y 7Kg de paletillas."
@@ -576,23 +569,10 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       );
     }
 
-    const dataDes =
-      typeof query.dataDes === 'string' && query.dataDes !== ''
-        ? query.dataDes
-        : dataIsoAmbOffset(1);
-    const dataFins =
-      typeof query.dataFins === 'string' && query.dataFins !== ''
-        ? query.dataFins
-        : dataIsoAmbOffset(7);
-
     const condicions: string[] = [
       `c.estat = 'oberta'`,
       'cat.elaborat_porc = true',
       'NOT cl.esborrat',
-      // ::date descarta la hora — dataDes/dataFins son fechas, no instantes,
-      // y así funciona sin importar si vienen como "YYYY-MM-DD" o un
-      // timestamp completo.
-      `cl.data_produccio::date BETWEEN $${1}::date AND $${2}::date`,
       // agrupacioProduccio/agrupacioRendiment son NO nulables en
       // PanellProduccioFilaApi (contrato) — una línia cuyo producte no
       // tiene agrupació de producció, o cuya categoria no tiene agrupació
@@ -602,7 +582,27 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       'p.agrupacio_produccio IS NOT NULL',
       'cat.agrupacio_rendiment IS NOT NULL',
     ];
-    const valors: unknown[] = [dataDes, dataFins];
+    const valors: unknown[] = [];
+
+    // Principio confirmado por Francesc (WhatsApp, evidencia de Michelle):
+    // "sin datos = todos los datos", para TODOS los filtros del sistema. Acá
+    // significa que sin dataDes NI dataFins no se agrega NINGUNA condición
+    // de fecha (antes se sustituía por un rango oculto interno, mañana a
+    // +7 días, vía dataIsoAmbOffset — eso ocultaba líneas elegibles fuera de
+    // ese rango sin que el usuario lo pidiera). Si viene sólo uno de los
+    // dos, se aplica sólo esa mitad — mismo patrón condicional que el resto
+    // de filtros de este archivo (agrupacioRendiment/producte, más abajo).
+    // ::date descarta la hora — dataDes/dataFins son fechas, no instantes, y
+    // así funciona sin importar si vienen como "YYYY-MM-DD" o un timestamp
+    // completo.
+    if (typeof query.dataDes === 'string' && query.dataDes !== '') {
+      condicions.push(`cl.data_produccio::date >= $${valors.length + 1}::date`);
+      valors.push(query.dataDes);
+    }
+    if (typeof query.dataFins === 'string' && query.dataFins !== '') {
+      condicions.push(`cl.data_produccio::date <= $${valors.length + 1}::date`);
+      valors.push(query.dataFins);
+    }
 
     if (query.agrupacioRendiment !== undefined && query.agrupacioRendiment !== '') {
       condicions.push(`cat.agrupacio_rendiment = $${valors.length + 1}`);
