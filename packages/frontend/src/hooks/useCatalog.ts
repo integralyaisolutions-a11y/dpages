@@ -10,6 +10,7 @@ import {
   type ProducteApi,
   type RespostaPaginada,
 } from '@/lib/api';
+import { usePageClamp } from './usePageClamp';
 
 export type ProductFormValues = {
   codi: string | null;
@@ -143,6 +144,12 @@ export function useCatalog(
   }, [reloadToken, pagina, mida, filtersKey, esTaulaCompleta]);
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
+
+  // Hallazgo A (auditoria de paginació) — desactivat al mode "taula
+  // completa" (`esTaulaCompleta`): `paginacio` hi és sintètic
+  // (`paginacioTaulaCompleta`, sempre pagina=1/totalPagines=1), mai pot
+  // quedar fora de rang de veritat.
+  usePageClamp(paginacio, setPagina, !esTaulaCompleta);
 
   // El backend espera categoriaId pla al escriure, no l'objecte categoria
   // que sí retorna el GET (productes.ts) — es tradueix acá, no al formulari.

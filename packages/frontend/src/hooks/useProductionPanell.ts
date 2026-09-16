@@ -8,6 +8,7 @@ import {
   type PanellProduccioApi,
   type PanellProduccioFilaApi,
 } from '@/lib/api';
+import { usePageClamp } from './usePageClamp';
 
 /**
  * Els filtres reals de GET /panells/produccio (confirmat contra
@@ -120,6 +121,10 @@ export function useProductionPanell(filters: ProductionPanelFilters): UseProduct
   }, [reloadToken, pagina, filtersKey, isReady]);
 
   const refetch = () => setReloadToken((token) => token + 1);
+
+  // Hallazgo A (auditoria de paginació) — corregeix `pagina` si un canvi
+  // deixa l'usuari en una pàgina que ja no existeix.
+  usePageClamp(paginacio, setPagina);
 
   return { data, totals, paginacio, pagina, setPagina, isLoading, error, refetch, isReady };
 }

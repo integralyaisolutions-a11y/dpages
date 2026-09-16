@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError, type CategoriaApi, type Paginacio, type RespostaPaginada } from '@/lib/api';
+import { usePageClamp } from './usePageClamp';
 
 export type CategoryFormValues = Pick<CategoriaApi, 'nom' | 'elaboratPorc' | 'agrupacioRendiment'>;
 
@@ -75,6 +76,10 @@ export function useCategories(params: UseCategoriesParams = {}): UseCategoriesRe
   }, [reloadToken, pagina, mida]);
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
+
+  // Hallazgo A (auditoria de paginació) — corregeix `pagina` si borrar una
+  // categoria deixa l'usuari en una pàgina que ja no existeix.
+  usePageClamp(paginacio, setPagina);
 
   // Sin edición optimista a propósito: el backend devuelve la fila
   // creada/editada, no la lista completa (a diferencia del mock viejo) —

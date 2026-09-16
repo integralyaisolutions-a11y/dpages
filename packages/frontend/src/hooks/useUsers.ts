@@ -9,9 +9,12 @@ import {
   type UsuariApi,
   type UsuariCreatRespostaApi,
 } from '@/lib/api';
+import { usePageClamp } from './usePageClamp';
 
 export type UserFilters = {
   actiu?: boolean;
+  /** Issue #17 — substring (ILIKE) sobre nom O email, confirmat contra usuaris.ts. */
+  cerca?: string;
 };
 
 export type CreateUserInput = { nom: string; email: string; rolId: number };
@@ -29,10 +32,7 @@ type UseUsersResult = {
   editUser: (id: number, input: EditUserInput) => Promise<UsuariApi>;
 };
 
-// Paginació real (20/pàgina). GET /usuaris no accepta cerca per nom/email
-// (només `actiu`, confirmat contra usuaris.ts) — el buscador de la pantalla
-// segueix filtrant client-side sobre la pàgina actual, ver comentari a
-// app/users/page.tsx.
+// Paginació real (20/pàgina).
 const MIDA_PAGINA = 20;
 
 export function useUsers(filters: UserFilters = {}): UseUsersResult {
@@ -91,6 +91,10 @@ export function useUsers(filters: UserFilters = {}): UseUsersResult {
   }, [reloadToken, pagina, filtersKey]);
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
+
+  // Hallazgo A (auditoria de paginació) — corregeix `pagina` si un canvi
+  // deixa l'usuari en una pàgina que ja no existeix.
+  usePageClamp(paginacio, setPagina);
 
   // Els 400 (camp/email) i 409 (email duplicat) los mapea directament el
   // formulario que llama a createUser/editUser, capturando ApiError — mismo

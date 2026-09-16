@@ -12,6 +12,7 @@ import {
   type Paginacio,
   type RespostaPaginada,
 } from '@/lib/api';
+import { usePageClamp } from './usePageClamp';
 
 export type OrderListFilters = {
   estat?: string;
@@ -212,6 +213,10 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
   }, [reloadToken, pagina, filtersKey]);
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
+
+  // Hallazgo A (auditoria de paginació) — corregeix `pagina` si un canvi
+  // deixa l'usuari en una pàgina que ja no existeix.
+  usePageClamp(paginacio, setPagina);
 
   // Alta real (POST) + PATCH encadenado para los campos que POST no acepta
   // (bultos/poblacioDesti/adrecaLliurament/obsProduccio/dataProduccio/

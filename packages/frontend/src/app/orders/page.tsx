@@ -12,7 +12,6 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { SimpleDropdown } from '@/components/ui/SimpleDropdown';
-import { useClientTariffs } from '@/hooks/useClientTariffs';
 import { useOrders } from '@/hooks/useOrders';
 import { useOrigensComanda } from '@/hooks/useOrigensComanda';
 import { ApiError, type ComandaResumApi } from '@/lib/api';
@@ -99,8 +98,7 @@ function OrderCard({
 export default function OrdersPage() {
   const router = useRouter();
 
-  const [orderNumberSearch, setOrderNumberSearch] = useState('');
-  const [clientSearch, setClientSearch] = useState('');
+  const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState(ALL);
   const [productionDateFilter, setProductionDateFilter] = useState('');
   const [orderDateFilter, setOrderDateFilter] = useState('');
@@ -115,10 +113,21 @@ export default function OrdersPage() {
     [statusFilter],
   );
 
-  // Els 6 filtres de la pantalla tenen suport real a GET /comandes, excepte
-  // la cerca de client per nom (el backend només filtra per clientId
-  // numèric) — aquesta es manté client-side sobre el resultat ja filtrat
-  // pel servidor, mateix criteri que ja feia servir aquesta pantalla.
+  // Issue #17 (Michelle/Francesc) — `cerca` ja és real a GET /comandes
+  // (ILIKE sobre `c.num` O `cl.nom`, confirmat contra comandes.ts):
+  // reemplaça els dos buscadors separats ("Núm. comanda" i "Client") que
+  // hi havia abans, un d'ells (Client) filtrant client-side amb
+  // totals/resultats inconsistents (mateix bug que Catàleg). Es fusionen
+  // en un sol input perquè el backend ja els tracta com un sol OR, no com
+  // dos filtres independents — mai té sentit mandar dos substrings
+  // diferents en un mateix `cerca`.
+  //
+  // LIMITACIÓ NOVA (no hi era abans): el buscador vell també matchejava
+  // pel CODI del client (`client.codi`, ex. "CLI213"), creuant contra
+  // useClientTariffs(). El `cerca` real del backend NOMÉS cobreix
+  // `cl.nom` — no `cl.codi` (confirmat llegint comandes.ts sencer). Buscar
+  // un pedido pel codi del seu client ja no funciona; caldria que Gerardo
+  // ampliés el OR del backend per recuperar-ho.
   const filters = useMemo(
     () => ({
       ...(statusCode ? { estat: statusCode } : {}),
@@ -129,38 +138,18 @@ export default function OrdersPage() {
       ...(deliveryDateFilter
         ? { dataLliuramentDes: deliveryDateFilter, dataLliuramentFins: deliveryDateFilter }
         : {}),
-      ...(orderNumberSearch.trim() ? { cerca: orderNumberSearch.trim() } : {}),
+      ...(search.trim() ? { cerca: search.trim() } : {}),
     }),
-    [statusCode, orderDateFilter, productionDateFilter, deliveryDateFilter, orderNumberSearch],
+    [statusCode, orderDateFilter, productionDateFilter, deliveryDateFilter, search],
   );
 
   const { data, paginacio, setPagina, isLoading, error, refetch, markIncidence } =
     useOrders(filters);
-  // useClientTariffs() SENSE paràmetres: taula de consulta completa per
-  // resoldre el codi de client (manté `mida: 200` per defecte, no es toca).
-  const { data: clients } = useClientTariffs();
   const { data: origins } = useOrigensComanda();
   const originLabel = useMemo(() => {
     const byCodi = new Map(origins.map((origin) => [origin.codi, origin.nom]));
     return (codi: string) => byCodi.get(codi) ?? codi;
   }, [origins]);
-
-  // El buscador de client segueix sent client-side sobre la pàgina actual
-  // (20 comandes) des que hi ha paginació real — GET /comandes no accepta
-  // cerca de text lliure per nom de client (confirmat contra comandes.ts,
-  // només `clientId` numèric exacte). Pendent de decidir si val la pena
-  // afegir suport real al backend.
-  const filtered = data.filter((order) => {
-    if (!clientSearch) return true;
-    // ComandaResumApi.client sólo trae {id, nom, poblacio} (contrato §4.5) —
-    // el codi se cruza contra el listado completo de clients (§4.4).
-    const client = clients.find((item) => item.id === order.client?.id);
-    const term = clientSearch.toLowerCase();
-    return (
-      order.client?.nom.toLowerCase().includes(term) ||
-      (client?.codi ?? '').toLowerCase().includes(term)
-    );
-  });
 
   async function handleConfirmIncidence() {
     if (!incidenceTarget) return;
@@ -188,12 +177,7 @@ export default function OrdersPage() {
       />
 
       <FilterBar>
-        <SearchInput
-          label="Núm. comanda"
-          value={orderNumberSearch}
-          onChange={setOrderNumberSearch}
-        />
-        <SearchInput label="Client" value={clientSearch} onChange={setClientSearch} />
+        <SearchInput label="Cerca (núm. comanda o client)" value={search} onChange={setSearch} />
         <SimpleDropdown
           label="Estat"
           options={Object.values(ESTAT_LABELS)}
@@ -233,7 +217,7 @@ export default function OrdersPage() {
       {!isLoading && !error && (
         <>
           <div className="flex flex-col gap-3 md:hidden">
-            {filtered.map((order) => (
+            {data.map((order) => (
               <OrderCard
                 key={order.id}
                 order={order}
@@ -288,7 +272,7 @@ export default function OrdersPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((order) => (
+                {data.map((order) => (
                   <tr
                     key={order.id}
                     onClick={() => router.push(`/orders/${order.id}`)}

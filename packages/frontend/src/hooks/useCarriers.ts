@@ -8,6 +8,7 @@ import {
   type RespostaPaginada,
   type TransportistaApi,
 } from '@/lib/api';
+import { usePageClamp } from './usePageClamp';
 
 // Decisió de negoci (acordada amb Gerardo): "codi" surt de la UI de
 // Transportistes per complet — ni es demana ni es mostra. El backend NO
@@ -88,6 +89,13 @@ export function useCarriers(params: UseCarriersParams = {}): UseCarriersResult {
   }, [reloadToken, pagina, mida]);
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
+
+  // Hallazgo A (auditoria de paginació) — corregeix `pagina` si un canvi
+  // deixa l'usuari en una pàgina que ja no existeix. Al mode "taula
+  // completa" (mida=200 per defecte, sense combinar múltiples pàgines com
+  // useCatalog.ts) mai s'arriba a disparar: res canvia `pagina` en aquest
+  // mode, sempre queda a 1.
+  usePageClamp(paginacio, setPagina);
 
   // Sin edición optimista, mismo criterio que useCategories.ts: el backend
   // devuelve la fila creada/editada, más simple re-pedir la lista.
