@@ -19,21 +19,6 @@ const ALL = 'Totes';
 const AGRUPACIONS_RENDIMENT = ['KG', 'MAGRE', 'PAQ'];
 
 /**
- * Mateix càlcul EXACTE que `dataIsoAmbOffset` del backend (panells.ts) —
- * només per mostrar visualment el default que el backend ja aplica sol.
- * Es calcula acá però NO es manda mai al request tret que l'usuari toqui
- * el camp (ver `dateFromTouched`/`dateToTouched` més avall): si el criteri
- * de negoci canvia del costat del backend, aquest càlcul pot quedar
- * desactualitzat un dia fins que algú ho noti, però mai es manda un valor
- * que contradigui el que el backend faria sol.
- */
-function dataIsoAmbOffset(diesOffset: number): string {
-  const data = new Date();
-  data.setUTCDate(data.getUTCDate() + diesOffset);
-  return data.toISOString().slice(0, 10);
-}
-
-/**
  * rendiment/diferencia ja arriben com a string amb la precisió que va
  * triar el backend segons el tipus d'agrupació (2 decimals a PAQ, 3 a KG,
  * `panells.ts`) — acá només es converteix el separador, mai es
@@ -97,13 +82,15 @@ export default function ProductionPage() {
   const [nombrePorcsInput, setNombrePorcsInput] = useState('1');
   const [agrupacioFilter, setAgrupacioFilter] = useState(ALL);
   const [productFilter, setProductFilter] = useState(ALL);
-  // Es precarreguen amb el mateix default que aplica el backend, però
-  // `touched` és el que decideix si viatgen al request — ver comentari de
-  // `dataIsoAmbOffset` més amunt.
-  const [dateFrom, setDateFrom] = useState(() => dataIsoAmbOffset(1));
-  const [dateTo, setDateTo] = useState(() => dataIsoAmbOffset(7));
-  const [dateFromTouched, setDateFromTouched] = useState(false);
-  const [dateToTouched, setDateToTouched] = useState(false);
+  // Issue #18 (Francesc, confirmada) — "sense dades = totes les dades"
+  // aplica també acá: ja NO es precarrega cap default visual (abans
+  // mirroreava hoy+1..hoy+7, el mateix que aplicava el backend sol quan no
+  // rebia dataDes/dataFins). Els camps arrenquen buits de veritat; mentre
+  // ho estiguin, `dataDes`/`dataFins` no viatgen al request — el backend
+  // (canvi paral·lel de Gerardo) interpreta la seva absència com "sense
+  // filtre de data", no com "aplica el teu propi default".
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   // Mode LOCAL (filtrant `catalog` ja carregat), mateix criteri que
   // Producte a OrderForm.tsx: GET /productes?cerca= fa coincidència EXACTA
@@ -144,22 +131,14 @@ export default function ProductionPage() {
       nombrePorcs: nombrePorcsValid ? nombrePorcs : null,
       ...(agrupacioFilter !== ALL ? { agrupacioRendiment: agrupacioFilter } : {}),
       ...(productFilter !== ALL ? { producte: productFilter } : {}),
-      // dataDes/dataFins es mostren precarregades amb el default real del
-      // backend, però SÓLO viatgen al request si l'usuari va tocar el camp
-      // a mà — si no, el backend aplica el seu propi default sol.
-      ...(dateFromTouched ? { dataDes: dateFrom } : {}),
-      ...(dateToTouched ? { dataFins: dateTo } : {}),
+      // Issue #18 — buit = sense filtre de data, es manda tal qual el
+      // backend un cop Gerardo apliqui el seu costat (ver comentari a
+      // dateFrom/dateTo més amunt). Ja no fa falta cap flag "touched": el
+      // propi valor (buit o no) ja diu tot el que cal.
+      ...(dateFrom ? { dataDes: dateFrom } : {}),
+      ...(dateTo ? { dataFins: dateTo } : {}),
     }),
-    [
-      nombrePorcsValid,
-      nombrePorcs,
-      agrupacioFilter,
-      productFilter,
-      dateFrom,
-      dateFromTouched,
-      dateTo,
-      dateToTouched,
-    ],
+    [nombrePorcsValid, nombrePorcs, agrupacioFilter, productFilter, dateFrom, dateTo],
   );
 
   const { data, totals, paginacio, setPagina, isLoading, error, refetch, isReady } =
@@ -168,10 +147,8 @@ export default function ProductionPage() {
   function clearFilters() {
     setAgrupacioFilter(ALL);
     setProductFilter(ALL);
-    setDateFrom(dataIsoAmbOffset(1));
-    setDateTo(dataIsoAmbOffset(7));
-    setDateFromTouched(false);
-    setDateToTouched(false);
+    setDateFrom('');
+    setDateTo('');
   }
 
   return (
@@ -253,22 +230,8 @@ export default function ProductionPage() {
           loadOptions={loadProductOptions}
           onChange={(option) => setProductFilter(option?.label ?? ALL)}
         />
-        <DateInput
-          label="Data producció des de"
-          value={dateFrom}
-          onChange={(value) => {
-            setDateFrom(value);
-            setDateFromTouched(true);
-          }}
-        />
-        <DateInput
-          label="Data producció fins a"
-          value={dateTo}
-          onChange={(value) => {
-            setDateTo(value);
-            setDateToTouched(true);
-          }}
-        />
+        <DateInput label="Data producció des de" value={dateFrom} onChange={setDateFrom} />
+        <DateInput label="Data producció fins a" value={dateTo} onChange={setDateTo} />
         <ClearFiltersButton onClick={clearFilters} />
       </FilterBar>
 
