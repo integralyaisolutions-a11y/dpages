@@ -1,8 +1,7 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type ComponentType } from "react";
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useRef, useState, type ComponentType } from 'react';
 import {
   Boxes,
   ChevronLeft,
@@ -17,8 +16,10 @@ import {
   Truck,
   Users,
   X,
-} from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
+} from 'lucide-react';
+import { GuardedLink } from '@/components/ui/GuardedLink';
+import { useAuth } from '@/hooks/useAuth';
+import { useNavigationGuard } from '@/hooks/useNavigationGuard';
 
 type NavItem = {
   label: string;
@@ -30,40 +31,60 @@ type NavItem = {
 
 // Comandes queda solta, primera i destacada (mateixa jerarquia visual que ja
 // tenia) — no forma part de cap grup.
-const STANDALONE_ITEM: NavItem = { label: "Comandes", href: "/orders", modul: "comandes", icon: Package };
+const STANDALONE_ITEM: NavItem = {
+  label: 'Comandes',
+  href: '/orders',
+  modul: 'comandes',
+  icon: Package,
+};
 
 type NavGroup = { label: string; items: NavItem[] };
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    label: "Catàleg",
+    label: 'Catàleg',
     items: [
-      { label: "Categories", href: "/categories", modul: "categories", icon: Layers },
-      { label: "Catàleg", href: "/catalog", modul: "catalog", icon: Boxes },
-      { label: "Rendiments Porcs", href: "/pig-yields", modul: "rendiments-porcs", icon: ClipboardList },
+      { label: 'Categories', href: '/categories', modul: 'categories', icon: Layers },
+      { label: 'Catàleg', href: '/catalog', modul: 'catalog', icon: Boxes },
+      {
+        label: 'Rendiments Porcs',
+        href: '/pig-yields',
+        modul: 'rendiments-porcs',
+        icon: ClipboardList,
+      },
     ],
   },
   {
-    label: "Tarifes",
+    label: 'Tarifes',
     items: [
-      { label: "Llistat de Tarifes", href: "/rates", modul: "tarifes", icon: List },
-      { label: "Tarifes per client", href: "/client-tariffs", modul: "tarifes-clients", icon: Tag },
+      { label: 'Llistat de Tarifes', href: '/rates', modul: 'tarifes', icon: List },
+      { label: 'Tarifes per client', href: '/client-tariffs', modul: 'tarifes-clients', icon: Tag },
     ],
   },
   {
-    label: "Panells",
+    label: 'Panells',
     items: [
-      { label: "Panell Oficina", href: "/office", modul: "panell-oficina", icon: LayoutGrid },
-      { label: "Panell Obrador", href: "/workshop", modul: "panell-obrador", icon: LayoutGrid },
-      { label: "Panell Empaquetat", href: "/packaging", modul: "panell-empaquetat", icon: LayoutGrid },
-      { label: "Panell Producció", href: "/production", modul: "panell-produccio", icon: LayoutGrid },
+      { label: 'Panell Oficina', href: '/office', modul: 'panell-oficina', icon: LayoutGrid },
+      { label: 'Panell Obrador', href: '/workshop', modul: 'panell-obrador', icon: LayoutGrid },
+      {
+        label: 'Panell Empaquetat',
+        href: '/packaging',
+        modul: 'panell-empaquetat',
+        icon: LayoutGrid,
+      },
+      {
+        label: 'Panell Producció',
+        href: '/production',
+        modul: 'panell-produccio',
+        icon: LayoutGrid,
+      },
     ],
   },
   {
-    label: "Configuració",
+    label: 'Configuració',
     items: [
-      { label: "Administració d'usuaris", href: "/users", modul: "usuaris", icon: Users },
-      { label: "Transportistes", href: "/transportistes", modul: "transportistes", icon: Truck },
+      { label: "Administració d'usuaris", href: '/users', modul: 'usuaris', icon: Users },
+      { label: 'Transportistes', href: '/transportistes', modul: 'transportistes', icon: Truck },
     ],
   },
 ];
@@ -82,17 +103,17 @@ function NavLink({
   const active = pathname === item.href;
   const Icon = item.icon;
   return (
-    <Link
+    <GuardedLink
       href={item.href}
       onClick={onNavigate}
       title={collapsed ? item.label : undefined}
       className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] leading-tight font-medium transition-colors ${
-        active ? "bg-ink text-white" : "text-gray-700 hover:bg-gray-100"
-      } ${collapsed ? "justify-center" : ""}`}
+        active ? 'bg-ink text-white' : 'text-gray-700 hover:bg-gray-100'
+      } ${collapsed ? 'justify-center' : ''}`}
     >
       <Icon className="h-4 w-4 shrink-0" />
       {!collapsed && <span>{item.label}</span>}
-    </Link>
+    </GuardedLink>
   );
 }
 
@@ -103,7 +124,9 @@ function NavLink({
 // a seques).
 function NavGroupHeader({ label, spaced }: { label: string; spaced: boolean }) {
   return (
-    <p className={`px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400 ${spaced ? "mt-3" : "mt-0"}`}>
+    <p
+      className={`px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400 ${spaced ? 'mt-3' : 'mt-0'}`}
+    >
       {label}
     </p>
   );
@@ -112,6 +135,7 @@ function NavGroupHeader({ label, spaced }: { label: string; spaced: boolean }) {
 function UserMenu({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const { isDirty, confirmNavigation } = useNavigationGuard();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -119,22 +143,23 @@ function UserMenu({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: 
     if (!open) return;
 
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) setOpen(false);
+      if (containerRef.current && !containerRef.current.contains(event.target as Node))
+        setOpen(false);
     }
 
-    window.addEventListener("mousedown", handleClickOutside);
-    return () => window.removeEventListener("mousedown", handleClickOutside);
+    window.addEventListener('mousedown', handleClickOutside);
+    return () => window.removeEventListener('mousedown', handleClickOutside);
   }, [open]);
 
   if (!user) return null;
 
-  const initial = user.nom.trim().charAt(0).toUpperCase() || "?";
+  const initial = user.nom.trim().charAt(0).toUpperCase() || '?';
 
   return (
     <div ref={containerRef} className="relative">
       {open && (
         <div className="absolute bottom-full left-0 z-10 mb-2 w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
-          <Link
+          <GuardedLink
             href="/profile"
             onClick={() => {
               setOpen(false);
@@ -143,14 +168,24 @@ function UserMenu({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: 
             className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
           >
             Veure perfil
-          </Link>
+          </GuardedLink>
           <button
             type="button"
             onClick={() => {
-              setOpen(false);
-              onNavigate?.();
-              logout();
-              router.replace("/login");
+              const doLogout = () => {
+                setOpen(false);
+                onNavigate?.();
+                logout();
+                router.replace('/login');
+              };
+              // Tancar sessió també abandona qualsevol formulari obert
+              // (issue #15) — no és un <Link>, així que GuardedLink no
+              // l'intercepta sol: passa pel mateix confirmNavigation a mà.
+              if (isDirty) {
+                confirmNavigation(doLogout);
+              } else {
+                doLogout();
+              }
             }}
             className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
           >
@@ -161,13 +196,16 @@ function UserMenu({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: 
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className={`flex w-full items-center gap-2.5 rounded-lg px-1 py-1.5 hover:bg-gray-100 ${collapsed ? "justify-center" : ""}`}
+        className={`flex w-full items-center gap-2.5 rounded-lg px-1 py-1.5 hover:bg-gray-100 ${collapsed ? 'justify-center' : ''}`}
       >
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink text-sm font-semibold text-white">
           {initial}
         </span>
         {!collapsed && (
-          <span title={user.nom} className="min-w-0 flex-1 truncate text-left text-sm font-medium text-gray-900">
+          <span
+            title={user.nom}
+            className="min-w-0 flex-1 truncate text-left text-sm font-medium text-gray-900"
+          >
             {user.nom}
           </span>
         )}
@@ -211,7 +249,7 @@ function SidebarContent({
           <button
             type="button"
             onClick={onToggleCollapse}
-            aria-label={collapsed ? "Expandir menú" : "Col·lapsar menú"}
+            aria-label={collapsed ? 'Expandir menú' : 'Col·lapsar menú'}
             className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 text-gray-400 hover:bg-gray-50"
           >
             {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
@@ -235,17 +273,30 @@ function SidebarContent({
           contenidor en comptes de scrollejar — mateix patró que Modal.tsx. */}
       <nav className="sidebar-nav-scroll flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pb-2">
         {standaloneVisible && (
-          <NavLink item={STANDALONE_ITEM} pathname={pathname} collapsed={collapsed} onNavigate={onNavigate} />
+          <NavLink
+            item={STANDALONE_ITEM}
+            pathname={pathname}
+            collapsed={collapsed}
+            onNavigate={onNavigate}
+          />
         )}
         {visibleGroups.map((group, index) => {
           const somethingBefore = index > 0 || standaloneVisible;
           return (
             <div key={group.label} className="flex flex-col gap-1">
-              {collapsed
-                ? somethingBefore && <div className="my-2 border-t border-gray-100" />
-                : <NavGroupHeader label={group.label} spaced={somethingBefore} />}
+              {collapsed ? (
+                somethingBefore && <div className="my-2 border-t border-gray-100" />
+              ) : (
+                <NavGroupHeader label={group.label} spaced={somethingBefore} />
+              )}
               {group.items.map((item) => (
-                <NavLink key={item.href} item={item} pathname={pathname} collapsed={collapsed} onNavigate={onNavigate} />
+                <NavLink
+                  key={item.href}
+                  item={item}
+                  pathname={pathname}
+                  collapsed={collapsed}
+                  onNavigate={onNavigate}
+                />
               ))}
             </div>
           );
@@ -286,18 +337,25 @@ export function Sidebar() {
       )}
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-72 transform border-r border-gray-200 bg-white transition-transform duration-200 lg:hidden ${
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
+          mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <SidebarContent collapsed={false} onNavigate={() => setMobileOpen(false)} onClose={() => setMobileOpen(false)} />
+        <SidebarContent
+          collapsed={false}
+          onNavigate={() => setMobileOpen(false)}
+          onClose={() => setMobileOpen(false)}
+        />
       </aside>
 
       <aside
         className={`sticky top-0 hidden h-screen shrink-0 border-r border-gray-200 bg-white transition-all duration-200 lg:block ${
-          collapsed ? "w-20" : "w-72"
+          collapsed ? 'w-20' : 'w-72'
         }`}
       >
-        <SidebarContent collapsed={collapsed} onToggleCollapse={() => setCollapsed((value) => !value)} />
+        <SidebarContent
+          collapsed={collapsed}
+          onToggleCollapse={() => setCollapsed((value) => !value)}
+        />
       </aside>
     </>
   );

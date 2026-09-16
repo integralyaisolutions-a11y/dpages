@@ -1,12 +1,13 @@
 'use client';
 
 import { ArrowLeft } from 'lucide-react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { GuardedLink } from '@/components/ui/GuardedLink';
 import { useCarriers } from '@/hooks/useCarriers';
 import { useCatalog } from '@/hooks/useCatalog';
 import { useClientTariffs } from '@/hooks/useClientTariffs';
+import { useNavigationGuard } from '@/hooks/useNavigationGuard';
 import { extractComandaErrorMessage, useOrders } from '@/hooks/useOrders';
 import { useOrigensComanda } from '@/hooks/useOrigensComanda';
 import { useRates } from '@/hooks/useRates';
@@ -27,6 +28,13 @@ export default function NewOrderPage() {
   const [patchWarning, setPatchWarning] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [hasDateErrors, setHasDateErrors] = useState(false);
+  const { setIsDirty } = useNavigationGuard();
+
+  // Issue #15 — neteja el flag global en desmuntar-se (navegar-se'n
+  // d'aquesta pàgina de qualsevol manera) perquè no quedi bloquejant la
+  // resta de l'app per sempre; NavigationGuardContext és un únic flag
+  // compartit per tota l'app, no propi d'aquesta pàgina.
+  useEffect(() => () => setIsDirty(false), [setIsDirty]);
 
   async function handleSave(values: Parameters<typeof createOrder>[0]) {
     setError(null);
@@ -51,15 +59,21 @@ export default function NewOrderPage() {
 
   return (
     <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+      {/* Issue #15 — sticky, no fixed: manté el mateix ample/columna que la
+          resta de la pàgina (dins del padding de <main>), no cal cap
+          marge negatiu. top-14 a mòbil deixa lloc a la barra fixa del
+          Sidebar (h-14, ver Sidebar.tsx); lg:top-0 perquè en desktop no hi
+          ha cap barra per sobre. bg-[var(--background)] evita que el
+          contingut que scrolleja per sota es vegi a través. */}
+      <div className="sticky top-14 z-20 mb-8 flex flex-wrap items-center justify-between gap-4 bg-[var(--background)] py-3 lg:top-0">
         <div className="flex items-center gap-4">
-          <Link
+          <GuardedLink
             href="/orders"
             className="flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-700"
           >
             <ArrowLeft className="h-4 w-4" />
             Tornar
-          </Link>
+          </GuardedLink>
           <h1 className="text-2xl font-bold text-gray-900 lg:text-3xl">Nova comanda</h1>
         </div>
         <button
@@ -77,12 +91,12 @@ export default function NewOrderPage() {
         <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
           <p className="text-sm text-amber-800">{patchWarning}</p>
           {createdOrder && (
-            <Link
+            <GuardedLink
               href={`/orders/${createdOrder.id}`}
               className="shrink-0 rounded-full border border-amber-300 px-3 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100"
             >
               Anar a la comanda
-            </Link>
+            </GuardedLink>
           )}
         </div>
       )}
@@ -97,6 +111,7 @@ export default function NewOrderPage() {
         origins={origins}
         onSave={handleSave}
         onDateErrorsChange={setHasDateErrors}
+        onDirtyChange={setIsDirty}
       />
     </div>
   );

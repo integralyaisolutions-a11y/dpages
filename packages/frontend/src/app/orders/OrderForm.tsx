@@ -16,6 +16,7 @@ import {
   type ClientApi,
   type ComandaDetallApi,
   type ComandaLiniaApi,
+  type FilaMatriuTarifesApi,
   type LiniaCreacioApi,
   type LiniaEdicioApi,
   type OrigenComandaApi,
@@ -34,6 +35,12 @@ const NO_TARIFF = 'Sense tarifa';
 const NO_CARRIER = 'Selecciona transportista...';
 const NO_PRODUCT = 'Selecciona producte...';
 const NO_ORIGIN = 'Selecciona origen...';
+
+// Avís preventiu de preu (ver resolvePriceRisk) — quan hi ha tarifa vigent i
+// cal confirmar-ho contra GET /tarifes/matriu, no es dispara una crida per
+// cada tecla en triar producte/tarifa; s'espera aquest marge des de l'últim
+// canvi rellevant.
+const TARIFF_COVERAGE_DEBOUNCE_MS = 300;
 
 // Capa 43 — un pedido NUEVO sólo puede cargarse manualmente por estos 3
 // canales (whatsapp/telefon/correu, ver origen_comanda). "manual" y
@@ -148,7 +155,11 @@ function toLiniaCreacio(line: LineDraft): LiniaCreacioApi {
     // GET), però el body de POST/PATCH segueix esperant un JS number.
     unitatsDemanades: Number(line.unitatsDemanades),
     kgDemanats: line.kgEditable ? line.kgDemanats : undefined,
-    dataProduccio: line.dataProduccio,
+    // Issue #16 — LiniaCreacioApi.dataProduccio ja no admet null (igual que
+    // LiniaAfegidaApi): el `!` és segur perquè submit() bloqueja abans amb
+    // un error clar si alguna línia nova no té data (mateix criteri que
+    // `line.producte!.id` a dalt, ja validat per `validLines`).
+    dataProduccio: line.dataProduccio!,
   };
 }
 
@@ -178,43 +189,62 @@ function dateOnly(value: string | null): string {
   return value ? value.slice(0, 10) : '';
 }
 
+/** Únic default real dels 3 camps de data obligatoris (issue #16) — cap dels dos (dataComanda/dataLliurament) té default al backend, ver docblock de ComandaCreacioApi a @dpages/shared. */
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 /**
- * Regles 1-3 — validació de client per feedback immediat; capa 34 les
+ * Regles 2/3/7 — validació de client per feedback immediat; capa 34 les
  * aplica també al backend (POST /comandes, PATCH /comandes/:id i els dos
  * endpoints de línia) com a última paraula, per si aquest formulari deixa
- * passar algun cas (ver `extractComandaErrorMessage` a useOrders.ts). Es
- * revalida sencer contra les 3 dates de capçalera cada cop, mai comparant
- * només la que s'acaba de tocar contra un valor fix — així queda bé sense
- * importar l'ordre en què l'usuari les completa.
+ * passar algun cas (ver `extractComandaErrorMessage` a useOrders.ts).
+ *
+ * Fusió Data producció / Data comanda de capçalera (decisió de negoci,
+ * Michelle, confirmada per investigació: `dataProduccio` de capçalera no
+ * s'usa en cap filtre/pantalla més que aquesta pròpia validació) — el
+ * formulari ja no té cap input separat per a `dataProduccio` de capçalera,
+ * es manda sempre idèntica a `dataComanda`. Això absorbeix l'antiga regla 1
+ * ("dataLliurament no anterior a dataProduccio de capçalera"), que passa a
+ * ser matemàticament idèntica a la regla 7 un cop `dataProduccio` de
+ * capçalera = `dataComanda` — mantenir-la per separat només duplicaria el
+ * mateix error sota dos camps.
  */
 function validateHeaderDates(
-  dataProduccio: string,
+  dataComanda: string,
   dataLliurament: string,
   dataExpedicio: string,
-): { dataLliurament?: string; dataExpedicio?: string } {
-  const errors: { dataLliurament?: string; dataExpedicio?: string } = {};
-  if (isDateAfter(dataProduccio, dataLliurament)) {
-    errors.dataLliurament = 'Aquesta data no pot ser anterior a la Data de producció.';
+): { dataComanda?: string; dataExpedicio?: string } {
+  const errors: { dataComanda?: string; dataExpedicio?: string } = {};
+  // Regla 7 (issue #16, ja implementada al backend) — dataComanda no pot
+  // ser posterior a dataLliurament.
+  if (isDateAfter(dataComanda, dataLliurament)) {
+    errors.dataComanda = 'Aquesta data no pot ser posterior a la Data de lliurament.';
   }
-  if (isDateAfter(dataProduccio, dataExpedicio)) {
-    errors.dataExpedicio = 'Aquesta data no pot ser anterior a la Data de producció.';
+  // Regla 2 (comparava contra dataProduccio de capçalera, ara fusionada amb dataComanda).
+  if (isDateAfter(dataComanda, dataExpedicio)) {
+    errors.dataExpedicio = 'Aquesta data no pot ser anterior a la Data de comanda.';
   } else if (isDateAfter(dataExpedicio, dataLliurament)) {
     errors.dataExpedicio = 'Aquesta data no pot ser posterior a la Data de lliurament.';
   }
   return errors;
 }
 
-/** Regles 4-6 — la data de producció d'una línia contra les 3 dates de capçalera ja vigents. */
+/**
+ * Regles 4-6 — la data de producció d'una línia contra les dates de
+ * capçalera ja vigents. Regla 4 comparava contra `dataProduccio` de
+ * capçalera; ara fusionada amb `dataComanda` (ver `validateHeaderDates`).
+ */
 function validateLineDate(
   lineDataProduccio: string | null,
-  headerDataProduccio: string,
+  headerDataComanda: string,
   headerDataLliurament: string,
   headerDataExpedicio: string,
 ): string | undefined {
   const lineDate = dateOnly(lineDataProduccio);
   if (lineDate === '') return undefined;
-  if (isDateAfter(headerDataProduccio, lineDate)) {
-    return 'Aquesta data no pot ser anterior a la Data de producció de la comanda.';
+  if (isDateAfter(headerDataComanda, lineDate)) {
+    return 'Aquesta data no pot ser anterior a la Data de comanda.';
   }
   if (isDateAfter(lineDate, headerDataLliurament)) {
     return 'Aquesta data no pot ser posterior a la Data de lliurament.';
@@ -248,9 +278,60 @@ function applyProduct(line: LineDraft, product: ProducteApi | undefined): LineDr
   };
 }
 
+/** null = encara no se sap (petició en curs o pendent de debounce). */
+type TariffCoverageStatus = 'covered' | 'not-covered';
+
+function tariffCoverageKey(tarifaId: number, producteId: number): string {
+  return `${tarifaId}:${producteId}`;
+}
+
+/**
+ * Avís preventiu (no bloquejant) del cas que caurà en amb_incidencia per
+ * falta de preu — mirall exacte de la cascada real de `resolverPreuLinia`
+ * (comandes.ts): (1) preu de la tarifa vigent, (2) si no n'hi ha,
+ * `producte.preuVenda`, (3) si tampoc, incidència.
+ *
+ * Dos casos:
+ * - Sense tarifa (`tarifaId === null`): certesa local, no cal cap crida —
+ *   si `preuVenda` també és null, els dos passos de la cascada fallen sí o
+ *   sí (cas original, capa anterior).
+ * - Amb tarifa vigent i `preuVenda === null` (l'únic altre cas on el pas 2
+ *   no serveix de xarxa de seguretat): abans es callava perquè el
+ *   frontend no tenia manera de saber si aquesta tarifa concreta cobreix
+ *   el producte. Ara sí es pot saber, consultant GET /tarifes/matriu
+ *   (mateixa font que Llistat de Tarifes) — `tariffCoverage` és la cache
+ *   ja resolta per l'efecte de OrderForm, `isChecking: true` mentre
+ *   encara no hi ha resposta (no s'afirma res mentrestant, ni true ni
+ *   false).
+ * - Si `preuVenda` NO és null, el pas 2 sempre és una xarxa de seguretat
+ *   vàlida encara que la tarifa no cobreixi el producte — mai hi ha risc
+ *   cert acá, per això no cal ni consultar la matriu.
+ */
+function resolvePriceRisk(
+  line: LineDraft,
+  tarifaId: number | null,
+  products: ProducteApi[],
+  tariffCoverage: Map<string, TariffCoverageStatus>,
+): { risk: boolean; isChecking: boolean } {
+  if (line.producte === null) return { risk: false, isChecking: false };
+  const product = products.find((p) => p.id === line.producte!.id);
+  if (!product) return { risk: false, isChecking: false };
+
+  if (tarifaId === null) {
+    return { risk: product.preuVenda === null, isChecking: false };
+  }
+  if (product.preuVenda !== null) return { risk: false, isChecking: false };
+
+  const status = tariffCoverage.get(tariffCoverageKey(tarifaId, product.id));
+  if (status === undefined) return { risk: false, isChecking: true };
+  return { risk: status === 'not-covered', isChecking: false };
+}
+
 function LineFormCard({
   line,
   products,
+  tarifaId,
+  tariffCoverage,
   disabled,
   headerDates,
   onUpdate,
@@ -258,18 +339,21 @@ function LineFormCard({
 }: {
   line: LineDraft;
   products: ProducteApi[];
+  tarifaId: number | null;
+  tariffCoverage: Map<string, TariffCoverageStatus>;
   disabled: boolean;
-  headerDates: { dataProduccio: string; dataLliurament: string; dataExpedicio: string };
+  headerDates: { dataComanda: string; dataLliurament: string; dataExpedicio: string };
   onUpdate: (patch: Partial<LineDraft>) => void;
   onRemove: () => void;
 }) {
   const product = products.find((p) => p.id === line.producte?.id);
   const dateError = validateLineDate(
     line.dataProduccio,
-    headerDates.dataProduccio,
+    headerDates.dataComanda,
     headerDates.dataLliurament,
     headerDates.dataExpedicio,
   );
+  const { risk: priceRisk } = resolvePriceRisk(line, tarifaId, products, tariffCoverage);
   // Línia ja existent (persistida, id>0): PATCH /comandes/:id/linies/:liniaId
   // (capa 30) no accepta producteId — no hi ha manera de comunicar un canvi
   // de producte al backend en una línia ja creada. Es desactiva el selector
@@ -292,6 +376,11 @@ function LineFormCard({
               onUpdate(applyProduct({ ...line }, selected));
             }}
           />
+          {priceRisk && (
+            <p className="mt-1.5 text-xs text-amber-700">
+              Aquest producte no té preu assignat — la comanda es marcarà amb incidència.
+            </p>
+          )}
         </div>
         <IconButton
           variant="delete"
@@ -423,6 +512,14 @@ export const OrderForm = forwardRef<
      * booleà d'estat al pare que es recalcula amb cada render d'acá.
      */
     onDateErrorsChange?: (hasErrors: boolean) => void;
+    /**
+     * Notifica al pare cada cop que canvia si hi ha canvis sense desar
+     * (issue #15) — mateix patró que `onDateErrorsChange`: el pare (viu a
+     * NavigationGuardContext) necessita aquest booleà per bloquejar
+     * beforeunload/navegació interna, però la font de veritat de "què s'ha
+     * tocat" viu acá dins, no té sentit duplicar-la al pare.
+     */
+    onDirtyChange?: (isDirty: boolean) => void;
   }
 >(function OrderForm(
   {
@@ -437,6 +534,7 @@ export const OrderForm = forwardRef<
     onSave,
     onDeleteLine,
     onDateErrorsChange,
+    onDirtyChange,
   },
   ref,
 ) {
@@ -453,11 +551,25 @@ export const OrderForm = forwardRef<
   const [transportistaId, setTransportistaId] = useState<number | null>(
     initialData?.transportista?.id ?? null,
   );
-  const [dataProduccio, setDataProduccio] = useState(
-    initialData?.dataProduccio?.slice(0, 10) ?? '',
-  );
+  // Issue #16 — nova, OBLIGATÒRIA (columna real comanda.dataComanda, NOT
+  // NULL). `initialData?.dataComanda` sempre ve informada en mode edició
+  // (el tipus ComandaDetallApi.dataComanda ja no és nullable) — el `?? today()`
+  // només s'activa en mode creació.
+  //
+  // Fusió Data producció / Data comanda de capçalera (decisió de negoci,
+  // Michelle) — ja NO hi ha estat separat per a `dataProduccio` de
+  // capçalera: es manda sempre idèntica a `dataComanda` en construir el
+  // payload (ver useOrders.ts createOrder/editOrder), sense mostrar cap
+  // input separat a l'usuari. El de cada LÍNIA (`line.dataProduccio`) és un
+  // concepte real i distint que NO es toca.
+  const [dataComanda, setDataComanda] = useState(initialData?.dataComanda?.slice(0, 10) ?? today());
+  // Issue #16 — passa a OBLIGATÒRIA només en creació (POST /comandes la
+  // rebutja buida); en edició segueix sent nullable de veritat a la base
+  // (PATCH la deixa buidar), per això el default "avui" NOMÉS s'aplica quan
+  // no hi ha `initialData` — mai es fabrica un valor en comandes existents
+  // que legítimament no en tenen.
   const [dataLliurament, setDataLliurament] = useState(
-    initialData?.dataLliurament?.slice(0, 10) ?? '',
+    initialData?.dataLliurament?.slice(0, 10) ?? (mode === 'create' ? today() : ''),
   );
   const [dataExpedicio, setDataExpedicio] = useState(
     initialData?.dataExpedicio?.slice(0, 10) ?? '',
@@ -473,12 +585,25 @@ export const OrderForm = forwardRef<
   // falso positivo por comparación de tipo/formato: si el id no está acá,
   // el usuario no tocó esa línea, punto.
   const [dirtyLineIds, setDirtyLineIds] = useState<Set<number>>(new Set());
+  // Mateix criteri que dirtyLineIds: es marca EXPLÍCITAMENT a l'acció de
+  // l'usuari (cada onChange de capçalera), mai comparant valors contra
+  // initialData més tard — evita falsos positius de tipus/format.
+  const [headerTouched, setHeaderTouched] = useState(false);
+  // Cache de "aquesta tarifa cobreix aquest producte?" (avís preventiu de
+  // preu, ver resolvePriceRisk) — clau `${tarifaId}:${producteId}`, mai
+  // s'esborra durant la sessió del formulari: si l'usuari torna a una
+  // combinació ja consultada (per exemple, canvia de tarifa i torna a la
+  // d'abans), es reaprofita sense repetir la crida a GET /tarifes/matriu.
+  const [tariffCoverage, setTariffCoverage] = useState<Map<string, TariffCoverageStatus>>(
+    new Map(),
+  );
   const [error, setError] = useState<string | null>(null);
   const [lineToDelete, setLineToDelete] = useState<LineDraft | null>(null);
   const [lineDeleteError, setLineDeleteError] = useState<string | null>(null);
   const [isDeletingLine, setIsDeletingLine] = useState(false);
 
   function handleClientChange(id: number | null) {
+    setHeaderTouched(true);
     setClientId(id);
     const client = clients.find((item) => item.id === id);
     if (!tariffTouched) {
@@ -545,10 +670,10 @@ export const OrderForm = forwardRef<
   // `error`, i és la MATEIXA constant que consulta submit() més avall
   // (no es recalcula per separat — elimina qualsevol possibilitat de
   // desincronització entre el que es pinta i el que es valida).
-  const headerDateErrors = validateHeaderDates(dataProduccio, dataLliurament, dataExpedicio);
+  const headerDateErrors = validateHeaderDates(dataComanda, dataLliurament, dataExpedicio);
   const hasLineDateErrors = lines.some(
     (line) =>
-      validateLineDate(line.dataProduccio, dataProduccio, dataLliurament, dataExpedicio) !==
+      validateLineDate(line.dataProduccio, dataComanda, dataLliurament, dataExpedicio) !==
       undefined,
   );
   const hasDateErrors = Object.keys(headerDateErrors).length > 0 || hasLineDateErrors;
@@ -559,6 +684,72 @@ export const OrderForm = forwardRef<
   useEffect(() => {
     onDateErrorsChange?.(hasDateErrors);
   }, [hasDateErrors, onDateErrorsChange]);
+
+  // isDirty = capçalera tocada O alguna línia tocada/afegida/eliminada
+  // (dirtyLineIds) — eliminar una línia existent (mode edit) NO hi compta
+  // (és un DELETE real i immediat, ver removeLine, no una part pendent de
+  // "Desar" que es pugui perdre en navegar).
+  const isDirty = headerTouched || dirtyLineIds.size > 0;
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  // Avís preventiu de preu (ver resolvePriceRisk) — quan hi ha tarifa
+  // vigent i el producte d'una línia no té `preuVenda` de respaldo, l'únic
+  // cas amb risc cert que encara falta resoldre és si aquesta tarifa
+  // concreta cobreix aquest producte concret. Es resol amb GET
+  // /tarifes/matriu?cerca=<codi> (mateix endpoint que Llistat de Tarifes),
+  // amb `cerca` fent coincidència EXACTA (regla 3.1) — per això `mida` no
+  // necessita ser gran, però es deixa un marge (50) per si dos productes
+  // comparteixen descripció exacta i cal desempatar per producteId.
+  useEffect(() => {
+    if (tarifaId === null) return;
+
+    const missing = new Map<string, ProducteApi>();
+    for (const line of lines) {
+      if (line.producte === null) continue;
+      const product = products.find((p) => p.id === line.producte!.id);
+      if (!product || product.preuVenda !== null) continue;
+      const key = tariffCoverageKey(tarifaId, product.id);
+      if (!tariffCoverage.has(key)) missing.set(key, product);
+    }
+    if (missing.size === 0) return;
+
+    let cancelled = false;
+    const timeoutId = setTimeout(() => {
+      void Promise.all(
+        Array.from(missing.entries()).map(async ([key, product]) => {
+          try {
+            const resposta = await api.get<{ dades: FilaMatriuTarifesApi[] }>('/tarifes/matriu', {
+              cerca: product.codi ?? product.descripcio,
+              mida: 50,
+            });
+            const fila = resposta.dades.find((d) => d.producteId === product.id);
+            const preu = fila?.preus[String(tarifaId)] ?? null;
+            return [key, preu !== null ? ('covered' as const) : ('not-covered' as const)] as const;
+          } catch {
+            // Error de xarxa: no s'afirma res (la key queda fora de la
+            // cache) — el proper efecte que la detecti com a "missing" la
+            // tornarà a intentar, en comptes d'assumir "no coberta".
+            return null;
+          }
+        }),
+      ).then((results) => {
+        if (cancelled) return;
+        setTariffCoverage((current) => {
+          const next = new Map(current);
+          for (const result of results) if (result) next.set(result[0], result[1]);
+          return next;
+        });
+      });
+    }, TARIFF_COVERAGE_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [lines, tarifaId, products, tariffCoverage]);
 
   useImperativeHandle(ref, () => ({
     submit: () => {
@@ -579,11 +770,38 @@ export const OrderForm = forwardRef<
         return;
       }
 
+      // Issue #16 — dataComanda és obligatòria sempre (POST i PATCH la
+      // rebutgen buida); dataLliurament només ho és en creació (PATCH
+      // encara la deixa buidar en comandes existents).
+      if (!dataComanda) {
+        setError('Cal indicar la Data comanda.');
+        return;
+      }
+      if (mode === 'create' && !dataLliurament) {
+        setError('Cal indicar la Data lliurament.');
+        return;
+      }
+
       setError(null);
 
       const validLines = lines.filter(
         (line) => line.producte !== null && Number(line.unitatsDemanades) > 0,
       );
+
+      // Issue #16 — dataProduccio passa a OBLIGATÒRIA per a qualsevol línia
+      // NOVA (tant embeguda a la creació com afegida després amb "Afegir
+      // línia"), mai per a línies ja existents que només s'estan editant
+      // (LiniaEdicioApi.dataProduccio segueix sent opcional). Es talla acá
+      // amb un missatge clar en comptes de deixar que el 400 cru del
+      // backend arribi sense context.
+      const newLines =
+        mode === 'create'
+          ? validLines
+          : validLines.filter((line) => dirtyLineIds.has(line.id) && line.id < 0);
+      if (newLines.some((line) => !line.dataProduccio)) {
+        setError('Cal indicar la Data producció de cada línia nova abans de desar.');
+        return;
+      }
 
       // Capa 30 — en edición, las línias nuevas/editadas se guardan por su
       // propio endpoint (POST/PATCH .../linies), nunca embebidas en el
@@ -592,9 +810,7 @@ export const OrderForm = forwardRef<
       const lineChanges: OrderLineChanges =
         mode === 'edit'
           ? {
-              novaLinies: validLines
-                .filter((line) => dirtyLineIds.has(line.id) && line.id < 0)
-                .map(toLiniaCreacio),
+              novaLinies: newLines.map(toLiniaCreacio),
               liniesEditades: validLines
                 .filter((line) => dirtyLineIds.has(line.id) && line.id > 0)
                 .map((line) => ({ liniaId: line.id, patch: toLiniaEdicio(line) })),
@@ -611,7 +827,11 @@ export const OrderForm = forwardRef<
           origen: mode === 'create' ? origenCodi : (initialData?.origen ?? null),
           tarifaId,
           transportistaId,
-          dataProduccio: dataProduccio ? `${dataProduccio}T00:00:00Z` : null,
+          // Issue #16 — sempre non-buida en aquest punt (validat a dalt).
+          // `dataProduccio` de capçalera ja NO viatja des d'acá — es
+          // sintetitza a useOrders.ts (createOrder/editOrder) a partir
+          // d'aquest mateix `dataComanda` (fusió de conceptes, Michelle).
+          dataComanda: `${dataComanda}T00:00:00Z`,
           dataExpedicio: dataExpedicio ? `${dataExpedicio}T00:00:00Z` : null,
           dataLliurament: dataLliurament ? `${dataLliurament}T00:00:00Z` : null,
           bultos,
@@ -696,6 +916,7 @@ export const OrderForm = forwardRef<
               options={originOptions}
               value={originValue}
               onChange={(label) => {
+                setHeaderTouched(true);
                 const origin = eligibleOrigins.find((item) => item.nom === label);
                 setOrigenCodi(origin?.codi ?? null);
               }}
@@ -720,6 +941,7 @@ export const OrderForm = forwardRef<
             value={ESTAT_LABELS[estat] ?? estat}
             onChange={(label) => {
               if (isFrozen) return;
+              setHeaderTouched(true);
               const value = estatOptions.find((option) => ESTAT_LABELS[option] === label);
               if (value) setEstat(value);
             }}
@@ -731,6 +953,7 @@ export const OrderForm = forwardRef<
             value={tariffValue}
             onChange={(label) => {
               if (isFrozen) return;
+              setHeaderTouched(true);
               setTariffTouched(true);
               const tariff = tariffs.find((item) => tariffLabel(item) === label);
               setTarifaId(tariff?.id ?? null);
@@ -743,34 +966,41 @@ export const OrderForm = forwardRef<
             value={carrierValue}
             onChange={(label) => {
               if (isFrozen) return;
+              setHeaderTouched(true);
               const carrier = carriers.find((item) => carrierLabel(item) === label);
               setTransportistaId(carrier?.id ?? null);
             }}
           />
-          {/* Decisió de negoci conscient (confirmada per Michelle): l'etiqueta
-              d'aquest camp és "Data comanda" NOMÉS acá, a Capçalera — l'estat
-              intern (dataProduccio) i el mapeig al backend (comanda.data_
-              produccio) NO canvien. Això reintrodueix a propòsit el mateix
-              xoc de noms que ja es va identificar i revertir en una sessió
-              anterior: "Data comanda" al llistat de Comandes i al Panell
-              d'Oficina és creat_en (data real d'alta del pedido) — un camp
-              totalment diferent. Es fa així per distingir-lo del camp "Data
-              producció" de Línies (ver línia ~865 i ~319), que sí es diu
-              "Data producció" tal qual. Si algun dia sembla un error, NO HO
-              és — no "corregir-ho" sense tornar a llegir aquest comentari. */}
+          {/* Issue #16 (fusió posterior, Michelle) — "Data producció" de
+              capçalera va desaparèixer com a input separat: investigació
+              confirmada, no s'usava en cap filtre/pantalla més que la
+              pròpia validació de coherència (ara fusionada amb dataComanda,
+              ver validateHeaderDates). Columna real comanda.dataComanda
+              (NOT NULL), distinta de creat_en (mai exposada a l'API).
+              Obligatòria: sense default al backend, es precarrega amb avui
+              (ver `today()`), editable abans de desar. El de cada LÍNIA
+              (input més avall, "Data producció" dins de cada fila) és un
+              concepte real i distint que NO es toca. */}
           <TextField
             label="Data comanda"
             type="date"
             disabled={isFrozen}
-            value={dataProduccio}
-            onChange={(event) => setDataProduccio(event.target.value)}
+            value={dataComanda}
+            onChange={(event) => {
+              setHeaderTouched(true);
+              setDataComanda(event.target.value);
+            }}
+            error={headerDateErrors.dataComanda}
           />
           <TextField
             label="Data expedició"
             type="date"
             disabled={isFrozen}
             value={dataExpedicio}
-            onChange={(event) => setDataExpedicio(event.target.value)}
+            onChange={(event) => {
+              setHeaderTouched(true);
+              setDataExpedicio(event.target.value);
+            }}
             error={headerDateErrors.dataExpedicio}
           />
           <TextField
@@ -778,21 +1008,27 @@ export const OrderForm = forwardRef<
             type="date"
             disabled={isFrozen}
             value={dataLliurament}
-            onChange={(event) => setDataLliurament(event.target.value)}
-            error={headerDateErrors.dataLliurament}
+            onChange={(event) => {
+              setHeaderTouched(true);
+              setDataLliurament(event.target.value);
+            }}
           />
           <TextField
             label="Núm. bultos"
             type="number"
             disabled={isFrozen}
             value={bultos ?? 0}
-            onChange={(event) => setBultos(Number(event.target.value))}
+            onChange={(event) => {
+              setHeaderTouched(true);
+              setBultos(Number(event.target.value));
+            }}
           />
           <TextField
             label="Població de destí"
             disabled={isFrozen}
             value={poblacioDesti}
             onChange={(event) => {
+              setHeaderTouched(true);
               setPoblacioTouched(true);
               setPoblacioDesti(event.target.value);
             }}
@@ -804,7 +1040,10 @@ export const OrderForm = forwardRef<
             label="Adreça de lliurament"
             disabled={isFrozen}
             value={adrecaLliurament}
-            onChange={(event) => setAdrecaLliurament(event.target.value)}
+            onChange={(event) => {
+              setHeaderTouched(true);
+              setAdrecaLliurament(event.target.value);
+            }}
           />
         </div>
 
@@ -814,7 +1053,10 @@ export const OrderForm = forwardRef<
             <textarea
               value={obsProduccio}
               disabled={isFrozen}
-              onChange={(event) => setObsProduccio(event.target.value)}
+              onChange={(event) => {
+                setHeaderTouched(true);
+                setObsProduccio(event.target.value);
+              }}
               rows={2}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
             />
@@ -824,7 +1066,10 @@ export const OrderForm = forwardRef<
             <textarea
               value={obsLliurament}
               disabled={isFrozen}
-              onChange={(event) => setObsLliurament(event.target.value)}
+              onChange={(event) => {
+                setHeaderTouched(true);
+                setObsLliurament(event.target.value);
+              }}
               rows={2}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
             />
@@ -854,8 +1099,10 @@ export const OrderForm = forwardRef<
               key={line.id}
               line={line}
               products={products}
+              tarifaId={tarifaId}
+              tariffCoverage={tariffCoverage}
               disabled={isFrozen}
-              headerDates={{ dataProduccio, dataLliurament, dataExpedicio }}
+              headerDates={{ dataComanda, dataLliurament, dataExpedicio }}
               onUpdate={(patch) => updateLine(line.id, patch)}
               onRemove={() => removeLine(line)}
             />
@@ -907,7 +1154,7 @@ export const OrderForm = forwardRef<
                 const product = products.find((p) => p.id === line.producte?.id);
                 const lineDateError = validateLineDate(
                   line.dataProduccio,
-                  dataProduccio,
+                  dataComanda,
                   dataLliurament,
                   dataExpedicio,
                 );
@@ -930,6 +1177,11 @@ export const OrderForm = forwardRef<
                           updateLine(line.id, applyProduct({ ...line }, selected));
                         }}
                       />
+                      {resolvePriceRisk(line, tarifaId, products, tariffCoverage).risk && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          Sense preu assignat — caurà en incidència.
+                        </p>
+                      )}
                     </td>
                     <td className="px-1.5 py-2 break-words text-gray-500">
                       {line.categoria ?? '—'}
