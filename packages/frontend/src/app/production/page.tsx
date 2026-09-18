@@ -32,7 +32,23 @@ function isNegative(value: string | null): boolean {
   return value !== null && Number(value) < 0;
 }
 
-function ProductionRow({ row }: { row: PanellProduccioFilaApi }) {
+// Issue #20 (Francesc, confirmat) — Rendiment/Diferència per fila NOMÉS
+// tenen sentit de negoci per KG/PAQ (l'única branca del backend que els
+// calcula per línia, ver panells.ts). Per MAGRE/Totes es força '—' encara
+// que la fila porti un valor real (a "Totes" les files KG/PAQ sí en
+// porten): la condició depèn del FILTRE actiu, no de l'agrupacioRendiment
+// de cada fila individual — no n'hi ha prou en confiar que vinguin buides.
+function showRowRendiment(agrupacioFilter: string): boolean {
+  return agrupacioFilter === 'KG' || agrupacioFilter === 'PAQ';
+}
+
+function ProductionRow({
+  row,
+  showRendiment,
+}: {
+  row: PanellProduccioFilaApi;
+  showRendiment: boolean;
+}) {
   return (
     <tr className="border-b border-gray-100 last:border-0">
       <td className="px-3 py-3 break-words text-gray-900">{row.agrupacioRendiment}</td>
@@ -41,19 +57,29 @@ function ProductionRow({ row }: { row: PanellProduccioFilaApi }) {
       </td>
       <td className="px-3 py-3 text-right text-gray-900">{formatBackendDecimal(row.paqPedido)}</td>
       <td className="px-3 py-3 text-right text-gray-900">{formatDecimal(row.kgAElaborar, 3)}</td>
-      <td className="px-3 py-3 text-right text-gray-900">{formatBackendDecimal(row.rendiment)}</td>
+      <td className="px-3 py-3 text-right text-gray-900">
+        {showRendiment ? formatBackendDecimal(row.rendiment) : '—'}
+      </td>
       <td
         className={`px-3 py-3 text-right ${
-          isNegative(row.diferencia) ? 'bg-red-600 font-medium text-white' : 'text-gray-900'
+          showRendiment && isNegative(row.diferencia)
+            ? 'bg-red-600 font-medium text-white'
+            : 'text-gray-900'
         }`}
       >
-        {formatBackendDecimal(row.diferencia)}
+        {showRendiment ? formatBackendDecimal(row.diferencia) : '—'}
       </td>
     </tr>
   );
 }
 
-function ProductionCard({ row }: { row: PanellProduccioFilaApi }) {
+function ProductionCard({
+  row,
+  showRendiment,
+}: {
+  row: PanellProduccioFilaApi;
+  showRendiment: boolean;
+}) {
   return (
     <DataCard>
       <p className="font-semibold text-gray-900">{row.agrupacioProduccio}</p>
@@ -63,12 +89,14 @@ function ProductionCard({ row }: { row: PanellProduccioFilaApi }) {
         <DataCardGrid>
           <DataCardField label="Paq. Comanda">{formatBackendDecimal(row.paqPedido)}</DataCardField>
           <DataCardField label="Kg a Elaborar">{formatDecimal(row.kgAElaborar, 3)}</DataCardField>
-          <DataCardField label="Rendiment">{formatBackendDecimal(row.rendiment)}</DataCardField>
+          <DataCardField label="Rendiment">
+            {showRendiment ? formatBackendDecimal(row.rendiment) : '—'}
+          </DataCardField>
           <DataCardField
             label="Diferència"
-            tone={isNegative(row.diferencia) ? 'negative' : 'default'}
+            tone={showRendiment && isNegative(row.diferencia) ? 'negative' : 'default'}
           >
-            {formatBackendDecimal(row.diferencia)}
+            {showRendiment ? formatBackendDecimal(row.diferencia) : '—'}
           </DataCardField>
         </DataCardGrid>
       </div>
@@ -144,6 +172,11 @@ export default function ProductionPage() {
   const { data, totals, paginacio, setPagina, isLoading, error, refetch, isReady } =
     useProductionPanell(filters);
 
+  // Issue #20 — la condició és el filtre ACTIU, no l'agrupacioRendiment de
+  // cada fila (només coincideixen quan el filtre no és 'Totes').
+  const showTopCards = agrupacioFilter === ALL || agrupacioFilter === 'MAGRE';
+  const showRowRendimentValues = showRowRendiment(agrupacioFilter);
+
   function clearFilters() {
     setAgrupacioFilter(ALL);
     setProductFilter(ALL);
@@ -194,23 +227,30 @@ export default function ProductionPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <StatCard
-              label="TOTAL KG A ELABORAR"
-              value={formatDecimal(totals?.totalKgAElaborar ?? null, 3)}
-            />
-            <StatCard
-              label="TOTAL KG MAGRE"
-              value={formatDecimal(totals?.totalKgMagro ?? null, 3)}
-            />
-            <StatCard
-              label="DIFERÈNCIA"
-              value={formatDecimal(totals?.diferencia ?? null, 3)}
-              alert={isNegative(totals?.diferencia ?? null)}
-            />
+        {/* Issue #20 (Francesc, confirmat) — aquests 3 totals només tenen
+            sentit quan el dataset pot incloure files MAGRE (és l'única
+            agrupació que alimenta totalKgMagro): filtrant per KG o PAQ es
+            queden en 0 sempre, no perquè no hi hagi magre, sinó perquè el
+            propi filtre ja les va excloure — mostrar-ho seria enganyós. */}
+        {showTopCards && (
+          <div className="rounded-xl border border-gray-200 bg-white p-6">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <StatCard
+                label="TOTAL KG A ELABORAR"
+                value={formatDecimal(totals?.totalKgAElaborar ?? null, 3)}
+              />
+              <StatCard
+                label="TOTAL KG MAGRE"
+                value={formatDecimal(totals?.totalKgMagro ?? null, 3)}
+              />
+              <StatCard
+                label="DIFERÈNCIA"
+                value={formatDecimal(totals?.diferencia ?? null, 3)}
+                alert={isNegative(totals?.diferencia ?? null)}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <FilterBar>
@@ -263,6 +303,7 @@ export default function ProductionPage() {
               <ProductionCard
                 key={`${row.agrupacioProduccio}-${row.agrupacioRendiment}`}
                 row={row}
+                showRendiment={showRowRendimentValues}
               />
             ))}
           </div>
@@ -296,6 +337,7 @@ export default function ProductionPage() {
                   <ProductionRow
                     key={`${row.agrupacioProduccio}-${row.agrupacioRendiment}`}
                     row={row}
+                    showRendiment={showRowRendimentValues}
                   />
                 ))}
               </tbody>

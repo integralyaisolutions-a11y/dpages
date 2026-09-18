@@ -16,6 +16,19 @@ import { useRates } from '@/hooks/useRates';
 import { api, ApiError, type ComandaDetallApi } from '@/lib/api';
 import { OrderForm, type OrderFormHandle } from '../OrderForm';
 
+// Avís específic quan el "Desar" falla DESPRÉS d'haver-hi hagut algun
+// DELETE de línia real i exitós en aquesta sessió d'edició — el pedido
+// pot haver quedat a mitges (línia vella ja eliminada, canvis nous no
+// guardats). S'afegeix al missatge real de l'error (mai el reemplaça:
+// perdre el detall concret del que va fallar seria un pas enrere), no és
+// un missatge genèric nou.
+const AVIS_LINIA_JA_ELIMINADA =
+  "Alguna línia ja s'ha eliminat correctament, però els canvis nous no s'han guardat — revisa la comanda abans de tornar-ho a intentar.";
+
+function ambAvisSiCal(missatge: string, hiHaLiniaEliminada: boolean): string {
+  return hiHaLiniaEliminada ? `${missatge} ${AVIS_LINIA_JA_ELIMINADA}` : missatge;
+}
+
 export default function OrderDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -34,6 +47,15 @@ export default function OrderDetailPage() {
   const [reloadToken, setReloadToken] = useState(0);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lineWarning, setLineWarning] = useState<string | null>(null);
+  // Borrar una línia existent és un DELETE real i immediat (no espera al
+  // "Desar" — ver comentari a OrderForm.tsx, removeLine). Si després
+  // d'això el "Desar" falla (afegir la línia de recanvi, o qualsevol
+  // altra cosa), el pedido queda a mitges: la línia vella ja no hi és,
+  // però els canvis nous tampoc s'han guardat. Es trackeja acá (mateix
+  // component on viu handleDeleteLine i handleSave) perquè el missatge
+  // d'error ho pugui advertir explícitament, en comptes de mostrar el
+  // mateix text que qualsevol altre fallo de guardat.
+  const [hasDeletedLineThisSession, setHasDeletedLineThisSession] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [hasDateErrors, setHasDateErrors] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -95,7 +117,12 @@ export default function OrderDetailPage() {
       await editOrder(order.id, values);
     } catch (caught) {
       headerFailed = true;
-      setSaveError(extractComandaErrorMessage(caught, "No s'ha pogut desar la comanda."));
+      setSaveError(
+        ambAvisSiCal(
+          extractComandaErrorMessage(caught, "No s'ha pogut desar la comanda."),
+          hasDeletedLineThisSession,
+        ),
+      );
     }
 
     // Capa 30 — una llamada por línia nova/editada (el backend no ofereix
@@ -121,7 +148,9 @@ export default function OrderDetailPage() {
         lineErrors.push(extractComandaErrorMessage(caught, "No s'ha pogut editar una línia."));
       }
     }
-    if (lineErrors.length > 0) setLineWarning(lineErrors.join(' '));
+    if (lineErrors.length > 0) {
+      setLineWarning(ambAvisSiCal(lineErrors.join(' '), hasDeletedLineThisSession));
+    }
 
     setIsSaving(false);
     if (!headerFailed && lineErrors.length === 0) {
@@ -134,6 +163,9 @@ export default function OrderDetailPage() {
   async function handleDeleteLine(liniaId: number) {
     if (!order) return;
     await deleteLine(order.id, liniaId);
+    // Si `deleteLine` llença, aquesta línia no s'arriba a executar — només
+    // marca el flag quan el DELETE ha estat realment exitós.
+    setHasDeletedLineThisSession(true);
     setReloadToken((token) => token + 1);
   }
 

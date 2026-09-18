@@ -158,7 +158,7 @@ function toLiniaCreacio(line: LineDraft): LiniaCreacioApi {
     // Issue #16 — LiniaCreacioApi.dataProduccio ja no admet null (igual que
     // LiniaAfegidaApi): el `!` és segur perquè submit() bloqueja abans amb
     // un error clar si alguna línia nova no té data (mateix criteri que
-    // `line.producte!.id` a dalt, ja validat per `validLines`).
+    // `line.producte!.id` a dalt, ja validat per `touchedLines`).
     dataProduccio: line.dataProduccio!,
   };
 }
@@ -379,6 +379,12 @@ function LineFormCard({
           {priceRisk && (
             <p className="mt-1.5 text-xs text-amber-700">
               Aquest producte no té preu assignat — la comanda es marcarà amb incidència.
+            </p>
+          )}
+          {productLocked && (
+            <p className="mt-1.5 text-xs text-gray-500">
+              El producte d&apos;una línia ja creada no es pot canviar. Per substituir-lo, esborra
+              aquesta línia i afegeix-ne una de nova amb el producte correcte.
             </p>
           )}
         </div>
@@ -789,9 +795,23 @@ export const OrderForm = forwardRef<
 
       setError(null);
 
-      const validLines = lines.filter(
-        (line) => line.producte !== null && Number(line.unitatsDemanades) > 0,
-      );
+      // Fix urgent (pèrdua de dades real) — abans, aquest mateix filtre es
+      // deia `validLines` i descartava en silenci qualsevol línia amb
+      // producte triat però unitatsDemanades <= 0 (el default d'una línia
+      // nova és "0", n'hi ha prou amb triar el producte i no tocar
+      // unitats): la línia desapareixia del guardat sense arribar ni al
+      // chequeo de dataProduccio de sota, i sense cap avís — l'usuari
+      // creia que s'havia guardat. Una línia amb producte triat és una
+      // línia que l'usuari ha tocat de veritat; si li falta alguna cosa,
+      // s'ha de bloquejar el guardat amb un missatge, mai descartar-la en
+      // silenci. Només les línies COMPLETAMENT buides (producte === null,
+      // mai tocades — les files de sobra sense usar) es descarten sense
+      // avís, tal com ja passava.
+      const touchedLines = lines.filter((line) => line.producte !== null);
+      if (touchedLines.some((line) => Number(line.unitatsDemanades) <= 0)) {
+        setError('Cal indicar les unitats demanades de cada línia abans de desar.');
+        return;
+      }
 
       // Issue #16 — dataProduccio passa a OBLIGATÒRIA per a qualsevol línia
       // NOVA (tant embeguda a la creació com afegida després amb "Afegir
@@ -801,8 +821,8 @@ export const OrderForm = forwardRef<
       // backend arribi sense context.
       const newLines =
         mode === 'create'
-          ? validLines
-          : validLines.filter((line) => dirtyLineIds.has(line.id) && line.id < 0);
+          ? touchedLines
+          : touchedLines.filter((line) => dirtyLineIds.has(line.id) && line.id < 0);
       if (newLines.some((line) => !line.dataProduccio)) {
         setError('Cal indicar la Data producció de cada línia nova abans de desar.');
         return;
@@ -816,7 +836,7 @@ export const OrderForm = forwardRef<
         mode === 'edit'
           ? {
               novaLinies: newLines.map(toLiniaCreacio),
-              liniesEditades: validLines
+              liniesEditades: touchedLines
                 .filter((line) => dirtyLineIds.has(line.id) && line.id > 0)
                 .map((line) => ({ liniaId: line.id, patch: toLiniaEdicio(line) })),
             }
@@ -845,7 +865,7 @@ export const OrderForm = forwardRef<
           poblacioDesti: poblacioDesti || null,
           adrecaLliurament: adrecaLliurament || null,
           estat,
-          linies: mode === 'create' ? validLines.map(toLiniaCreacio) : [],
+          linies: mode === 'create' ? touchedLines.map(toLiniaCreacio) : [],
         },
         lineChanges,
       );
@@ -1185,6 +1205,11 @@ export const OrderForm = forwardRef<
                       {resolvePriceRisk(line, tarifaId, products, tariffCoverage).risk && (
                         <p className="mt-1 text-xs text-amber-700">
                           Sense preu assignat — caurà en incidència.
+                        </p>
+                      )}
+                      {!isFrozen && line.id > 0 && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          No es pot canviar — esborra la línia i afegeix-ne una de nova.
                         </p>
                       )}
                     </td>
