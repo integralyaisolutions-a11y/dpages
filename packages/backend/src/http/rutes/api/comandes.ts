@@ -562,15 +562,18 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
         producteId: number;
         unitatsDemanades: number;
         kgDemanats?: string;
-        dataProduccio: string;
+        dataProduccio?: string | null;
       }[];
     }>;
 
     // Issue #16 (Francesc, bloqueant) — dataComanda/dataLliurament de
-    // capçalera i dataProduccio de cada línia passen a ser OBLIGATÒRIES,
-    // sense valor per defecte al backend (el frontend precarrega HOY, però
-    // qui garanteix que arriba és aquesta validació, no un default silenciós
-    // acá). Mateix estil que la resta d'aquest bloc (origen/linies).
+    // capçalera passen a ser OBLIGATÒRIES, sense valor per defecte al
+    // backend (el frontend precarrega HOY, però qui garanteix que arriba és
+    // aquesta validació, no un default silenciós acá). Mateix estil que la
+    // resta d'aquest bloc (origen/linies).
+    //
+    // Issue #21 — dataProduccio de línia deixa de ser obligatòria (revertia
+    // una decisió de negoci de l'issue #16): ja no es valida acá.
     const detalls: { camp: string; missatge: string }[] = [];
     if (!cos.origen || cos.origen.trim() === '') {
       detalls.push({ camp: 'origen', missatge: 'és obligatori' });
@@ -583,12 +586,6 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
     }
     if (!cos.linies || cos.linies.length === 0) {
       detalls.push({ camp: 'linies', missatge: 'la comanda ha de tenir com a mínim una línia' });
-    } else {
-      cos.linies.forEach((linia, i) => {
-        if (!linia.dataProduccio || linia.dataProduccio.trim() === '') {
-          detalls.push({ camp: `linies[${i}].dataProduccio`, missatge: 'és obligatori' });
-        }
-      });
     }
     if (detalls.length > 0) {
       return enviarValidacio(reply, 'Falten dades obligatòries', detalls);
@@ -678,7 +675,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       pesFitxaKg: string | null;
       pesCalculatKg: string;
       pesEditable: boolean;
-      dataProduccio: string;
+      dataProduccio: string | null;
     }[] = [];
 
     for (let i = 0; i < cos.linies!.length; i++) {
@@ -743,7 +740,10 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
         pesFitxaKg,
         pesCalculatKg,
         pesEditable,
-        dataProduccio: linia.dataProduccio,
+        // Issue #21 — dataProduccio deixa de ser obligatòria: normalitzada a
+        // null (mateix criteri que cos.obsLliurament ?? null, més avall) en
+        // comptes de deixar passar `undefined` cru al paràmetre de l'INSERT.
+        dataProduccio: linia.dataProduccio ?? null,
       });
     }
 
@@ -1059,14 +1059,12 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
    *
    * Capa 34 — el body acepta `dataProduccio` para la línea nueva (antes no
    * existía este campo acá, sólo se podía fijar después vía
-   * `PATCH .../linies/:liniaId`). Se valida contra las fechas de cabecera YA
-   * GUARDADAS del pedido (reglas 4/5/6 de `validarCoherenciaDatesComanda`).
+   * `PATCH .../linies/:liniaId`). Si viene, se valida contra las fechas de
+   * cabecera YA GUARDADAS del pedido (reglas 4/5/6 de
+   * `validarCoherenciaDatesComanda`).
    *
-   * Issue #16 (Francesc/Michelle, confirmado en segunda ronda) —
-   * `dataProduccio` pasó de opcional a OBLIGATORIA acá también: el issue
-   * original sólo lo exigió en `POST /comandes` (alta en bloque) y dejó
-   * este endpoint explícitamente afuera; se confirmó después que el mismo
-   * criterio aplica a agregar una línea a un pedido ya existente.
+   * Issue #21 — dataProduccio deja de ser obligatoria acá (revierte la
+   * decisión de issue #16, que la había igualado a `POST /comandes`).
    */
   fastify.post('/comandes/:comandaId/linies', async (req, reply) => {
     const comandaUuid = await resolverComandaOResponder(
@@ -1083,20 +1081,12 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       producteId: number;
       unitatsDemanades: number;
       kgDemanats: string;
-      dataProduccio: string;
+      dataProduccio: string | null;
     }>;
 
     if (cos.producteId === undefined) {
       return enviarValidacio(reply, 'producteId és obligatori', [
         { camp: 'producteId', missatge: 'és obligatori' },
-      ]);
-    }
-    // Issue #16 (Francesc/Michelle) — ver nota a la JSDoc d'aquest endpoint:
-    // dataProduccio passa a ser obligatòria també acá, mateix criteri que
-    // POST /comandes.
-    if (!cos.dataProduccio || cos.dataProduccio.trim() === '') {
-      return enviarValidacio(reply, 'dataProduccio és obligatori', [
-        { camp: 'dataProduccio', missatge: 'és obligatori' },
       ]);
     }
     // Capa 38 — ver nota equivalente en POST /comandes.
@@ -1138,9 +1128,10 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
     }
 
     // Capa 34 — validar la dataProduccio de la línia nova contra les dates
-    // de capçalera JA GUARDADES d'aquest pedido, abans d'inserir res. Issue
-    // #16: ja no cal el guard `dataProduccio !== undefined` d'abans — ara és
-    // obligatòria, sempre hi és en aquest punt.
+    // de capçalera JA GUARDADES d'aquest pedido, abans d'inserir res.
+    // Issue #21 — dataProduccio ja no és obligatòria: si no ve
+    // (undefined/null), validarCoherenciaDatesComanda la salta sola (ja
+    // tolera aquest cas, ver comu de les 6 regles).
     {
       const capcalera = await pool.query<{
         data_produccio: Date | null;
@@ -1200,7 +1191,10 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
           pesFitxaKg,
           pesCalculatKg,
           pesEditable,
-          cos.dataProduccio,
+          // Issue #21 — normalizada a null, mismo patrón que la línea 776
+          // (cos.obsLliurament ?? null): dataProduccio ya no es obligatoria,
+          // pero el parámetro no debe recibir `undefined` crudo.
+          cos.dataProduccio ?? null,
         ],
       );
 

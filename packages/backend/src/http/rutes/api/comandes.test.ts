@@ -462,12 +462,12 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       await fastify.close();
     });
 
-    // Issue #16 (Francesc) — BREAKING: antes dataProduccio de línia era
-    // opcional (null por defecto, cargable después). Ahora es OBLIGATORIA,
-    // sin valor por defecto — este test reemplaza al que verificaba el
-    // comportamiento viejo (ya no reproducible vía la API: POST /comandes
-    // rechaza una línia sin dataProduccio antes de escribir nada).
-    it('POST /comandes amb una línia sense dataProduccio rebutja amb 400 VALIDACIO', async () => {
+    // Issue #21 — revierte issue #16: dataProduccio de línia vuelve a ser
+    // opcional (null por defecto, cargable después vía
+    // PATCH .../linies/:liniaId). Este test reemplaza al que verificaba el
+    // comportamiento OBLIGATORIO de issue #16 (ya no reproducible vía la
+    // API: POST /comandes ahora acepta una línia sin dataProduccio).
+    it('POST /comandes amb una línia sense dataProduccio accepta amb 201, dataProduccio queda null', async () => {
       const fastify = construirServidor();
       const res = await fastify.inject({
         method: 'POST',
@@ -480,8 +480,9 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         },
       });
 
-      expect(res.statusCode).toBe(400);
-      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+      expect(res.statusCode).toBe(201);
+      const cuerpo = cuerpoJson<ComandaDetallApi>(res);
+      expect(cuerpo.linies[0]!.dataProduccio).toBeNull();
 
       await fastify.close();
     });
@@ -2265,7 +2266,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
   // dataLliurament (regla 7, nova) i (2) dataProduccio també passa a ser
   // obligatòria a POST /comandes/:comandaId/linies (abans quedava fora
   // d'aquest abast a propòsit).
-  describe('issue #16 (segona ronda) — regla 7 (dataComanda vs dataLliurament) i dataProduccio obligatòria a .../linies', () => {
+  describe('issue #16 (segona ronda) — regla 7 (dataComanda vs dataLliurament); dataProduccio a .../linies ja NO obligatòria (issue #21)', () => {
     it('POST /comandes amb dataComanda posterior a dataLliurament rebutja amb 400 VALIDACIO', async () => {
       const fastify = construirServidor();
       const res = await fastify.inject({
@@ -2386,7 +2387,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       await fastify.close();
     });
 
-    it('POST /comandes/:comandaId/linies sense dataProduccio rebutja amb 400 VALIDACIO', async () => {
+    it('POST /comandes/:comandaId/linies sense dataProduccio accepta amb 201, dataProduccio queda null', async () => {
       const fastify = construirServidor();
       const creada = await fastify.inject({
         method: 'POST',
@@ -2412,8 +2413,13 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         payload: { producteId: producteFitxaId, unitatsDemanades: 1 },
       });
 
-      expect(res.statusCode).toBe(400);
-      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+      expect(res.statusCode).toBe(201);
+      const cuerpo = cuerpoJson<ComandaDetallApi>(res);
+      // Ordenat per ordinal ASC (ver SELECT_COMANDA_LINIA): la línia nova
+      // (afegida després) és sempre l'última — el mateix producteFitxaId
+      // que la línia original faria ambigu buscar-la per producte.
+      expect(cuerpo.linies).toHaveLength(2);
+      expect(cuerpo.linies[1]!.dataProduccio).toBeNull();
 
       await fastify.close();
     });

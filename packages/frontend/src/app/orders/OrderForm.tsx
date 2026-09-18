@@ -155,11 +155,9 @@ function toLiniaCreacio(line: LineDraft): LiniaCreacioApi {
     // GET), però el body de POST/PATCH segueix esperant un JS number.
     unitatsDemanades: Number(line.unitatsDemanades),
     kgDemanats: line.kgEditable ? line.kgDemanats : undefined,
-    // Issue #16 — LiniaCreacioApi.dataProduccio ja no admet null (igual que
-    // LiniaAfegidaApi): el `!` és segur perquè submit() bloqueja abans amb
-    // un error clar si alguna línia nova no té data (mateix criteri que
-    // `line.producte!.id` a dalt, ja validat per `touchedLines`).
-    dataProduccio: line.dataProduccio!,
+    // Issue #21 — LiniaCreacioApi.dataProduccio torna a admetre null: ja no
+    // hi ha cap bloqueig de submit que en garanteixi la presència.
+    dataProduccio: line.dataProduccio,
   };
 }
 
@@ -420,6 +418,15 @@ function LineFormCard({
             className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
           />
           {dateError && <span className="text-xs text-red-600">{dateError}</span>}
+          {/* Issue #21 — indicador informatiu, no una incidència: dataProduccio
+              ja no és obligatòria, però una línia ja existent (persistida)
+              sense data assignada val la pena que es noti a primer cop d'ull,
+              en comptes de confondre's amb un input buit qualsevol. Només per
+              a línies ja existents (line.id > 0) — una línia nova encara no
+              tocada no és "un problema", és l'estat inicial normal. */}
+          {line.id > 0 && line.dataProduccio === null && (
+            <Badge variant="neutral">Sense data assignada</Badge>
+          )}
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-xs text-gray-500">Unitats demanades</span>
@@ -799,12 +806,11 @@ export const OrderForm = forwardRef<
       // deia `validLines` i descartava en silenci qualsevol línia amb
       // producte triat però unitatsDemanades <= 0 (el default d'una línia
       // nova és "0", n'hi ha prou amb triar el producte i no tocar
-      // unitats): la línia desapareixia del guardat sense arribar ni al
-      // chequeo de dataProduccio de sota, i sense cap avís — l'usuari
-      // creia que s'havia guardat. Una línia amb producte triat és una
-      // línia que l'usuari ha tocat de veritat; si li falta alguna cosa,
-      // s'ha de bloquejar el guardat amb un missatge, mai descartar-la en
-      // silenci. Només les línies COMPLETAMENT buides (producte === null,
+      // unitats): la línia desapareixia del guardat sense cap avís —
+      // l'usuari creia que s'havia guardat. Una línia amb producte triat és
+      // una línia que l'usuari ha tocat de veritat; si li falta alguna
+      // cosa, s'ha de bloquejar el guardat amb un missatge, mai descartar-la
+      // en silenci. Només les línies COMPLETAMENT buides (producte === null,
       // mai tocades — les files de sobra sense usar) es descarten sense
       // avís, tal com ja passava.
       const touchedLines = lines.filter((line) => line.producte !== null);
@@ -813,20 +819,13 @@ export const OrderForm = forwardRef<
         return;
       }
 
-      // Issue #16 — dataProduccio passa a OBLIGATÒRIA per a qualsevol línia
-      // NOVA (tant embeguda a la creació com afegida després amb "Afegir
-      // línia"), mai per a línies ja existents que només s'estan editant
-      // (LiniaEdicioApi.dataProduccio segueix sent opcional). Es talla acá
-      // amb un missatge clar en comptes de deixar que el 400 cru del
-      // backend arribi sense context.
+      // Issue #21 — dataProduccio de línia ja no és obligatòria (revertia
+      // issue #16): `newLines` es manté (es reutilitza més avall per a
+      // `lineChanges.novaLinies`), només es treu el bloqueig de submit.
       const newLines =
         mode === 'create'
           ? touchedLines
           : touchedLines.filter((line) => dirtyLineIds.has(line.id) && line.id < 0);
-      if (newLines.some((line) => !line.dataProduccio)) {
-        setError('Cal indicar la Data producció de cada línia nova abans de desar.');
-        return;
-      }
 
       // Capa 30 — en edición, las línias nuevas/editadas se guardan por su
       // propio endpoint (POST/PATCH .../linies), nunca embebidas en el
@@ -1234,6 +1233,14 @@ export const OrderForm = forwardRef<
                       />
                       {lineDateError && (
                         <p className="mt-1 text-xs text-red-600">{lineDateError}</p>
+                      )}
+                      {/* Issue #21 — mateix criteri que a la vista de card:
+                          indicador informatiu, no una incidència; només per a
+                          línies ja existents (line.id > 0). */}
+                      {line.id > 0 && line.dataProduccio === null && (
+                        <div className="mt-1">
+                          <Badge variant="neutral">Sense data assignada</Badge>
+                        </div>
                       )}
                     </td>
                     <td className="px-1.5 py-2">

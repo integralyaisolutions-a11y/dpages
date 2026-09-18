@@ -351,16 +351,16 @@ export interface LiniaCreacioApi {
   /** Sólo tiene sentido si el artículo es "a medida" — se ignora si tiene peso de ficha. */
   kgDemanats?: string;
   /**
-   * Issue #16 (Francesc) — BREAKING: pasó de opcional a OBLIGATORIA, sin
-   * valor por defecto (regla de negocio confirmada con Michelle/Francesc).
-   * Antes (capa 34) era opcional; antes de eso sólo se podía fijar después,
-   * vía `PATCH /comandes/:comandaId/linies/:liniaId`. Se sigue validando
-   * contra las fechas de cabecera del pedido (las 6 reglas de coherencia
-   * temporal, ver docs/contrato-api.md § 4.5) — en `POST /comandes` sólo
-   * contra `dataLliurament` (única fecha de cabecera que existe en ese
-   * body).
+   * Issue #21 — vuelve a ser opcional (revierte el BREAKING de issue #16,
+   * que la había hecho obligatoria sin valor por defecto). Si viene, se
+   * sigue validando contra las fechas de cabecera del pedido (las 6 reglas
+   * de coherencia temporal, ver docs/contrato-api.md § 4.5) — en
+   * `POST /comandes` sólo contra `dataLliurament` (única fecha de cabecera
+   * que existe en ese body). Si falta, esas reglas simplemente no se
+   * evalúan para esa línea (mismo criterio que cualquier otra fecha
+   * opcional del contrato).
    */
-  dataProduccio: string;
+  dataProduccio?: string | null;
 }
 
 export interface ComandaCreacioApi {
@@ -401,17 +401,18 @@ export interface ComandaCreacioApi {
  * Dejó de ser un simple alias de `LiniaCreacioApi` cuando el issue #16
  * original hizo `dataProduccio` obligatoria sólo en `POST /comandes`, dejando
  * este endpoint (agregar línea a un pedido ya existente) sin tocar. Michelle/
- * Francesc confirmaron después que el mismo criterio aplica acá también —
- * `dataProduccio` pasa a OBLIGATORIA con el mismo criterio que
- * `LiniaCreacioApi`. Se mantiene como interfaz propia (no se vuelve a
- * alias-ear) porque el resto de la forma (sin `producteId` como parte de un
- * array, endpoint distinto) sigue siendo conceptualmente independiente.
+ * Francesc confirmaron después que el mismo criterio aplica acá también.
+ * Issue #21 la revierte a opcional en ambas interfaces por igual, mismo
+ * shape que `LiniaCreacioApi.dataProduccio`. Se mantiene como interfaz
+ * propia (no se vuelve a alias-ear) porque el resto de la forma (sin
+ * `producteId` como parte de un array, endpoint distinto) sigue siendo
+ * conceptualmente independiente.
  */
 export interface LiniaAfegidaApi {
   producteId: number;
   unitatsDemanades: number;
   kgDemanats?: string;
-  dataProduccio: string;
+  dataProduccio?: string | null;
 }
 
 /**
