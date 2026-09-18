@@ -50,6 +50,8 @@ type UsePanellEmpaquetatResult = {
     liniaId: number,
     body: LliuramentBodyApi,
   ) => Promise<LliuramentSaveResult>;
+  /** Issue #19 — desfer una línia ja confirmada: reseteja confirmatA/confirmatPer, mai toca unitats/kg. */
+  undoLliurament: (comandaId: number, liniaId: number) => Promise<LliuramentSaveResult>;
 };
 
 // Paginació real (20/pàgina), mateix criteri que usePanellOficina.ts/usePanellObrador.ts.
@@ -146,5 +148,33 @@ export function usePanellEmpaquetat(
     [],
   );
 
-  return { data, totals, paginacio, pagina, setPagina, isLoading, error, refetch, saveLliurament };
+  // Issue #19 — sense body: desfer sempre és la mateixa operació. Reutilitza
+  // LliuramentSaveResult (fieldErrors sempre buit acá, no hi ha cap camp a
+  // validar) per no afegir un tipus de resultat nou només per aquest cas.
+  const undoLliurament = useCallback(
+    async (comandaId: number, liniaId: number): Promise<LliuramentSaveResult> => {
+      try {
+        await api.patch(`/comandes/${comandaId}/linies/${liniaId}/lliurament/desfer`);
+        refetch();
+        return { success: true };
+      } catch (caught) {
+        const generalError = caught instanceof ApiError ? caught.message : 'Error desconegut.';
+        return { success: false, fieldErrors: {}, generalError };
+      }
+    },
+    [],
+  );
+
+  return {
+    data,
+    totals,
+    paginacio,
+    pagina,
+    setPagina,
+    isLoading,
+    error,
+    refetch,
+    saveLliurament,
+    undoLliurament,
+  };
 }

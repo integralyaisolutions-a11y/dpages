@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { AsyncCombobox, type ComboboxOption } from '@/components/ui/AsyncCombobox';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ClearFiltersButton, FilterBar } from '@/components/ui/FilterBar';
 import { DataCard, DataCardActions, DataCardField, DataCardGrid } from '@/components/ui/DataCard';
 import { DateInput } from '@/components/ui/DateInput';
@@ -52,18 +53,28 @@ function initialDeliveredValue(value: string, confirmatA: string | null): string
   return confirmatA === null && Number(value) === 0 ? '0' : value;
 }
 
-// De sólo lectura — l'únic camí real per marcar-la és carregar unitats/kg i
-// Guardar (que confirma al backend, ver PATCH .../lliurament); aquest
-// checkbox només reflecteix confirmatA, mai el modifica. Mateix tractament
-// que qualsevol checkbox disabled del projecte (ver office/page.tsx).
-function WorkedCheckbox({ confirmatA }: { confirmatA: string | null }) {
+// Issue #19 — abans era sempre disabled (l'única forma de marcar-la era
+// carregar unitats/kg i Guardar). Ara, si la línia ja està confirmada,
+// aquest mateix checkbox és l'acció per desfer-la (onRequestUndo obre el
+// ConfirmDialog, mai muta l'estat directament des d'acá). Sobre una línia
+// encara pendent (confirmatA === null) segueix sent purament informatiu i
+// disabled — no té sentit "desfer" una confirmació que mai va existir.
+function WorkedCheckbox({
+  confirmatA,
+  onRequestUndo,
+}: {
+  confirmatA: string | null;
+  onRequestUndo?: () => void;
+}) {
+  const isConfirmed = confirmatA !== null;
   return (
     <input
       type="checkbox"
-      checked={confirmatA !== null}
-      disabled
-      aria-label={confirmatA !== null ? 'Línia treballada' : 'Línia pendent'}
-      className="h-4 w-4 rounded border-gray-300 text-ink"
+      checked={isConfirmed}
+      disabled={!isConfirmed}
+      onChange={onRequestUndo}
+      aria-label={isConfirmed ? 'Desfer confirmació de la línia' : 'Línia pendent'}
+      className="h-4 w-4 rounded border-gray-300 text-ink disabled:cursor-not-allowed"
     />
   );
 }
@@ -89,6 +100,7 @@ type Draft = { unitatsLliurades: string; kgLliurats: string };
 function PackagingRow({
   line,
   onSave,
+  onRequestUndo,
 }: {
   line: FilaPanellEmpaquetatApi;
   onSave: (
@@ -97,6 +109,7 @@ function PackagingRow({
     unitatsLliurades: number,
     kgLliurats: string,
   ) => Promise<LliuramentSaveResult>;
+  onRequestUndo: (line: FilaPanellEmpaquetatApi) => void;
 }) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -131,7 +144,10 @@ function PackagingRow({
       <td
         className={`${leftBorderClass(line.confirmatA)} hidden px-3 py-3 text-center xl:table-cell`}
       >
-        <WorkedCheckbox confirmatA={line.confirmatA} />
+        <WorkedCheckbox
+          confirmatA={line.confirmatA}
+          onRequestUndo={line.confirmatA !== null ? () => onRequestUndo(line) : undefined}
+        />
       </td>
       <td className="hidden px-3 py-3 break-words text-gray-900 xl:table-cell">
         {line.dataExpedicio ? formatData(line.dataExpedicio, false) : '—'}
@@ -194,6 +210,7 @@ function PackagingRow({
 function PackagingCard({
   line,
   onSave,
+  onRequestUndo,
 }: {
   line: FilaPanellEmpaquetatApi;
   onSave: (
@@ -202,6 +219,7 @@ function PackagingCard({
     unitatsLliurades: number,
     kgLliurats: string,
   ) => Promise<LliuramentSaveResult>;
+  onRequestUndo: (line: FilaPanellEmpaquetatApi) => void;
 }) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -239,7 +257,10 @@ function PackagingCard({
             <p className="font-semibold text-gray-900">{line.producte}</p>
             <p className="text-sm text-gray-500">{line.client ?? '—'}</p>
           </div>
-          <WorkedCheckbox confirmatA={line.confirmatA} />
+          <WorkedCheckbox
+            confirmatA={line.confirmatA}
+            onRequestUndo={line.confirmatA !== null ? () => onRequestUndo(line) : undefined}
+          />
         </div>
 
         <div className="mt-3">
@@ -375,8 +396,49 @@ export default function PackagingPage() {
   // /panells/empaquetat, ORDER BY confirmat_a IS NOT NULL ASC), sense cap
   // paràmetre — confirmat amb curl real abans de treure el sort
   // client-side que hi havia acá com a pedaç temporal.
-  const { data, totals, paginacio, setPagina, isLoading, error, refetch, saveLliurament } =
-    usePanellEmpaquetat(filters);
+  const {
+    data,
+    totals,
+    paginacio,
+    setPagina,
+    isLoading,
+    error,
+    refetch,
+    saveLliurament,
+    undoLliurament,
+  } = usePanellEmpaquetat(filters);
+
+  // Issue #19 — estat del diàleg de confirmació de "desfer" alçat a la
+  // pàgina (mateix patró que categories/page.tsx amb categoryToDelete): un
+  // sol ConfirmDialog al final del JSX, no un per fila (Modal no fa
+  // portal, un <div className="fixed..."> dins d'un <tr> seria HTML
+  // invàlid).
+  const [lineToUndo, setLineToUndo] = useState<FilaPanellEmpaquetatApi | null>(null);
+  const [undoError, setUndoError] = useState<string | null>(null);
+  const [isUndoing, setIsUndoing] = useState(false);
+
+  function handleRequestUndo(line: FilaPanellEmpaquetatApi) {
+    setUndoError(null);
+    setLineToUndo(line);
+  }
+
+  function handleCancelUndo() {
+    setLineToUndo(null);
+    setUndoError(null);
+  }
+
+  async function handleConfirmUndo() {
+    if (!lineToUndo) return;
+    setIsUndoing(true);
+    setUndoError(null);
+    const result = await undoLliurament(lineToUndo.comandaId, lineToUndo.liniaId);
+    setIsUndoing(false);
+    if (result.success) {
+      setLineToUndo(null);
+    } else {
+      setUndoError(result.generalError);
+    }
+  }
 
   function clearFilters() {
     setShippingDateFilter('');
@@ -473,7 +535,12 @@ export default function PackagingPage() {
         <>
           <div className="flex flex-col gap-3 md:hidden">
             {data.map((line) => (
-              <PackagingCard key={line.liniaId} line={line} onSave={handleSave} />
+              <PackagingCard
+                key={line.liniaId}
+                line={line}
+                onSave={handleSave}
+                onRequestUndo={handleRequestUndo}
+              />
             ))}
           </div>
 
@@ -518,7 +585,12 @@ export default function PackagingPage() {
               </thead>
               <tbody>
                 {data.map((line) => (
-                  <PackagingRow key={line.liniaId} line={line} onSave={handleSave} />
+                  <PackagingRow
+                    key={line.liniaId}
+                    line={line}
+                    onSave={handleSave}
+                    onRequestUndo={handleRequestUndo}
+                  />
                 ))}
               </tbody>
             </table>
@@ -527,6 +599,18 @@ export default function PackagingPage() {
           {paginacio && <Pagination paginacio={paginacio} onPageChange={setPagina} />}
         </>
       )}
+
+      <ConfirmDialog
+        isOpen={lineToUndo !== null}
+        title="Desfer confirmació"
+        message="Vols desfer la confirmació d'aquesta línia? Les quantitats es mantindran, però la línia tornarà a estar pendent."
+        confirmLabel="Desfer"
+        confirmingLabel="Desfent..."
+        onConfirm={handleConfirmUndo}
+        onCancel={handleCancelUndo}
+        errorMessage={undoError}
+        isConfirming={isUndoing}
+      />
     </div>
   );
 }

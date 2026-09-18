@@ -28,6 +28,39 @@ export type WorkshopPanelFilters = {
 /** Capa 40 — `PATCH .../treball`. El 409 (comanda congelada) no porta `detalls` per camp, mateix criteri que `LliuramentSaveResult`. */
 export type ToggleTreballResult = { success: true } | { success: false; error: string };
 
+/**
+ * Issue del reordenament immediat — replica DELIBERADAMENT el mateix
+ * ORDER BY de `GET /panells/obrador` (panells.ts:349): `(treballat_a IS
+ * NOT NULL) ASC, data_produccio ASC NULLS LAST, num ASC, ordinal ASC`. Si
+ * algú canvia aquell ORDER BY en el futur, aquest comparador s'ha
+ * d'actualitzar igual.
+ *
+ * Incompleta A PROPÒSIT: `num` (comanda) i `ordinal` (línia) NOMÉS es fan
+ * servir al ORDER BY del backend, mai es seleccionen ni viatgen a
+ * `FilaPanellObradorApi` (confirmat contra el SELECT real de panells.ts) —
+ * no hi ha manera d'aplicar-los acá sense afegir camps nous al contracte,
+ * fora de l'abast d'aquest canvi. En comptes d'això, ens recolzem en que
+ * `Array.prototype.sort` és estable (garantit des d'ES2019): quan dues
+ * files empaten en `treballatA`/`dataProduccio`, mantenen l'ordre relatiu
+ * que ja tenien a `current` — que, per a qualsevol fila que no s'acaba de
+ * tocar, ja reflecteix el num/ordinal real del darrer fetch complet. Només
+ * la fila que s'acaba de marcar/desmarcar pot quedar mal ordenada DINS
+ * d'un empat exacte (mateix treballatA i mateixa dataProduccio) amb altres
+ * files — un cas marginal, no el problema real que es reporta.
+ */
+function compararOrdreObrador(a: FilaPanellObradorApi, b: FilaPanellObradorApi): number {
+  const aTreballada = a.treballatA !== null;
+  const bTreballada = b.treballatA !== null;
+  if (aTreballada !== bTreballada) return aTreballada ? 1 : -1;
+
+  if (a.dataProduccio === null && b.dataProduccio === null) return 0;
+  if (a.dataProduccio === null) return 1; // NULLS LAST
+  if (b.dataProduccio === null) return -1;
+  if (a.dataProduccio < b.dataProduccio) return -1;
+  if (a.dataProduccio > b.dataProduccio) return 1;
+  return 0;
+}
+
 type UsePanellObradorResult = {
   data: FilaPanellObradorApi[];
   totals: TotalsPanellObradorApi | null;
@@ -125,11 +158,13 @@ export function usePanellObrador(filters: WorkshopPanelFilters = {}): UsePanellO
           { marcat },
         );
         setData((current) =>
-          current.map((line) =>
-            line.liniaId === liniaId
-              ? { ...line, treballatA: resposta.treballatA, treballatPer: resposta.treballatPer }
-              : line,
-          ),
+          current
+            .map((line) =>
+              line.liniaId === liniaId
+                ? { ...line, treballatA: resposta.treballatA, treballatPer: resposta.treballatPer }
+                : line,
+            )
+            .sort(compararOrdreObrador),
         );
         return { success: true };
       } catch (caught) {

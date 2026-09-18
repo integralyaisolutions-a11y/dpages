@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { AsyncCombobox } from '@/components/ui/AsyncCombobox';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ClearFiltersButton, FilterBar } from '@/components/ui/FilterBar';
 import { DataCard, DataCardField, DataCardGrid } from '@/components/ui/DataCard';
 import { DateInput } from '@/components/ui/DateInput';
@@ -32,10 +33,16 @@ function leftBorderClass(treballat: boolean) {
  * Capa 40 — a diferència del checkbox de sòl lectura d'Empaquetat
  * (`WorkedCheckbox`, packaging/page.tsx), aquest SÍ dispara la crida real:
  * el propi click és l'acció, sense formulari ni botó "Guardar" separat.
- * Estat optimista local: es marca/desmarca a l'instant i es desactiva
- * mentre la crida està en curs; si falla, torna a l'últim valor confirmat
- * pel servidor (`treballatA`, mai tocat mentre la crida falla) i mostra
+ * Estat optimista local: es marca a l'instant i es desactiva mentre la
+ * crida està en curs; si falla, torna a l'últim valor confirmat pel
+ * servidor (`treballatA`, mai tocat mentre la crida falla) i mostra
  * l'error just sota el checkbox d'aquesta fila, no de tota la pantalla.
+ *
+ * Consistència amb Empaquetat (WorkedCheckbox, packaging/page.tsx) — aquest
+ * hook ja NOMÉS gestiona el sentit "marcar" (pendent → treballada): el
+ * sentit "desmarcar" ja no és instantani, requereix el ConfirmDialog alçat
+ * a la pàgina (mateix patró que "desfer" a Empaquetat) abans de cridar
+ * `onToggle(..., false)`.
  */
 function useTreballToggle(
   comandaId: number,
@@ -49,18 +56,17 @@ function useTreballToggle(
 
   const checked = pending ?? treballatA !== null;
 
-  async function handleChange() {
-    const next = !checked;
-    setPending(next);
+  async function markAsDone() {
+    setPending(true);
     setIsToggling(true);
     setError(null);
-    const result = await onToggle(comandaId, liniaId, next);
+    const result = await onToggle(comandaId, liniaId, true);
     setIsToggling(false);
     setPending(null);
     if (!result.success) setError(result.error);
   }
 
-  return { checked, isToggling, error, handleChange };
+  return { checked, isToggling, error, markAsDone };
 }
 
 function TreballCheckbox({
@@ -78,7 +84,7 @@ function TreballCheckbox({
       checked={checked}
       disabled={disabled}
       onChange={onChange}
-      aria-label={checked ? 'Marcar com a pendent' : 'Marcar com a treballada'}
+      aria-label={checked ? 'Desmarcar línia treballada' : 'Marcar com a treballada'}
       className="h-4 w-4 rounded border-gray-300 text-ink disabled:cursor-not-allowed disabled:opacity-60"
     />
   );
@@ -87,16 +93,26 @@ function TreballCheckbox({
 function WorkshopCard({
   line,
   onToggle,
+  onRequestUnmark,
 }: {
   line: FilaPanellObradorApi;
   onToggle: (comandaId: number, liniaId: number, marcat: boolean) => Promise<ToggleTreballResult>;
+  onRequestUnmark: (line: FilaPanellObradorApi) => void;
 }) {
-  const { checked, isToggling, error, handleChange } = useTreballToggle(
+  const { checked, isToggling, error, markAsDone } = useTreballToggle(
     line.comandaId,
     line.liniaId,
     line.treballatA,
     onToggle,
   );
+
+  function handleChange() {
+    if (checked) {
+      onRequestUnmark(line);
+    } else {
+      markAsDone();
+    }
+  }
 
   return (
     <div className="relative overflow-hidden rounded-xl">
@@ -138,16 +154,26 @@ function WorkshopCard({
 function WorkshopRow({
   line,
   onToggle,
+  onRequestUnmark,
 }: {
   line: FilaPanellObradorApi;
   onToggle: (comandaId: number, liniaId: number, marcat: boolean) => Promise<ToggleTreballResult>;
+  onRequestUnmark: (line: FilaPanellObradorApi) => void;
 }) {
-  const { checked, isToggling, error, handleChange } = useTreballToggle(
+  const { checked, isToggling, error, markAsDone } = useTreballToggle(
     line.comandaId,
     line.liniaId,
     line.treballatA,
     onToggle,
   );
+
+  function handleChange() {
+    if (checked) {
+      onRequestUnmark(line);
+    } else {
+      markAsDone();
+    }
+  }
 
   return (
     <tr className="border-b border-gray-100 last:border-0">
@@ -219,6 +245,36 @@ export default function WorkshopPage() {
   // que hi havia acá com a pedaç temporal.
   const { data, totals, paginacio, setPagina, isLoading, error, refetch, toggleTreball } =
     usePanellObrador(filters);
+
+  // Consistència amb Empaquetat (lineToUndo, packaging/page.tsx) — mateix
+  // patró: estat del diàleg alçat a la pàgina, un sol ConfirmDialog al
+  // final del JSX en comptes d'un per fila.
+  const [lineToUnmark, setLineToUnmark] = useState<FilaPanellObradorApi | null>(null);
+  const [unmarkError, setUnmarkError] = useState<string | null>(null);
+  const [isUnmarking, setIsUnmarking] = useState(false);
+
+  function handleRequestUnmark(line: FilaPanellObradorApi) {
+    setUnmarkError(null);
+    setLineToUnmark(line);
+  }
+
+  function handleCancelUnmark() {
+    setLineToUnmark(null);
+    setUnmarkError(null);
+  }
+
+  async function handleConfirmUnmark() {
+    if (!lineToUnmark) return;
+    setIsUnmarking(true);
+    setUnmarkError(null);
+    const result = await toggleTreball(lineToUnmark.comandaId, lineToUnmark.liniaId, false);
+    setIsUnmarking(false);
+    if (result.success) {
+      setLineToUnmark(null);
+    } else {
+      setUnmarkError(result.error);
+    }
+  }
 
   function clearFilters() {
     setProductFilter(ALL);
@@ -296,7 +352,12 @@ export default function WorkshopPage() {
         <>
           <div className="flex flex-col gap-3 md:hidden">
             {data.map((line) => (
-              <WorkshopCard key={line.liniaId} line={line} onToggle={toggleTreball} />
+              <WorkshopCard
+                key={line.liniaId}
+                line={line}
+                onToggle={toggleTreball}
+                onRequestUnmark={handleRequestUnmark}
+              />
             ))}
           </div>
 
@@ -335,7 +396,12 @@ export default function WorkshopPage() {
               </thead>
               <tbody>
                 {data.map((line) => (
-                  <WorkshopRow key={line.liniaId} line={line} onToggle={toggleTreball} />
+                  <WorkshopRow
+                    key={line.liniaId}
+                    line={line}
+                    onToggle={toggleTreball}
+                    onRequestUnmark={handleRequestUnmark}
+                  />
                 ))}
               </tbody>
             </table>
@@ -344,6 +410,18 @@ export default function WorkshopPage() {
           {paginacio && <Pagination paginacio={paginacio} onPageChange={setPagina} />}
         </>
       )}
+
+      <ConfirmDialog
+        isOpen={lineToUnmark !== null}
+        title="Desmarcar línia"
+        message="Vols desmarcar aquesta línia com a treballada? Tornarà a aparèixer com a pendent."
+        confirmLabel="Desmarcar"
+        confirmingLabel="Desmarcant..."
+        onConfirm={handleConfirmUnmark}
+        onCancel={handleCancelUnmark}
+        errorMessage={unmarkError}
+        isConfirming={isUnmarking}
+      />
     </div>
   );
 }

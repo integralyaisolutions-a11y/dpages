@@ -452,6 +452,18 @@ export interface LliuramentRespostaApi {
   confirmatPer: { id: number; nom: string };
 }
 
+/**
+ * Issue #19 — `PATCH /comandes/:comandaId/linies/:liniaId/lliurament/desfer`.
+ * Sin body: siempre resetea confirmatA/confirmatPer a null y nunca toca
+ * unitatsLliurades/kgLliurats (se mantienen tal cual quedaron).
+ */
+export interface LliuramentDesferRespostaApi {
+  liniaId: number;
+  comandaId: number;
+  confirmatA: null;
+  confirmatPer: null;
+}
+
 // ── Capa 40 · Treball (Panell Obrador) ──────────────────────────────────
 
 export interface TreballBodyApi {
