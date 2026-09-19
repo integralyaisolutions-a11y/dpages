@@ -227,43 +227,55 @@ export function registrarRutesClients(fastify: FastifyInstance): void {
       }
     }
 
-    const resultat = await pool.query<{ id: string }>(
-      `UPDATE client SET
-         nom = CASE WHEN $2 THEN $3 ELSE nom END,
-         nif = CASE WHEN $4 THEN $5 ELSE nif END,
-         email = CASE WHEN $6 THEN $7 ELSE email END,
-         telefon = CASE WHEN $8 THEN $9 ELSE telefon END,
-         poblacio = CASE WHEN $10 THEN $11 ELSE poblacio END,
-         tarifa_id = CASE WHEN $12 THEN $13 ELSE tarifa_id END,
-         transportista_defecte_id = CASE WHEN $14 THEN $15 ELSE transportista_defecte_id END,
-         actiu = COALESCE($16, actiu)
-       WHERE id_seq = $1
-       RETURNING id`,
-      [
+    try {
+      const resultat = await pool.query<{ id: string }>(
+        `UPDATE client SET
+           nom = CASE WHEN $2 THEN $3 ELSE nom END,
+           nif = CASE WHEN $4 THEN $5 ELSE nif END,
+           email = CASE WHEN $6 THEN $7 ELSE email END,
+           telefon = CASE WHEN $8 THEN $9 ELSE telefon END,
+           poblacio = CASE WHEN $10 THEN $11 ELSE poblacio END,
+           tarifa_id = CASE WHEN $12 THEN $13 ELSE tarifa_id END,
+           transportista_defecte_id = CASE WHEN $14 THEN $15 ELSE transportista_defecte_id END,
+           actiu = COALESCE($16, actiu)
+         WHERE id_seq = $1
+         RETURNING id`,
+        [
+          idPublic,
+          cos.nom !== undefined,
+          cos.nom ?? null,
+          cos.nif !== undefined,
+          cos.nif ?? null,
+          cos.email !== undefined,
+          cos.email ?? null,
+          cos.telefon !== undefined,
+          cos.telefon ?? null,
+          cos.poblacio !== undefined,
+          cos.poblacio ?? null,
+          tarifaUuid !== undefined,
+          tarifaUuid ?? null,
+          transportistaUuid !== undefined,
+          transportistaUuid ?? null,
+          cos.actiu ?? null,
+        ],
+      );
+
+      if (!resultat.rows[0]) return enviarNoTrobat(reply, 'Client no trobat');
+
+      const actualitzat = await pool.query<FilaClient>(`${SELECT_CLIENT} WHERE cl.id_seq = $1`, [
         idPublic,
-        cos.nom !== undefined,
-        cos.nom ?? null,
-        cos.nif !== undefined,
-        cos.nif ?? null,
-        cos.email !== undefined,
-        cos.email ?? null,
-        cos.telefon !== undefined,
-        cos.telefon ?? null,
-        cos.poblacio !== undefined,
-        cos.poblacio ?? null,
-        tarifaUuid !== undefined,
-        tarifaUuid ?? null,
-        transportistaUuid !== undefined,
-        transportistaUuid ?? null,
-        cos.actiu ?? null,
-      ],
-    );
-
-    if (!resultat.rows[0]) return enviarNoTrobat(reply, 'Client no trobat');
-
-    const actualitzat = await pool.query<FilaClient>(`${SELECT_CLIENT} WHERE cl.id_seq = $1`, [
-      idPublic,
-    ]);
-    return aApi(actualitzat.rows[0]!);
+      ]);
+      return aApi(actualitzat.rows[0]!);
+    } catch (err) {
+      if (esViolacioCodiUnic(err)) {
+        return enviarConflicte(
+          reply,
+          cos.nif !== undefined
+            ? `Ja existeix un client amb el NIF "${cos.nif}"`
+            : `Ja existeix un client amb l'email "${cos.email}"`,
+        );
+      }
+      throw err;
+    }
   });
 }

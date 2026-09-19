@@ -3,8 +3,10 @@ import type { FastifyInstance } from 'fastify';
 import { pool } from '../../../db/pool.js';
 import {
   construirPaginacio,
+  enviarConflicte,
   enviarNoTrobat,
   enviarValidacio,
+  esViolacioCodiUnic,
   parsearIdPublic,
   parsearPaginacio,
   resolverCategoriaUuid,
@@ -198,42 +200,53 @@ export function registrarRutesProductes(fastify: FastifyInstance): void {
       }
     }
 
-    const insertat = await pool.query<FilaProducte>(
-      `WITH nou AS (
-         INSERT INTO producte (codi, descripcio, descripcio_venda, tipus, pes_kg, preu_venda, actiu,
-                                categoria_id, agrupacio_produccio, format, envasat)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-         RETURNING *
-       )
-       SELECT nou.id_seq, nou.codi, nou.descripcio, nou.descripcio_venda, nou.tipus, nou.pes_kg,
-              nou.preu_venda, nou.actiu, c.id_seq AS categoria_id_seq, c.nom AS categoria_nom,
-              nou.agrupacio_produccio, nou.format, nou.envasat
-       FROM nou LEFT JOIN categoria_producte c ON c.id = nou.categoria_id`,
-      [
-        cos.codi ?? null,
-        cos.descripcio.trim(),
-        cos.descripcioVenda ?? null,
-        cos.tipus ?? 'simple',
-        cos.pesKg ?? null,
-        cos.preuVenda ?? null,
-        cos.actiu ?? true,
-        categoriaUuid,
-        cos.agrupacioProduccio ?? null,
-        cos.format ?? null,
-        cos.envasat ?? null,
-      ],
-    );
+    try {
+      const insertat = await pool.query<FilaProducte>(
+        `WITH nou AS (
+           INSERT INTO producte (codi, descripcio, descripcio_venda, tipus, pes_kg, preu_venda, actiu,
+                                  categoria_id, agrupacio_produccio, format, envasat)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           RETURNING *
+         )
+         SELECT nou.id_seq, nou.codi, nou.descripcio, nou.descripcio_venda, nou.tipus, nou.pes_kg,
+                nou.preu_venda, nou.actiu, c.id_seq AS categoria_id_seq, c.nom AS categoria_nom,
+                nou.agrupacio_produccio, nou.format, nou.envasat
+         FROM nou LEFT JOIN categoria_producte c ON c.id = nou.categoria_id`,
+        [
+          cos.codi ?? null,
+          cos.descripcio.trim(),
+          cos.descripcioVenda ?? null,
+          cos.tipus ?? 'simple',
+          cos.pesKg ?? null,
+          cos.preuVenda ?? null,
+          cos.actiu ?? true,
+          categoriaUuid,
+          cos.agrupacioProduccio ?? null,
+          cos.format ?? null,
+          cos.envasat ?? null,
+        ],
+      );
 
-    reply.code(201);
-    return aApi(insertat.rows[0]!);
+      reply.code(201);
+      return aApi(insertat.rows[0]!);
+    } catch (err) {
+      if (esViolacioCodiUnic(err)) {
+        return enviarConflicte(reply, `Ja existeix un producte amb el codi "${cos.codi}"`);
+      }
+      throw err;
+    }
   });
 
   fastify.patch('/productes/:id', async (req, reply) => {
     const idPublic = parsearIdPublic((req.params as { id: string }).id);
     if (idPublic === null) return enviarNoTrobat(reply);
 
+    // Issue de robustesa (Francesc) — codi és immutable un cop creat el
+    // producte (decisió de negoci confirmada: es carrega manualment NOMÉS
+    // en crear-lo). No es llegeix del cos encara que vingui, no hi ha camp
+    // per a ell acá — mateix criteri exacte que client.codi a
+    // PATCH /clients/:id i usuari.firebaseUid a PATCH /usuaris/:id.
     const cos = req.body as Partial<{
-      codi: string | null;
       descripcio: string;
       descripcioVenda: string | null;
       tipus: 'simple' | 'variable';
@@ -283,23 +296,20 @@ export function registrarRutesProductes(fastify: FastifyInstance): void {
 
     const resultat = await pool.query<{ id: string }>(
       `UPDATE producte SET
-         codi = CASE WHEN $2 THEN $3 ELSE codi END,
-         descripcio = COALESCE($4, descripcio),
-         descripcio_venda = CASE WHEN $5 THEN $6 ELSE descripcio_venda END,
-         tipus = COALESCE($7, tipus),
-         pes_kg = CASE WHEN $8 THEN $9 ELSE pes_kg END,
-         preu_venda = CASE WHEN $10 THEN $11 ELSE preu_venda END,
-         actiu = COALESCE($12, actiu),
-         categoria_id = CASE WHEN $13 THEN $14 ELSE categoria_id END,
-         agrupacio_produccio = CASE WHEN $15 THEN $16 ELSE agrupacio_produccio END,
-         format = CASE WHEN $17 THEN $18 ELSE format END,
-         envasat = CASE WHEN $19 THEN $20 ELSE envasat END
+         descripcio = COALESCE($2, descripcio),
+         descripcio_venda = CASE WHEN $3 THEN $4 ELSE descripcio_venda END,
+         tipus = COALESCE($5, tipus),
+         pes_kg = CASE WHEN $6 THEN $7 ELSE pes_kg END,
+         preu_venda = CASE WHEN $8 THEN $9 ELSE preu_venda END,
+         actiu = COALESCE($10, actiu),
+         categoria_id = CASE WHEN $11 THEN $12 ELSE categoria_id END,
+         agrupacio_produccio = CASE WHEN $13 THEN $14 ELSE agrupacio_produccio END,
+         format = CASE WHEN $15 THEN $16 ELSE format END,
+         envasat = CASE WHEN $17 THEN $18 ELSE envasat END
        WHERE id_seq = $1
        RETURNING id`,
       [
         idPublic,
-        cos.codi !== undefined,
-        cos.codi ?? null,
         cos.descripcio?.trim() ?? null,
         cos.descripcioVenda !== undefined,
         cos.descripcioVenda ?? null,

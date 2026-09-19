@@ -98,6 +98,46 @@ describe('API negoci — /clients (Postgres real, esquema aislado)', () => {
     await fastify.close();
   });
 
+  // Issue de robustesa (Francesc, bug real: 500 en canviar producte.codi
+  // duplicat) — PATCH /clients/:id ja tenia el try/catch per a codi al
+  // POST, però no per a nif/email al PATCH (ambdós amb índex únic parcial,
+  // migració 0009): mateix buit, mateix fix.
+  it('PATCH /clients/:id amb nif duplicat dona 409 CONFLICTE, no 500', async () => {
+    await entorn.poolTest.query(
+      `INSERT INTO client (nom, poblacio, nif) VALUES ('Altre client', 'Vic', '12345678A')`,
+    );
+
+    const fastify = construirServidor();
+    const res = await fastify.inject({
+      method: 'PATCH',
+      url: `/api/v1/clients/${clientId}`,
+      payload: { nif: '12345678A' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ error: { codi: 'CONFLICTE' } });
+
+    await fastify.close();
+  });
+
+  it('PATCH /clients/:id amb email duplicat dona 409 CONFLICTE, no 500', async () => {
+    await entorn.poolTest.query(
+      `INSERT INTO client (nom, poblacio, email) VALUES ('Altre client 2', 'Vic', 'ja-existent@example.com')`,
+    );
+
+    const fastify = construirServidor();
+    const res = await fastify.inject({
+      method: 'PATCH',
+      url: `/api/v1/clients/${clientId}`,
+      payload: { email: 'ja-existent@example.com' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ error: { codi: 'CONFLICTE' } });
+
+    await fastify.close();
+  });
+
   describe('POST /clients — alta manual (capa 11, prototipo /pedidos/nuevo; capa 29 — codi autogenerat)', () => {
     it('con los campos mínimos del prototipo (nom, poblacio) más tarifaId: crea el cliente y autogenera codi (CLI+id, sin padding)', async () => {
       const fastify = construirServidor();

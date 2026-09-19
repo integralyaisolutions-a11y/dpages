@@ -138,6 +138,58 @@ describe('API negoci — /rols, guardas i validació de mòduls (capa 39, Postgr
     await fastify.close();
   });
 
+  // Issue de robustesa (Francesc, bug real: 500 en canviar producte.codi
+  // duplicat) — rol.nom també és UNIQUE i tenia el mateix buit (sense
+  // try/catch), tant a POST com a PATCH.
+  it('POST /rols amb nom duplicat dona 409 CONFLICTE, no 500', async () => {
+    const fastify = construirServidor();
+    await promoureAAdministrador(entorn, fastify);
+    await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/rols',
+      payload: { nom: 'Rol duplicat', modulsPermesos: ['comandes'] },
+    });
+
+    const res = await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/rols',
+      payload: { nom: 'Rol duplicat', modulsPermesos: ['usuaris'] },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ error: { codi: 'CONFLICTE' } });
+
+    await fastify.close();
+  });
+
+  it('PATCH /rols/:id amb nom duplicat dona 409 CONFLICTE, no 500', async () => {
+    const fastify = construirServidor();
+    await promoureAAdministrador(entorn, fastify);
+    await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/rols',
+      payload: { nom: 'Rol existent', modulsPermesos: ['comandes'] },
+    });
+    const rol = cuerpoJson<RolApi>(
+      await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/rols',
+        payload: { nom: 'Rol a renombrar', modulsPermesos: ['comandes'] },
+      }),
+    );
+
+    const res = await fastify.inject({
+      method: 'PATCH',
+      url: `/api/v1/rols/${rol.id}`,
+      payload: { nom: 'Rol existent' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ error: { codi: 'CONFLICTE' } });
+
+    await fastify.close();
+  });
+
   it('DELETE /rols/:id amb usuaris assignats dona 409 CONFLICTE', async () => {
     const fastify = construirServidor();
     await promoureAAdministrador(entorn, fastify);

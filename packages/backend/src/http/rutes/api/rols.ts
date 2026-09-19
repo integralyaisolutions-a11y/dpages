@@ -7,6 +7,7 @@ import {
   enviarConflicte,
   enviarNoTrobat,
   enviarValidacio,
+  esViolacioCodiUnic,
   parsearIdPublic,
   parsearPaginacio,
   resolverRolUuid,
@@ -141,14 +142,21 @@ export function registrarRutesRols(fastify: FastifyInstance): void {
       return enviarValidacio(reply, errorModuls.missatge, errorModuls.detalls);
     }
 
-    const inserit = await pool.query<FilaRol>(
-      `INSERT INTO rol (nom, moduls_permesos) VALUES ($1, $2)
-       RETURNING id_seq, nom, moduls_permesos`,
-      [cos.nom.trim(), cos.modulsPermesos ?? []],
-    );
+    try {
+      const inserit = await pool.query<FilaRol>(
+        `INSERT INTO rol (nom, moduls_permesos) VALUES ($1, $2)
+         RETURNING id_seq, nom, moduls_permesos`,
+        [cos.nom.trim(), cos.modulsPermesos ?? []],
+      );
 
-    reply.code(201);
-    return aApi(inserit.rows[0]!);
+      reply.code(201);
+      return aApi(inserit.rows[0]!);
+    } catch (err) {
+      if (esViolacioCodiUnic(err)) {
+        return enviarConflicte(reply, `Ja existeix un rol amb el nom "${cos.nom}"`);
+      }
+      throw err;
+    }
   });
 
   fastify.patch('/rols/:id', { preHandler: crearGuardaModul('usuaris') }, async (req, reply) => {
@@ -167,17 +175,24 @@ export function registrarRutesRols(fastify: FastifyInstance): void {
       return enviarValidacio(reply, errorModuls.missatge, errorModuls.detalls);
     }
 
-    const resultat = await pool.query<FilaRol>(
-      `UPDATE rol SET
-         nom = COALESCE($2, nom),
-         moduls_permesos = COALESCE($3, moduls_permesos)
-       WHERE id_seq = $1
-       RETURNING id_seq, nom, moduls_permesos`,
-      [idPublic, cos.nom?.trim() ?? null, cos.modulsPermesos ?? null],
-    );
+    try {
+      const resultat = await pool.query<FilaRol>(
+        `UPDATE rol SET
+           nom = COALESCE($2, nom),
+           moduls_permesos = COALESCE($3, moduls_permesos)
+         WHERE id_seq = $1
+         RETURNING id_seq, nom, moduls_permesos`,
+        [idPublic, cos.nom?.trim() ?? null, cos.modulsPermesos ?? null],
+      );
 
-    if (!resultat.rows[0]) return enviarNoTrobat(reply, 'Rol no trobat');
-    return aApi(resultat.rows[0]);
+      if (!resultat.rows[0]) return enviarNoTrobat(reply, 'Rol no trobat');
+      return aApi(resultat.rows[0]);
+    } catch (err) {
+      if (esViolacioCodiUnic(err)) {
+        return enviarConflicte(reply, `Ja existeix un rol amb el nom "${cos.nom}"`);
+      }
+      throw err;
+    }
   });
 
   // Capa 39 — no existía. Mismo guard que arriba; mismo patrón de guarda de

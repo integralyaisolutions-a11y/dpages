@@ -105,6 +105,42 @@ describe('API negoci — /categories (Postgres real, esquema aislado)', () => {
     await fastify.close();
   });
 
+  // Issue de robustesa (Francesc, bug real: 500 en canviar producte.codi
+  // duplicat) — categoria_producte.nom també és UNIQUE i tenia el mateix
+  // buit (sense try/catch), tant a POST com a PATCH.
+  it('POST /categories amb nom duplicat dona 409 CONFLICTE, no 500', async () => {
+    const fastify = construirServidor();
+    const res = await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/categories',
+      payload: { nom: 'Fresc' }, // ja existeix (seed de beforeAll)
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ error: { codi: 'CONFLICTE' } });
+
+    await fastify.close();
+  });
+
+  it('PATCH /categories/:id amb nom duplicat dona 409 CONFLICTE, no 500', async () => {
+    const fastify = construirServidor();
+    const altra = await entorn.poolTest.query<{ id_seq: string }>(
+      `INSERT INTO categoria_producte (nom) VALUES ('Congelats') RETURNING id_seq`,
+    );
+    const altraId = Number(altra.rows[0]!.id_seq);
+
+    const res = await fastify.inject({
+      method: 'PATCH',
+      url: `/api/v1/categories/${altraId}`,
+      payload: { nom: 'Fresc' }, // ja existeix (seed de beforeAll)
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ error: { codi: 'CONFLICTE' } });
+
+    await fastify.close();
+  });
+
   it('DELETE /categories/:id con productes actius associats da 409 CONFLICTE', async () => {
     const categoriaEnUs = await entorn.poolTest.query<{ id: string; id_seq: string }>(
       `INSERT INTO categoria_producte (nom) VALUES ('En ús') RETURNING id, id_seq`,

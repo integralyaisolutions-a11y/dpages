@@ -152,6 +152,51 @@ describe('API negoci — /productes (Postgres real, esquema aislado)', () => {
     await fastify.close();
   });
 
+  // Bug real reportado por Francesc — cambiar codi a un valor duplicado
+  // daba 500 (sin try/catch alrededor del INSERT/UPDATE). Decisión de
+  // negocio confirmada: codi se escribe a mano SÓLO al crear.
+  it('POST /productes amb codi duplicat dona 409 CONFLICTE, no 500', async () => {
+    const fastify = construirServidor();
+    const res = await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/productes',
+      payload: { codi: 'LLF01', descripcio: 'Un altre producte', tipus: 'simple' }, // 'LLF01' ja existeix (seed de beforeAll)
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ error: { codi: 'CONFLICTE' } });
+
+    await fastify.close();
+  });
+
+  it('PATCH /productes/:id ignora un intent de canviar codi (immutable un cop creat)', async () => {
+    const fastify = construirServidor();
+    const productes = await entorn.poolTest.query<{ id_seq: string }>(
+      `SELECT id_seq FROM producte WHERE codi = 'PIC01'`,
+    );
+    const idPublic = Number(productes.rows[0]!.id_seq);
+
+    const res = await fastify.inject({
+      method: 'PATCH',
+      url: `/api/v1/productes/${idPublic}`,
+      payload: { codi: 'CODI-QUE-NO-HAURIA-DE-QUEDAR', descripcio: 'Picada de porc (editat)' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const cuerpo = cuerpoJson<ProducteApi>(res);
+    expect(cuerpo.descripcio).toBe('Picada de porc (editat)'); // el resto del body sí se aplica
+    expect(cuerpo.codi).toBe('PIC01'); // codi, sin cambios
+    expect(cuerpo.codi).not.toBe('CODI-QUE-NO-HAURIA-DE-QUEDAR');
+
+    const fila = await entorn.poolTest.query<{ codi: string | null }>(
+      `SELECT codi FROM producte WHERE id_seq = $1`,
+      [idPublic],
+    );
+    expect(fila.rows[0]?.codi).toBe('PIC01'); // confirmado también directo en la base
+
+    await fastify.close();
+  });
+
   // Auditoría de Michelle — reproduce con datos reales: "PRESTA TALLADA 330G"
   // aparecía 2 veces en producte.descripcio, sin un desempate único en el
   // ORDER BY (sólo descripcio ASC). Con descripciones empatadas, Postgres no

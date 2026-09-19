@@ -104,11 +104,25 @@ export function ProductForm({
     <div className="rounded-xl border border-gray-200 bg-white p-6">
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <TextField
-            label="Codi de producte"
-            value={codi}
-            onChange={(event) => setCodi(event.target.value)}
-          />
+          {initialData !== undefined ? (
+            // Issue de robustesa (Francesc) — codi és immutable un cop creat
+            // (decisió de negoci confirmada): en edició es mostra com a text
+            // de sòl lectura, mateix component/classes exactes que "Codi" a
+            // ClientFormModal.tsx (mai un TextField disabled, que es veuria
+            // com un input editable qualsevol).
+            <div className="flex flex-col gap-1.5 text-sm">
+              <span className="font-medium text-gray-900">Codi de producte</span>
+              <span className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-gray-500">
+                {initialData?.codi ?? '—'}
+              </span>
+            </div>
+          ) : (
+            <TextField
+              label="Codi de producte"
+              value={codi}
+              onChange={(event) => setCodi(event.target.value)}
+            />
+          )}
           <TextField
             label="Agrupació producció"
             value={agrupacioProduccio}

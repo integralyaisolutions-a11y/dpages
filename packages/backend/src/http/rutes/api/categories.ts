@@ -6,6 +6,7 @@ import {
   enviarConflicte,
   enviarNoTrobat,
   enviarValidacio,
+  esViolacioCodiUnic,
   parsearIdPublic,
   parsearPaginacio,
   resolverCategoriaUuid,
@@ -109,15 +110,22 @@ export function registrarRutesCategories(fastify: FastifyInstance): void {
       );
     }
 
-    const inserit = await pool.query<FilaCategoria>(
-      `INSERT INTO categoria_producte (nom, elaborat_porc, agrupacio_rendiment)
-       VALUES ($1, $2, $3)
-       RETURNING id_seq, nom, elaborat_porc, agrupacio_rendiment`,
-      [cos.nom.trim(), elaboratPorc, cos.agrupacioRendiment ?? null],
-    );
+    try {
+      const inserit = await pool.query<FilaCategoria>(
+        `INSERT INTO categoria_producte (nom, elaborat_porc, agrupacio_rendiment)
+         VALUES ($1, $2, $3)
+         RETURNING id_seq, nom, elaborat_porc, agrupacio_rendiment`,
+        [cos.nom.trim(), elaboratPorc, cos.agrupacioRendiment ?? null],
+      );
 
-    reply.code(201);
-    return aApi(inserit.rows[0]!);
+      reply.code(201);
+      return aApi(inserit.rows[0]!);
+    } catch (err) {
+      if (esViolacioCodiUnic(err)) {
+        return enviarConflicte(reply, `Ja existeix una categoria amb el nom "${cos.nom}"`);
+      }
+      throw err;
+    }
   });
 
   fastify.patch('/categories/:id', async (req, reply) => {
@@ -177,24 +185,31 @@ export function registrarRutesCategories(fastify: FastifyInstance): void {
       }
     }
 
-    const resultat = await pool.query<FilaCategoria>(
-      `UPDATE categoria_producte SET
-         nom = COALESCE($2, nom),
-         elaborat_porc = COALESCE($3, elaborat_porc),
-         agrupacio_rendiment = CASE WHEN $4::boolean THEN $5 ELSE agrupacio_rendiment END
-       WHERE id_seq = $1
-       RETURNING id_seq, nom, elaborat_porc, agrupacio_rendiment`,
-      [
-        idPublic,
-        cos.nom ?? null,
-        cos.elaboratPorc ?? null,
-        cos.agrupacioRendiment !== undefined,
-        cos.agrupacioRendiment ?? null,
-      ],
-    );
+    try {
+      const resultat = await pool.query<FilaCategoria>(
+        `UPDATE categoria_producte SET
+           nom = COALESCE($2, nom),
+           elaborat_porc = COALESCE($3, elaborat_porc),
+           agrupacio_rendiment = CASE WHEN $4::boolean THEN $5 ELSE agrupacio_rendiment END
+         WHERE id_seq = $1
+         RETURNING id_seq, nom, elaborat_porc, agrupacio_rendiment`,
+        [
+          idPublic,
+          cos.nom ?? null,
+          cos.elaboratPorc ?? null,
+          cos.agrupacioRendiment !== undefined,
+          cos.agrupacioRendiment ?? null,
+        ],
+      );
 
-    if (!resultat.rows[0]) return enviarNoTrobat(reply, 'Categoria no trobada');
-    return aApi(resultat.rows[0]);
+      if (!resultat.rows[0]) return enviarNoTrobat(reply, 'Categoria no trobada');
+      return aApi(resultat.rows[0]);
+    } catch (err) {
+      if (esViolacioCodiUnic(err)) {
+        return enviarConflicte(reply, `Ja existeix una categoria amb el nom "${cos.nom}"`);
+      }
+      throw err;
+    }
   });
 
   fastify.delete('/categories/:id', async (req, reply) => {
