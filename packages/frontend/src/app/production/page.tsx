@@ -1,5 +1,6 @@
 'use client';
 
+import { Package } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AsyncCombobox } from '@/components/ui/AsyncCombobox';
 import { ClearFiltersButton, FilterBar } from '@/components/ui/FilterBar';
@@ -205,52 +206,130 @@ export default function ProductionPage() {
             />
             {nombrePorcsError && <span className="text-xs text-red-600">{nombrePorcsError}</span>}
           </label>
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {/* Fix (causa real d'overflow a 1024px, confirmat amb mesura DOM
+              real): `sm:grid-cols-3` (minmax(0,1fr) per defecte a Tailwind)
+              no té cap límit inferior — a un ample de columna prou estret
+              (sidebar + padding de <main> deixaven ~75px reals per targeta
+              a 1024px amb la scrollbar vertical present), el text amb
+              `whitespace-nowrap` es desbordava de la seva pròpia caixa i
+              quedava tallat pel `overflow-hidden` del contenidor pare (mai
+              arribava a inflar `document.documentElement.scrollWidth`, per
+              això la verificació anterior no ho detectava). Primer intent
+              amb `grid-cols-[repeat(auto-fit,minmax(...))]` semblava
+              arreglar-ho, però `minmax(Npx, 1fr)` fixa un mínim ARBITRARI,
+              no basat en el contingut real — amb valors petits ("0,000")
+              trencava a menys columnes sense necessitat (massa
+              conservador), i per a un valor prou gran encara podia
+              desbordar la seva pròpia columna si "encaixaven" 3 columnes
+              pel mínim però no pel contingut real. `flex flex-wrap` sí és
+              correcte: cada element ocupa el seu ample de contingut natural
+              (mai es comprimeix per sota, com ja demostra aquest mateix
+              patró a office/page.tsx i packaging/page.tsx) i BAIXA DE LÍNIA
+              sencer quan no hi ha lloc — mai desborda, i en el cas normal
+              (valors curts) es manté igual de compacte que abans. */}
+          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-3">
             <div>
               <p className="text-xs font-medium text-gray-500">KG Rendiment Pernil</p>
-              <p className="mt-1 text-lg font-bold text-gray-900">
+              <p className="mt-1 text-lg font-bold whitespace-nowrap text-gray-900">
                 {formatDecimal(totals?.kgJamon ?? null, 3)}
               </p>
             </div>
             <div>
               <p className="text-xs font-medium text-gray-500">KG Retalls</p>
-              <p className="mt-1 text-lg font-bold text-gray-900">
+              <p className="mt-1 text-lg font-bold whitespace-nowrap text-gray-900">
                 {formatDecimal(totals?.kgRecortes ?? null, 3)}
               </p>
             </div>
             <div>
               <p className="text-xs font-medium text-gray-500">KG Espatlles</p>
-              <p className="mt-1 text-lg font-bold text-gray-900">
+              <p className="mt-1 text-lg font-bold whitespace-nowrap text-gray-900">
                 {formatDecimal(totals?.kgPaletillas ?? null, 3)}
               </p>
             </div>
           </div>
         </div>
 
-        {/* Issue #20 (Francesc, confirmat) — aquests 3 totals només tenen
-            sentit quan el dataset pot incloure files MAGRE (és l'única
-            agrupació que alimenta totalKgMagro): filtrant per KG o PAQ es
-            queden en 0 sempre, no perquè no hi hagi magre, sinó perquè el
-            propi filtre ja les va excloure — mostrar-ho seria enganyós. */}
-        {showTopCards && (
-          <div className="rounded-xl border border-gray-200 bg-white p-6">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <StatCard
-                label="TOTAL KG A ELABORAR"
-                value={formatDecimal(totals?.totalKgAElaborar ?? null, 3)}
-              />
-              <StatCard
-                label="TOTAL KG MAGRE"
-                value={formatDecimal(totals?.totalKgMagro ?? null, 3)}
-              />
-              <StatCard
-                label="DIFERÈNCIA"
-                value={formatDecimal(totals?.diferencia ?? null, 3)}
-                alert={isNegative(totals?.diferencia ?? null)}
-              />
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+          {/* Issue #20 (Francesc, confirmat) — aquests 3 totals només tenen
+              sentit quan el dataset pot incloure files MAGRE (és l'única
+              agrupació que alimenta totalKgMagro): filtrant per KG o PAQ es
+              queden en 0 sempre, no perquè no hi hagi magre, sinó perquè el
+              propi filtre ja les va excloure — mostrar-ho seria enganyós. */}
+          {showTopCards && (
+            <div className="p-6">
+              {/* `flex flex-wrap` — ver comentari extens més amunt (mateix
+                  fix, mateixa causa real). Aquests 3 valors vénen
+                  d'agregats reals (qualsevol magnitud, no una constant
+                  petita) — el motiu original pel qual va aparèixer el bug. */}
+              <div className="flex flex-wrap gap-3">
+                <StatCard
+                  label="TOTAL KG A ELABORAR"
+                  value={formatDecimal(totals?.totalKgAElaborar ?? null, 3)}
+                />
+                <StatCard
+                  label="TOTAL KG MAGRE"
+                  value={formatDecimal(totals?.totalKgMagro ?? null, 3)}
+                />
+                <StatCard
+                  label="DIFERÈNCIA"
+                  value={formatDecimal(totals?.diferencia ?? null, 3)}
+                  alert={isNegative(totals?.diferencia ?? null)}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Franja de CANALS — independent de qualsevol filtre d'agrupació
+              o producte (elaborat_porc=false a propòsit, confirmat per
+              Francesc), només respon al filtre de data que ja viatja al
+              fetch. Sempre visible, encara que `showTopCards` sigui fals
+              (agrupacioFilter=KG/PAQ oculta el bloc de dalt): Canals és el
+              requisit central d'aquest disseny, mai pot desaparèixer.
+              Ajust (Michelle, confirmat visualment): color subtil en
+              comptes de l'accent fort — `bg-gray-50`/`text-gray-500` són el
+              to secundari ja establert al projecte (hover de DataCard,
+              opció seleccionada de SimpleDropdown/AsyncCombobox, etc.), no
+              un color nou.
+              Ajust (bug real d'overflow, ver comentari extens més amunt):
+              es va abandonar l'alineació EXACTA de columnes amb la graella
+              de dalt (`grid-cols-3` calcat) perquè depenia del mateix
+              mecanisme de columnes fixes que causava el desbordament —
+              amb `flex flex-wrap` cada fila troba el seu propi ample
+              natural, ja no hi ha garantia de coincidència píxel a píxel,
+              però mai desborda ni es talla, i en el cas normal (valors
+              curts) segueix quedant visualment a prop de sota de la
+              graella de dalt. */}
+          {/* Ajust (Michelle) — la franja quedava massa alta copiant el
+              padding vertical complet de StatCard (p-6 + label/valor en 2
+              línies). `px-6` (horitzontal, sense canvis) però `py-3` en
+              comptes de `p-6`, i etiqueta+valor en UNA sola línia
+              (`items-baseline`) en comptes de apilats — la mateixa dada,
+              menys alçada. */}
+          <div className={`bg-gray-50 px-6 py-3 ${showTopCards ? 'border-t border-gray-200' : ''}`}>
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              <div className="flex items-center gap-2">
+                <Package className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-hidden="true" />
+                <span className="text-[10px] font-semibold tracking-wide text-gray-500 uppercase">
+                  Canals
+                </span>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <p className="text-xs font-semibold tracking-wide text-gray-500 uppercase">
+                  Unitats
+                </p>
+                <p className="text-sm font-bold whitespace-nowrap text-gray-900">
+                  {formatDecimal(totals?.canals.unitats ?? null, 2)}
+                </p>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <p className="text-xs font-semibold tracking-wide text-gray-500 uppercase">Kg</p>
+                <p className="text-sm font-bold whitespace-nowrap text-gray-900">
+                  {formatDecimal(totals?.canals.kg ?? null, 3)}
+                </p>
+              </div>
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       <FilterBar>

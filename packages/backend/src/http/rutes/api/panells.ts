@@ -660,6 +660,47 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       valors,
     );
 
+    // Sumatorio de CANALS — completamente independiente del resto del panel
+    // (confirmado por Francesc): CANALS tiene elaborat_porc=false A
+    // PROPÓSITO, así que queda fuera de `condicions`/`filas` de arriba (esa
+    // query exige elaborat_porc=true, agrupacio_produccio y
+    // agrupacio_rendiment no nulos — los productos de CANALS no cumplen
+    // ninguna de las tres). Por eso es una query aparte, no una variante de
+    // la de arriba. Único filtro que comparte con el resto del panel:
+    // dataDes/dataFins (mismo criterio "sin fecha = todas", issue #18) — ni
+    // agrupacioRendiment ni producte ni la categoria de la tabla principal
+    // le aplican.
+    const condicionsCanals: string[] = [
+      `cat.nom = 'CANALS'`,
+      'NOT cl.esborrat',
+      `c.estat = 'oberta'`,
+    ];
+    const valorsCanals: unknown[] = [];
+    if (typeof query.dataDes === 'string' && query.dataDes !== '') {
+      condicionsCanals.push(`cl.data_produccio::date >= $${valorsCanals.length + 1}::date`);
+      valorsCanals.push(query.dataDes);
+    }
+    if (typeof query.dataFins === 'string' && query.dataFins !== '') {
+      condicionsCanals.push(`cl.data_produccio::date <= $${valorsCanals.length + 1}::date`);
+      valorsCanals.push(query.dataFins);
+    }
+    const canals = await pool.query<{ unitats: string | null; kg: string | null }>(
+      `SELECT SUM(cl.unitats_demanades) AS unitats, SUM(cl.pes_calculat_kg)::numeric(14,3) AS kg
+       FROM comanda_linia cl
+       JOIN comanda c ON c.id = cl.comanda_id
+       JOIN producte p ON p.id = cl.producte_id
+       JOIN categoria_producte cat ON cat.id = p.categoria_id
+       WHERE ${condicionsCanals.join(' AND ')}`,
+      valorsCanals,
+    );
+    // Sin líneas que matcheen: SUM() de Postgres da NULL, no 0 — se
+    // normaliza acá para que el contrato nunca traiga null (mismo criterio
+    // que el resto de los totales de este panel, todos string siempre).
+    const totalsCanals = {
+      unitats: canals.rows[0]?.unitats ?? '0',
+      kg: canals.rows[0]?.kg ?? '0',
+    };
+
     let totalKgAElaborarNum = 0;
     let totalKgMagroNum = 0;
     const dadesCompletes: PanellProduccioFilaApi[] = filas.rows.map((f) => {
@@ -728,6 +769,7 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
         kgJamon: (KG_JAMON_PER_CERDO * nombrePorcs).toFixed(3),
         kgRecortes: (KG_RECORTES_PER_CERDO * nombrePorcs).toFixed(3),
         kgPaletillas: (KG_PALETILLAS_PER_CERDO * nombrePorcs).toFixed(3),
+        canals: totalsCanals,
       },
       dades,
       paginacio: construirPaginacio(pagina, mida, dadesCompletes.length),

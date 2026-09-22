@@ -666,6 +666,20 @@ export interface PanellProduccioApi {
     kgJamon: string;
     kgRecortes: string;
     kgPaletillas: string;
+    /**
+     * Sumatorio de líneas de la categoria CANALS (confirmado con Francesc),
+     * totalmente independiente del resto de esta tabla y de sus totales:
+     * CANALS tiene `elaborat_porc = false` a propósito, por eso nunca
+     * aparece en `dades` ni afecta ninguno de los campos de arriba. Sólo
+     * responde al mismo filtro de fecha (`dataDes`/`dataFins`) del resto del
+     * endpoint — ni `agrupacioRendiment` ni `producte` ni `categoriaId` de
+     * la tabla principal lo afectan. "0" (nunca `null`) cuando no hay
+     * líneas que matcheen, mismo criterio que el resto de `totals`.
+     */
+    canals: {
+      unitats: string;
+      kg: string;
+    };
   };
   dades: PanellProduccioFilaApi[];
   paginacio: Paginacio;

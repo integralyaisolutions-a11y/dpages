@@ -282,6 +282,8 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
       kgJamon: '60.000',
       kgRecortes: '30.000',
       kgPaletillas: '35.000',
+      // Sin líneas de categoria CANALS en este dataset de prueba.
+      canals: { unitats: '0', kg: '0' },
     });
 
     await fastify.close();
@@ -399,6 +401,8 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
       kgJamon: '60.000',
       kgRecortes: '30.000',
       kgPaletillas: '35.000',
+      // Fuera del rango de fechas — tampoco hay líneas CANALS que sumar.
+      canals: { unitats: '0', kg: '0' },
     });
 
     await fastify.close();
@@ -584,6 +588,117 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
       const cuerpo = cuerpoJson<PanellProduccioApi>(res);
       expect(cuerpo.dades.some((f) => f.agrupacioProduccio === 'FILTRE-ANTIGA')).toBe(true);
       expect(cuerpo.dades.some((f) => f.agrupacioProduccio === 'FILTRE-FUTURA')).toBe(false);
+
+      await fastify.close();
+    });
+  });
+
+  // Confirmado por Francesc (evidencia de Michelle): sumatorio nuevo,
+  // totalmente independiente del resto del panel — CANALS tiene
+  // elaborat_porc=false A PROPÓSITO, por eso nunca puede aparecer en
+  // `dades` (que exige elaborat_porc=true), pero sí necesita su propio
+  // total agregado, sensible sólo al filtro de fecha y al estat='oberta'.
+  describe('totals.canals — sumatorio de CANALS, independiente del resto del panel', () => {
+    beforeAll(async () => {
+      const categoria = await entorn.poolTest.query<{ id: string }>(
+        `INSERT INTO categoria_producte (nom, elaborat_porc, agrupacio_rendiment)
+         VALUES ('CANALS', false, NULL) RETURNING id`,
+      );
+      const producte = await entorn.poolTest.query<{ id: string }>(
+        `INSERT INTO producte (codi, descripcio, tipus, categoria_id)
+         VALUES ('CANALS-TEST', 'CANALS-TEST', 'simple', $1) RETURNING id`,
+        [categoria.rows[0]!.id],
+      );
+
+      const comanda = await entorn.poolTest.query<{ id: string }>(
+        `INSERT INTO comanda (origen_id, estat, data_comanda)
+         VALUES ((SELECT id FROM origen_comanda WHERE codi = 'manual'), 'oberta', '2026-08-01') RETURNING id`,
+      );
+      await entorn.poolTest.query(
+        `INSERT INTO comanda_linia (
+           comanda_id, ordinal, producte_id, unitats_demanades, preu_unitari,
+           pes_calculat_kg, data_produccio
+         ) VALUES ($1, 0, $2, 3, '0.00', '15.500', $3)`,
+        [comanda.rows[0]!.id, producte.rows[0]!.id, DATA],
+      );
+
+      // Misma categoria/producto, pedido NO oberta — nunca debe sumar acá,
+      // aunque tenga muchas más unidades/kg que la línia de arriba (si
+      // sumara, el total no daría exactamente 3.00/15.500 más abajo).
+      const comandaTancada = await entorn.poolTest.query<{ id: string }>(
+        `INSERT INTO comanda (origen_id, estat, data_comanda)
+         VALUES ((SELECT id FROM origen_comanda WHERE codi = 'manual'), 'tancada', '2026-08-01') RETURNING id`,
+      );
+      await entorn.poolTest.query(
+        `INSERT INTO comanda_linia (
+           comanda_id, ordinal, producte_id, unitats_demanades, preu_unitari,
+           pes_calculat_kg, data_produccio
+         ) VALUES ($1, 0, $2, 100, '0.00', '999.000', $3)`,
+        [comandaTancada.rows[0]!.id, producte.rows[0]!.id, DATA],
+      );
+    });
+
+    it('suma unitats/kg de la línia oberta dentro del rango de fecha, ignorando la línia tancada', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'GET',
+        url: `/api/v1/panells/produccio?nombrePorcs=5&dataDes=${DATA}&dataFins=${DATA}`,
+      });
+
+      expect(res.statusCode).toBe(200);
+      const cuerpo = cuerpoJson<PanellProduccioApi>(res);
+      // elaborat_porc=false — CANALS no puede aparecer nunca en `dades`.
+      expect(cuerpo.dades.some((f) => f.categoria === 'CANALS')).toBe(false);
+      expect(cuerpo.totals.canals).toEqual({ unitats: '3.00', kg: '15.500' });
+
+      await fastify.close();
+    });
+
+    it('agrupacioRendiment i producte de la taula principal NO afecten totals.canals', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'GET',
+        // Filtros que sí afectan `dades` (agrupacioRendiment=KG, un
+        // producte real de la tabla principal) — totals.canals debe dar
+        // exactamente el mismo valor que sin ellos.
+        url: `/api/v1/panells/produccio?nombrePorcs=5&dataDes=${DATA}&dataFins=${DATA}&agrupacioRendiment=KG&producte=COSTELLETA`,
+      });
+
+      expect(res.statusCode).toBe(200);
+      const cuerpo = cuerpoJson<PanellProduccioApi>(res);
+      expect(cuerpo.totals.canals).toEqual({ unitats: '3.00', kg: '15.500' });
+
+      await fastify.close();
+    });
+
+    it('fuera del rango de fechas, totals.canals da "0"/"0" (nunca null)', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'GET',
+        url: '/api/v1/panells/produccio?nombrePorcs=5&dataDes=2019-01-01&dataFins=2019-01-02',
+      });
+
+      expect(res.statusCode).toBe(200);
+      const cuerpo = cuerpoJson<PanellProduccioApi>(res);
+      expect(cuerpo.totals.canals).toEqual({ unitats: '0', kg: '0' });
+
+      await fastify.close();
+    });
+
+    // Issue #18 (Francesc, confirmada) — "sense dades = totes les dades"
+    // aplica también a CANALS: sin dataDes NI dataFins, la línia oberta de
+    // CANALS (creada arriba, fecha DATA) tiene que aparecer igual, sin que
+    // el endpoint le aplique ninguna ventana oculta por defecto.
+    it('sin dataDes ni dataFins ("sin datos = todos los datos", issue #18): la línia de CANALS igual suma', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'GET',
+        url: '/api/v1/panells/produccio?nombrePorcs=5&mida=200',
+      });
+
+      expect(res.statusCode).toBe(200);
+      const cuerpo = cuerpoJson<PanellProduccioApi>(res);
+      expect(cuerpo.totals.canals).toEqual({ unitats: '3.00', kg: '15.500' });
 
       await fastify.close();
     });
