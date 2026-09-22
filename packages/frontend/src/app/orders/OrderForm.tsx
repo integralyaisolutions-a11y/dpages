@@ -284,10 +284,12 @@ function tariffCoverageKey(tarifaId: number, producteId: number): string {
 }
 
 /**
- * Avís preventiu (no bloquejant) del cas que caurà en amb_incidencia per
- * falta de preu — mirall exacte de la cascada real de `resolverPreuLinia`
+ * Avís preventiu (no bloquejant) del cas que es quedarà sense preu
+ * resolt — mirall exacte de la cascada real de `resolverPreuLinia`
  * (comandes.ts): (1) preu de la tarifa vigent, (2) si no n'hi ha,
- * `producte.preuVenda`, (3) si tampoc, incidència.
+ * `producte.preuVenda`, (3) si tampoc, es registra la incidència però
+ * la comanda es desa igualment (decisió de negoci, Francesc, confirmada
+ * — ja no bloqueja ni canvia l'estat de la comanda).
  *
  * Dos casos:
  * - Sense tarifa (`tarifaId === null`): certesa local, no cal cap crida —
@@ -376,13 +378,8 @@ function LineFormCard({
           />
           {priceRisk && (
             <p className="mt-1.5 text-xs text-amber-700">
-              Aquest producte no té preu assignat — la comanda es marcarà amb incidència.
-            </p>
-          )}
-          {productLocked && (
-            <p className="mt-1.5 text-xs text-gray-500">
-              El producte d&apos;una línia ja creada no es pot canviar. Per substituir-lo, esborra
-              aquesta línia i afegeix-ne una de nova amb el producte correcte.
+              Aquest producte no té preu assignat. La comanda es desarà igualment — caldrà completar
+              el preu més endavant.
             </p>
           )}
         </div>
@@ -1203,12 +1200,7 @@ export const OrderForm = forwardRef<
                       />
                       {resolvePriceRisk(line, tarifaId, products, tariffCoverage).risk && (
                         <p className="mt-1 text-xs text-amber-700">
-                          Sense preu assignat — caurà en incidència.
-                        </p>
-                      )}
-                      {!isFrozen && line.id > 0 && (
-                        <p className="mt-1 text-xs text-gray-500">
-                          No es pot canviar — esborra la línia i afegeix-ne una de nova.
+                          Sense preu — cal completar més endavant.
                         </p>
                       )}
                     </td>

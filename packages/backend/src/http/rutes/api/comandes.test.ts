@@ -798,7 +798,10 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       expect(res.statusCode).toBe(201);
       const cuerpo = cuerpoJson<ComandaDetallApi>(res);
       expect(cuerpo.linies[0]?.preuUnitari).toBe('0.00');
-      expect(cuerpo.estat).toBe('amb_incidencia');
+      // Decisión de negocio (Francesc, confirmada) — ya no cae en
+      // amb_incidencia automático: el registro de auditoría se mantiene,
+      // el pedido se guarda normalmente como cualquier otro.
+      expect(cuerpo.estat).toBe('oberta');
       expect(cuerpo.incidencies.some((i) => i.tipus === 'sense_preu')).toBe(true);
 
       await fastify.close();
@@ -876,7 +879,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       await fastify.close();
     });
 
-    it('POST .../linies sense preu resolt: registra incidència sense_preu i posa la comanda amb_incidencia', async () => {
+    it('POST .../linies sense preu resolt: registra incidència sense_preu i la comanda es manté oberta', async () => {
       const producteSensePreu = await entorn.poolTest.query<{ id_seq: string }>(
         `INSERT INTO producte (codi, descripcio, pes_kg, tipus)
          VALUES ('CAP30-SP', 'Sense preu', '1.000', 'simple') RETURNING id_seq`,
@@ -915,7 +918,9 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
 
       expect(res.statusCode).toBe(201);
       const cuerpo = cuerpoJson<ComandaDetallApi>(res);
-      expect(cuerpo.estat).toBe('amb_incidencia');
+      // Decisión de negocio (Francesc, confirmada) — ya no cae en
+      // amb_incidencia automático: se mantiene en el estat que ya tenía.
+      expect(cuerpo.estat).toBe('oberta');
       expect(cuerpo.incidencies.some((i) => i.tipus === 'sense_preu')).toBe(true);
       const liniaNova = cuerpo.linies.find((l) => l.producte?.id === producteSensePreuId);
       expect(liniaNova?.preuUnitari).toBe('0.00');

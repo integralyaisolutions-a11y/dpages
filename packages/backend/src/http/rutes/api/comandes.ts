@@ -755,10 +755,6 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       const totalEur = liniesResoltes
         .reduce((acc, l) => acc + l.unitats * Number(l.preuUnitari), 0)
         .toFixed(2);
-      // Si alguna línea no pudo resolver precio (ni tarifa ni preu_venda),
-      // el pedido nace directamente amb_incidencia — mismo criterio que el
-      // resto del sistema (nunca "oberta" con un problema silencioso).
-      const teLiniaSensePreu = liniesResoltes.some((l) => l.sensePreu);
 
       const comanda = await client.query<{ id: string }>(
         `INSERT INTO comanda (origen_id, estat, client_id, tarifa_id, poblacio_desti, total,
@@ -767,7 +763,12 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
          RETURNING id`,
         [
           origenUuid,
-          teLiniaSensePreu ? 'amb_incidencia' : 'oberta',
+          // Decisión de negocio (Francesc, confirmada) — una línea sin
+          // precio resuelto NUNCA queda silenciosa (se registra igual en
+          // incidencia_comanda, más abajo), pero ya no fuerza el pedido a
+          // amb_incidencia: nace "oberta" siempre, el precio pendiente se
+          // completa después sin bloquear el flujo normal.
+          'oberta',
           clientUuid,
           tarifaUuid,
           totalEur,
@@ -1198,10 +1199,12 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
         ],
       );
 
-      // Mismo criterio que POST /comandes: una línea sin precio resuelto
-      // nunca queda silenciosa — se registra la incidencia, y la comanda
-      // pasa a amb_incidencia si todavía no lo estaba (mismo motivo por el
-      // que un pedido nace amb_incidencia si nace con una línea así).
+      // Decisión de negocio (Francesc, confirmada) — mismo criterio que
+      // POST /comandes: una línea sin precio resuelto nunca queda
+      // silenciosa (se registra igual en incidencia_comanda), pero ya no
+      // fuerza el pedido a amb_incidencia — se queda en el estat que ya
+      // tenía (oberta, en_proces, tancada...), el precio pendiente se
+      // completa después sin bloquear el flujo normal.
       if (sensePreu) {
         await client.query(
           `INSERT INTO incidencia_comanda (comanda_id, tipus, detall) VALUES ($1, 'sense_preu', $2)`,
@@ -1209,10 +1212,6 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
             comandaUuid,
             `Línia afegida (producte ${cos.producteId}): no té preu resolt (sense tarifa amb preu ni preu base) — preuUnitari es va deixar en 0.00.`,
           ],
-        );
-        await client.query(
-          `UPDATE comanda SET estat = 'amb_incidencia' WHERE id = $1 AND estat != 'amb_incidencia'`,
-          [comandaUuid],
         );
       }
 
