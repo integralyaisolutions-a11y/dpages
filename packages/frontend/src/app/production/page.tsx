@@ -33,14 +33,16 @@ function isNegative(value: string | null): boolean {
   return value !== null && Number(value) < 0;
 }
 
-// Issue #20 (Francesc, confirmat) — Rendiment/Diferència per fila NOMÉS
-// tenen sentit de negoci per KG/PAQ (l'única branca del backend que els
-// calcula per línia, ver panells.ts). Per MAGRE/Totes es força '—' encara
-// que la fila porti un valor real (a "Totes" les files KG/PAQ sí en
-// porten): la condició depèn del FILTRE actiu, no de l'agrupacioRendiment
-// de cada fila individual — no n'hi ha prou en confiar que vinguin buides.
-function showRowRendiment(agrupacioFilter: string): boolean {
-  return agrupacioFilter === 'KG' || agrupacioFilter === 'PAQ';
+// Issue #20 (Francesc, confirmat — corregit després d'una primera
+// implementació que extrapolava malament el missatge original de
+// WhatsApp) — Rendiment/Diferència per fila NOMÉS tenen sentit de negoci
+// per KG/PAQ (l'única branca del backend que els calcula per línia, ver
+// panells.ts). La condició depèn del tipus de CADA FILA
+// (row.agrupacioRendiment), no del filtre global seleccionat: amb
+// "Totes" les files vénen mesclades i cada una s'avalua pel seu propi
+// tipus, no totes igual.
+function showRowRendiment(agrupacioRendiment: string): boolean {
+  return agrupacioRendiment === 'KG' || agrupacioRendiment === 'PAQ';
 }
 
 function ProductionRow({
@@ -173,10 +175,11 @@ export default function ProductionPage() {
   const { data, totals, paginacio, setPagina, isLoading, error, refetch, isReady } =
     useProductionPanell(filters);
 
-  // Issue #20 — la condició és el filtre ACTIU, no l'agrupacioRendiment de
-  // cada fila (només coincideixen quan el filtre no és 'Totes').
+  // Issue #20 — les 3 targetes de capçalera SÍ depenen del filtre ACTIU
+  // (sense canvis). Rendiment/Diferència per fila, en canvi, depenen del
+  // tipus de cada fila (ver showRowRendiment) — es calcula al moment de
+  // pintar cada ProductionRow/ProductionCard, no acá.
   const showTopCards = agrupacioFilter === ALL || agrupacioFilter === 'MAGRE';
-  const showRowRendimentValues = showRowRendiment(agrupacioFilter);
 
   function clearFilters() {
     setAgrupacioFilter(ALL);
@@ -382,7 +385,7 @@ export default function ProductionPage() {
               <ProductionCard
                 key={`${row.agrupacioProduccio}-${row.agrupacioRendiment}`}
                 row={row}
-                showRendiment={showRowRendimentValues}
+                showRendiment={showRowRendiment(row.agrupacioRendiment)}
               />
             ))}
           </div>
@@ -416,7 +419,7 @@ export default function ProductionPage() {
                   <ProductionRow
                     key={`${row.agrupacioProduccio}-${row.agrupacioRendiment}`}
                     row={row}
-                    showRendiment={showRowRendimentValues}
+                    showRendiment={showRowRendiment(row.agrupacioRendiment)}
                   />
                 ))}
               </tbody>
