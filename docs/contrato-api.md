@@ -175,8 +175,13 @@ Siempre con esta forma, en cualquier código de estado:
 {
   "error": {
     "codi": "VALIDACIO",
-    "missatge": "Les unitats lliurades no poden ser zero",
-    "detalls": [{ "camp": "unitatsLliurades", "missatge": "ha de ser més gran que zero" }]
+    "missatge": "Les unitats i els kg lliurats no són vàlids",
+    "detalls": [
+      {
+        "camp": "unitatsLliurades",
+        "missatge": "ha de ser un número vàlid, com a màxim 2 decimals"
+      }
+    ]
   }
 }
 ```
@@ -1897,9 +1902,14 @@ Respuesta `200`:
 
 ### Reglas de negocio, confirmadas por el cliente
 
-**Ambos campos son obligatorios y no pueden quedar en cero.** El backend
-rechaza con `400 VALIDACIO`. `unitatsLliurades` admite hasta 2 decimales
-(capa 38) — con más de 2, también `400 VALIDACIO`.
+**Ambos campos son obligatorios, pero SÍ pueden quedar en cero** — issue
+#19 (Francesc, confirmado hoy) reabrió y reemplazó la regla anterior
+("nunca guardar una línea en cero"): un pedido puede terminar con 0
+unidades/kg realmente entregados (ej. rotura total, artículo agotado),
+y hay que poder registrarlo así, no forzar un valor ficticio. El
+backend sigue rechazando con `400 VALIDACIO` cualquier valor inválido
+(negativo, no numérico, o con más de 2 decimales en `unitatsLliurades`)
+— sólo se sacó la condición de "mayor que cero".
 
 **Ambos llegan siempre en cero por defecto**, aunque coincidan con lo pedido.
 El operario debe teclearlos de todos modos. Es doble confirmación deliberada:

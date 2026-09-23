@@ -661,7 +661,13 @@ export interface PanellProduccioApi {
      * constantes de negocio (`KG_JAMON_PER_CERDO` × `nombrePorcs`, y así
      * para los otros dos). `nombrePorcs` es obligatorio en este endpoint
      * (ver `GET /panells/produccio`), así que estos tres campos siempre
-     * traen un valor — nunca `null`.
+     * traen un valor — nunca `null`. `totalKgMagro` = suma de estos 3.
+     *
+     * REVERT (Francesc, confirmado 23/09/2026) — el 23/09/2026 se conectó
+     * esto a `rendiments_porcs` por error (se asumió sin confirmar que el
+     * desajuste contra `totalKgMagro` era un bug). Francesc aclaró que es
+     * una decisión de negocio fija e intencional, sin relación con esa
+     * tabla — NO reconectar bajo ningún concepto.
      */
     kgJamon: string;
     kgRecortes: string;

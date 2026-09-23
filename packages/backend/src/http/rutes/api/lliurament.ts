@@ -5,17 +5,25 @@ import {
   enviarConflicte,
   enviarNoTrobat,
   enviarValidacio,
-  esUnitatsValides,
   formatearDataApi,
   parsearIdPublic,
 } from './comu.js';
 
 /**
  * El endpoint más delicado del sistema (contrato, sección 5): unitats i kg
- * lliurats son OBLIGATORIOS y nunca pueden quedar en cero, aunque
- * coincidan con lo pedido — es doble confirmación deliberada (mermas →
- * abono/cargo). Una sola llamada confirma Y graba; no hay un paso previo
- * de "guardar sin confirmar".
+ * lliurats son OBLIGATORIOS, aunque coincidan con lo pedido — es doble
+ * confirmación deliberada (mermas → abono/cargo). Una sola llamada
+ * confirma Y graba; no hay un paso previo de "guardar sin confirmar".
+ *
+ * Issue #19 (Francesc, confirmado 23/09/2026) — reabre y reemplaza la
+ * decisión anterior: estos dos campos YA NO exigen ser mayores que cero
+ * (rotura total, artículo agotado, etc. son casos reales de negocio con 0
+ * entregado). Por eso la validación de acá NO reusa `esUnitatsValides` de
+ * `comu.js` — esa función es compartida con `unitatsDemanades`
+ * (`POST /comandes`, `POST .../linies`, `PATCH .../linies/:liniaId`), cuya
+ * regla de "mayor que cero" NO cambió (una línea de pedido sigue sin poder
+ * pedirse en cero) — se validan acá con su propia lógica inline, mismo
+ * criterio que ya usaba `kgLliurats`.
  */
 export function registrarRutaLliurament(fastify: FastifyInstance): void {
   fastify.patch('/comandes/:comandaId/linies/:liniaId/lliurament', async (req, reply) => {
@@ -31,18 +39,28 @@ export function registrarRutaLliurament(fastify: FastifyInstance): void {
 
     // Capa 38 — unitats_lliurades pasó de INTEGER a NUMERIC(10,2): admite
     // decimales (entregas parciales de pieza), hasta 2 decimales.
-    if (cos.unitatsLliurades === undefined || !esUnitatsValides(cos.unitatsLliurades)) {
+    //
+    // Issue #19 — ya NO exige > 0 (0 es un valor válido, ver JSDoc de
+    // arriba): validación inline en vez de `esUnitatsValides` (compartida
+    // con `unitatsDemanades`, que sigue exigiendo > 0).
+    const unitatsLliurades = cos.unitatsLliurades;
+    const unitatsLliuradesValides =
+      typeof unitatsLliurades === 'number' &&
+      Number.isFinite(unitatsLliurades) &&
+      unitatsLliurades >= 0 &&
+      Math.round(unitatsLliurades * 100) / 100 === unitatsLliurades;
+    if (unitatsLliurades === undefined || !unitatsLliuradesValides) {
       detalls.push({
         camp: 'unitatsLliurades',
-        missatge: 'ha de ser més gran que zero, com a màxim 2 decimals',
+        missatge: 'ha de ser un número vàlid (0 o més), com a màxim 2 decimals',
       });
     }
     const kgLliurats = cos.kgLliurats !== undefined ? Number(cos.kgLliurats) : NaN;
-    if (cos.kgLliurats === undefined || !Number.isFinite(kgLliurats) || kgLliurats <= 0) {
-      detalls.push({ camp: 'kgLliurats', missatge: 'ha de ser més gran que zero' });
+    if (cos.kgLliurats === undefined || !Number.isFinite(kgLliurats) || kgLliurats < 0) {
+      detalls.push({ camp: 'kgLliurats', missatge: 'ha de ser un número vàlid (0 o més)' });
     }
     if (detalls.length > 0) {
-      return enviarValidacio(reply, 'Les unitats i els kg lliurats no poden ser zero', detalls);
+      return enviarValidacio(reply, 'Les unitats i els kg lliurats no són vàlids', detalls);
     }
 
     const comanda = await pool.query<{ id: string; congelat_a: Date | null }>(

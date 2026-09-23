@@ -83,28 +83,56 @@ describe('API negoci — PATCH .../lliurament (Postgres real, esquema aislado)',
     await fastify.close();
   });
 
-  it('rechaza con 400 VALIDACIO si unitatsLliurades o kgLliurats quedan en cero, aunque coincidan con lo pedido', async () => {
+  it('issue #19 (Francesc, reabre y reemplaza la regla anterior) — acepta unitatsLliurades/kgLliurats en 0', async () => {
     const fastify = construirServidor();
     await crearComandaAmbLinia(fastify);
 
-    const sinUnitats = await fastify.inject({
+    const res = await fastify.inject({
       method: 'PATCH',
       url: `/api/v1/comandes/${comandaId}/linies/${liniaId}/lliurament`,
-      payload: { unitatsLliurades: 0, kgLliurats: '9.750' },
+      payload: { unitatsLliurades: 0, kgLliurats: '0' },
     });
-    expect(sinUnitats.statusCode).toBe(400);
-    expect(cuerpoJson<CosErrorApi>(sinUnitats).error.detalls).toContainEqual(
+    expect(res.statusCode).toBe(200);
+    const cuerpo = cuerpoJson<LliuramentRespostaApi>(res);
+    expect(cuerpo.unitatsLliurades).toBe('0.00');
+    expect(cuerpo.kgLliurats).toBe('0');
+    expect(cuerpo.confirmatA).toMatch(/Z$/);
+
+    await fastify.close();
+  });
+
+  it('rechaza con 400 VALIDACIO valores negativos o con más de 2 decimales en unitatsLliurades (0 sigue siendo válido, negativo no)', async () => {
+    const fastify = construirServidor();
+    await crearComandaAmbLinia(fastify);
+
+    const unitatsNegatives = await fastify.inject({
+      method: 'PATCH',
+      url: `/api/v1/comandes/${comandaId}/linies/${liniaId}/lliurament`,
+      payload: { unitatsLliurades: -1, kgLliurats: '9.750' },
+    });
+    expect(unitatsNegatives.statusCode).toBe(400);
+    expect(cuerpoJson<CosErrorApi>(unitatsNegatives).error.detalls).toContainEqual(
       expect.objectContaining({ camp: 'unitatsLliurades' }),
     );
 
-    const sinKg = await fastify.inject({
+    const kgNegatius = await fastify.inject({
       method: 'PATCH',
       url: `/api/v1/comandes/${comandaId}/linies/${liniaId}/lliurament`,
-      payload: { unitatsLliurades: 8, kgLliurats: '0' },
+      payload: { unitatsLliurades: 8, kgLliurats: '-0.001' },
     });
-    expect(sinKg.statusCode).toBe(400);
-    expect(cuerpoJson<CosErrorApi>(sinKg).error.detalls).toContainEqual(
+    expect(kgNegatius.statusCode).toBe(400);
+    expect(cuerpoJson<CosErrorApi>(kgNegatius).error.detalls).toContainEqual(
       expect.objectContaining({ camp: 'kgLliurats' }),
+    );
+
+    const massaDecimals = await fastify.inject({
+      method: 'PATCH',
+      url: `/api/v1/comandes/${comandaId}/linies/${liniaId}/lliurament`,
+      payload: { unitatsLliurades: 2.505, kgLliurats: '9.750' },
+    });
+    expect(massaDecimals.statusCode).toBe(400);
+    expect(cuerpoJson<CosErrorApi>(massaDecimals).error.detalls).toContainEqual(
+      expect.objectContaining({ camp: 'unitatsLliurades' }),
     );
 
     await fastify.close();

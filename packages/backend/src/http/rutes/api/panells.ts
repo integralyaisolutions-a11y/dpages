@@ -49,6 +49,17 @@ function esAgrupacioRendimentValida(valor: unknown): valor is AgrupacioRendiment
  * `rendiments_porcs` (no hay artículos de catálogo individuales para
  * "jamón"/"recortes"/"paletillas" con esos rendimientos cargados) —
  * pendiente de exponer como configuración si cambian en el futuro.
+ *
+ * REVERT (Francesc, confirmado 23/09/2026) — el 23/09/2026 se intentó
+ * "arreglar" esto conectándolo a `rendiments_porcs` (PERNIL/RETALLS
+ * 1RA+2NA/ESPATLLA), asumiendo que el desajuste contra `totalKgMagro` era
+ * un bug. Francesc aclaró explícitamente que NO lo era: estas 3 tasas son
+ * una decisión de negocio fija e independiente, sin relación con
+ * `rendiments_porcs` (esa tabla es para el cálculo de Rendiment/
+ * Diferència de las FILAS KG/PAQ de la tabla principal — un concepto
+ * distinto, que nunca estuvo en discusión). Su ejemplo real: con 1 cerdo,
+ * Total Kg Magre = 25.000 (12+6+7), NO 30.000. NO reconectar esto a
+ * `rendiments_porcs` bajo ningún concepto — ya se intentó y se revirtió.
  */
 const KG_JAMON_PER_CERDO = 12;
 const KG_RECORTES_PER_CERDO = 6;
@@ -702,7 +713,6 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
     };
 
     let totalKgAElaborarNum = 0;
-    let totalKgMagroNum = 0;
     const dadesCompletes: PanellProduccioFilaApi[] = filas.rows.map((f) => {
       const unitatsPerPorc = f.unitats_per_porc !== null ? Number(f.unitats_per_porc) : null;
       const kgPerUnitat = f.kg_per_unitat !== null ? Number(f.kg_per_unitat) : null;
@@ -726,10 +736,6 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
         };
       }
 
-      // KG o MAGRE: kgAElaborar cuenta para el total de cabecera siempre
-      // (nunca para PAQ, ver totals.totalKgAElaborar más abajo).
-      totalKgAElaborarNum += Number(f.kg_a_elaborar);
-
       let rendiment: string | null = null;
       let diferencia: string | null = null;
       if (f.agrupacio_rendiment === 'KG') {
@@ -738,11 +744,26 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
           rendiment = rendimentNum.toFixed(3);
           diferencia = (rendimentNum - Number(f.kg_a_elaborar)).toFixed(3);
         }
-      } else if (kgPerUnitat !== null) {
-        // MAGRE: no hay cálculo por fila — el rendimiento potencial de
-        // esta agrupación va al total global (totals.totalKgMagro), una
-        // sola vez por agrupación, no por línia individual.
-        totalKgMagroNum += kgPerUnitat * nombrePorcs;
+      } else {
+        // MAGRE: no hay cálculo por fila (rendiment/diferencia quedan
+        // null) — a diferencia de KG, acá `rendiments_porcs` no alimenta
+        // ningún total de cabecera. "Total Kg Magre" (totals.totalKgMagro)
+        // es la suma de kgJamon/kgRecortes/kgPaletillas, 3 tasas FIJAS de
+        // negocio — ver el comentario junto a esas constantes, más arriba
+        // (REVERT 23/09/2026: no reconectar esto a rendiments_porcs).
+        //
+        // Fix (Francesc, confirmado) — "Total Kg a elaborar" (la tarjeta
+        // que se compara contra "Total Kg Magre"/"Diferència") suma
+        // EXCLUSIVAMENTE MAGRE, nunca KG: antes se acumulaba más arriba,
+        // fuera de este if/else, para KG+MAGRE juntas — con
+        // agrupacioRendiment=MAGRE explícito ya daba bien (porque `filas`
+        // sólo traía MAGRE en ese caso), el bug sólo se notaba con "Totes"
+        // o "KG" seleccionados. La columna "Kg a Elaborar" de CADA FILA
+        // (`kgAElaborar` más abajo, `f.kg_a_elaborar` crudo) es un campo
+        // completamente aparte — sigue igual para KG y MAGRE, sin tocar.
+        // Este fix SIGUE VIGENTE — el revert del 23/09/2026 sólo afecta a
+        // kgJamon/kgRecortes/kgPaletillas/totalKgMagro, no a esto.
+        totalKgAElaborarNum += Number(f.kg_a_elaborar);
       }
 
       return {
@@ -758,17 +779,28 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
 
     const dades = dadesCompletes.slice(offset, offset + mida);
 
+    // Capa 24 — rendimiento fijo por cerdo (ver constantes arriba).
+    // nombrePorcs ya está validado como obligatorio y > 0 más arriba en el
+    // handler, así que estos tres campos siempre traen un valor.
+    //
+    // REVERT (Francesc, confirmado 23/09/2026) — totalKgMagro vuelve a ser
+    // la suma directa de estas 3 tasas fijas, NO un acumulado desde
+    // rendiments_porcs (eso se intentó y se revirtió — ver comentario junto
+    // a las constantes). Con nombrePorcs=1: 12+6+7=25.000, el ejemplo real
+    // que dio Francesc.
+    const kgJamonNum = KG_JAMON_PER_CERDO * nombrePorcs;
+    const kgRecortesNum = KG_RECORTES_PER_CERDO * nombrePorcs;
+    const kgPaletillasNum = KG_PALETILLAS_PER_CERDO * nombrePorcs;
+    const totalKgMagroNum = kgJamonNum + kgRecortesNum + kgPaletillasNum;
+
     return {
       totals: {
         totalKgAElaborar: totalKgAElaborarNum.toFixed(3),
         totalKgMagro: totalKgMagroNum.toFixed(3),
         diferencia: (totalKgMagroNum - totalKgAElaborarNum).toFixed(3),
-        // Capa 24 — rendimiento fijo por cerdo (ver constantes arriba).
-        // nombrePorcs ya está validado como obligatorio y > 0 más arriba
-        // en el handler, así que estos tres campos siempre traen un valor.
-        kgJamon: (KG_JAMON_PER_CERDO * nombrePorcs).toFixed(3),
-        kgRecortes: (KG_RECORTES_PER_CERDO * nombrePorcs).toFixed(3),
-        kgPaletillas: (KG_PALETILLAS_PER_CERDO * nombrePorcs).toFixed(3),
+        kgJamon: kgJamonNum.toFixed(3),
+        kgRecortes: kgRecortesNum.toFixed(3),
+        kgPaletillas: kgPaletillasNum.toFixed(3),
         canals: totalsCanals,
       },
       dades,

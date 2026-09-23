@@ -165,9 +165,12 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
       ordinal: 5,
     });
 
-    // MAGRE — tres agrupaciones que rinden 12/6/7 kg por cerdo (el ejemplo
-    // del contrato), con kgAElaborar propios que suman 387.979 para que
-    // totalKgAElaborar cierre en 512.982 (35.000 + 90.003 + 387.979).
+    // MAGRE — tres agrupaciones (nombres arbitrarios, PERNIL/ESPATLLA/
+    // PAPADA no coinciden con las agrupaciones reales de negocio), con
+    // kgAElaborar propios que suman 387.979 — ese es el totalKgAElaborar
+    // esperado (fix Francesc: sólo MAGRE, ya no KG+MAGRE). kgJamon/
+    // kgRecortes/kgPaletillas/totalKgMagro son constantes fijas — no
+    // dependen de esta fixture en absoluto (ver REVERT 23/09/2026).
     await crearAgrupacio({
       categoriaNom: 'Peces Magres',
       agrupacioRendiment: 'MAGRE',
@@ -275,10 +278,21 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
 
     expect(cuerpo.dades).toHaveLength(9);
     expect(cuerpo.totals).toEqual({
-      totalKgAElaborar: '512.982',
+      // Fix (Francesc, confirmado) — "Total Kg a elaborar" ahora suma
+      // EXCLUSIVAMENTE MAGRE (antes sumaba KG+MAGRE: 125.003 + 387.979 =
+      // 512.982). Este dataset tiene PERNIL/ESPATLLA/PAPADA con
+      // unitatsPerPorc='1.00' (ver crearAgrupacio más arriba), así que
+      // totalKgMagro no cambia con el otro fix (unitatsPerPorc×1 = mismo
+      // valor) — el test dedicado de más abajo cubre unitatsPerPorc≠1.
+      totalKgAElaborar: '387.979',
+      // REVERT (Francesc, confirmado 23/09/2026) — kgJamon/kgRecortes/
+      // kgPaletillas vuelven a ser constantes fijas (12/6/7 × nombrePorcs),
+      // NO calculadas desde rendiments_porcs (se intentó conectarlas y se
+      // revirtió — Francesc aclaró que es una tasa de negocio fija e
+      // independiente). Con nombrePorcs=5: 60+30+35=125, coincide con
+      // totalKgMagro (pura coincidencia con este fixture, no por diseño).
       totalKgMagro: '125.000',
-      diferencia: '-387.982',
-      // Capa 24 — rendimiento fijo por cerdo, 12/6/7 kg × nombrePorcs.
+      diferencia: '-262.979',
       kgJamon: '60.000',
       kgRecortes: '30.000',
       kgPaletillas: '35.000',
@@ -351,9 +365,15 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
     const cuerpo = cuerpoJson<PanellProduccioApi>(res);
     expect(cuerpo.dades).toHaveLength(2);
     expect(cuerpo.dades.every((f) => f.agrupacioRendiment === 'KG')).toBe(true);
-    // El total ahora sólo cubre lo filtrado (KG), no las MAGRE.
-    expect(cuerpo.totals.totalKgAElaborar).toBe('125.003'); // 35.000 + 90.003
-    expect(cuerpo.totals.totalKgMagro).toBe('0.000');
+    // Fix (Francesc, confirmado) — "Total Kg a elaborar" es EXCLUSIVAMENTE
+    // MAGRE ahora: filtrando por KG no hay ninguna línia MAGRE en `filas`,
+    // así que da "0.000" (antes daba la suma de las 2 filas KG mostradas,
+    // 125.003 — mezclaba lo que se ve en la tabla con lo que muestra esta
+    // tarjeta puntual, que son cosas distintas por diseño).
+    expect(cuerpo.totals.totalKgAElaborar).toBe('0.000');
+    // totalKgMagro es constante fija (12+6+7)×nombrePorcs — NO depende de
+    // agrupacioRendiment (REVERT 23/09/2026).
+    expect(cuerpo.totals.totalKgMagro).toBe('125.000');
 
     await fastify.close();
   });
@@ -394,10 +414,12 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
     expect(cuerpo.dades).toHaveLength(0);
     expect(cuerpo.totals).toEqual({
       totalKgAElaborar: '0.000',
-      totalKgMagro: '0.000',
-      diferencia: '0.000',
-      // kgJamon/kgRecortes/kgPaletillas son constantes fijas × nombrePorcs
-      // — no dependen de si hay datos en el rango filtrado (capa 24).
+      // REVERT (Francesc, confirmado 23/09/2026) — kgJamon/kgRecortes/
+      // kgPaletillas/totalKgMagro son constantes fijas × nombrePorcs — NO
+      // dependen de si hay datos en el rango filtrado (capa 24, revertido
+      // el intento de conectarlas a rendiments_porcs).
+      totalKgMagro: '125.000',
+      diferencia: '125.000',
       kgJamon: '60.000',
       kgRecortes: '30.000',
       kgPaletillas: '35.000',
@@ -699,6 +721,125 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
       expect(res.statusCode).toBe(200);
       const cuerpo = cuerpoJson<PanellProduccioApi>(res);
       expect(cuerpo.totals.canals).toEqual({ unitats: '3.00', kg: '15.500' });
+
+      await fastify.close();
+    });
+  });
+
+  // Fix (Francesc, confirmado) — reproduce EXACTO el escenario real
+  // reportado como regresión: categoria PECES MAGRES con las 4 agrupaciones
+  // reales de rendiments_porcs (unitatsPerPorc≠1 en 2 de las 4, a propósito
+  // — la fixture de más arriba usa siempre '1.00'). Confirma
+  // totalKgAElaborar (demanda real, exclusivamente MAGRE — fix que SIGUE
+  // vigente).
+  //
+  // REVERT (Francesc, confirmado 23/09/2026): este describe originalmente
+  // también probaba que totalKgMagro/kgJamon/kgRecortes/kgPaletillas se
+  // calculaban desde estos mismos datos de rendiments_porcs — esa conexión
+  // se revirtió por completo (Francesc: son 3 tasas fijas de negocio, sin
+  // relación con rendiments_porcs). El test de abajo ahora confirma
+  // justamente lo contrario: que tener agrupaciones PERNIL/RETALLS/
+  // ESPATLLA reales en rendiments_porcs NO afecta esos 4 campos — para que
+  // nadie repita este mismo error sin que un test lo agarre.
+  describe('totalKgAElaborar — datos reales de PECES MAGRES (Francesc)', () => {
+    // Fecha propia ('2026-08-15'), distinta de `DATA` ('2026-08-20', usada
+    // por el fixture del describe exterior) — y raw SQL en vez de
+    // `crearAgrupacio` (que hardcodea `DATA`) — para quedar totalmente
+    // aislado de ese otro fixture al filtrar por rango de fecha. Ya hubo un
+    // intento fallido reusando 'PERNIL'/'ESPATLLA' como agrupacioProduccio
+    // con la MISMA fecha: el GROUP BY de la query es por agrupacio_produccio
+    // + agrupacio_rendiment (no por categoria_id), así que un nombre
+    // repetido en el mismo rango de fecha mezcla las dos fixtures en una
+    // sola fila (540.000 en vez de 300.000 en ese intento).
+    const DATA_MAGRE_REAL = '2026-08-15';
+
+    beforeAll(async () => {
+      const categoria = await entorn.poolTest.query<{ id: string }>(
+        `INSERT INTO categoria_producte (nom, elaborat_porc, agrupacio_rendiment)
+         VALUES ('PECES MAGRES REAL', true, 'MAGRE') RETURNING id`,
+      );
+      const comanda = await entorn.poolTest.query<{ id: string }>(
+        `INSERT INTO comanda (origen_id, estat, data_comanda)
+         VALUES ((SELECT id FROM origen_comanda WHERE codi = 'manual'), 'oberta', '2026-08-01') RETURNING id`,
+      );
+      const comandaId = comanda.rows[0]!.id;
+
+      // 7.0 + 12.0 + 7.0 + 4.0 = 30.0 kg/porc (dato real confirmado por
+      // Francesc) — la fórmula vieja (sin ×unitatsPerPorc) daba 3.5+6.0+
+      // 7.0+4.0 = 20.5 kg/porc, un resultado distinto pero NUNCA cero.
+      const grupos: {
+        codi: string;
+        agrupacioProduccio: string;
+        unitatsPerPorc: string;
+        kgPerUnitat: string;
+      }[] = [
+        {
+          codi: 'ESPATLLA-REAL',
+          agrupacioProduccio: 'ESPATLLA',
+          unitatsPerPorc: '2.00',
+          kgPerUnitat: '3.500',
+        },
+        {
+          codi: 'PERNIL-REAL',
+          agrupacioProduccio: 'PERNIL',
+          unitatsPerPorc: '2.00',
+          kgPerUnitat: '6.000',
+        },
+        {
+          codi: 'RETALLS-1RA-REAL',
+          agrupacioProduccio: 'RETALLS 1RA',
+          unitatsPerPorc: '1.00',
+          kgPerUnitat: '7.000',
+        },
+        {
+          codi: 'RETALLS-2NA-REAL',
+          agrupacioProduccio: 'RETALLS 2NA',
+          unitatsPerPorc: '1.00',
+          kgPerUnitat: '4.000',
+        },
+      ];
+      for (const [ordinal, grup] of grupos.entries()) {
+        const producte = await entorn.poolTest.query<{ id: string }>(
+          `INSERT INTO producte (codi, descripcio, tipus, categoria_id, agrupacio_produccio)
+           VALUES ($1, $1, 'simple', $2, $3) RETURNING id`,
+          [grup.codi, categoria.rows[0]!.id, grup.agrupacioProduccio],
+        );
+        await entorn.poolTest.query(
+          `INSERT INTO rendiments_porcs (categoria_id, agrupacio_produccio, unitats_per_porc, kg_per_unitat)
+           VALUES ($1, $2, $3, $4)`,
+          [categoria.rows[0]!.id, grup.agrupacioProduccio, grup.unitatsPerPorc, grup.kgPerUnitat],
+        );
+        await entorn.poolTest.query(
+          `INSERT INTO comanda_linia (
+             comanda_id, ordinal, producte_id, unitats_demanades, preu_unitari,
+             pes_calculat_kg, data_produccio
+           ) VALUES ($1, $2, $3, 1, '0.00', '10.000', $4)`,
+          [comandaId, ordinal, producte.rows[0]!.id, DATA_MAGRE_REAL],
+        );
+      }
+    });
+
+    it('totalKgAElaborar = 40.0 (demanda real de las 4 agrupaciones) — totalKgMagro/kgJamon/kgRecortes/kgPaletillas NO se ven afectados por rendiments_porcs', async () => {
+      const fastify = construirServidor();
+      const res = await fastify.inject({
+        method: 'GET',
+        url: `/api/v1/panells/produccio?nombrePorcs=10&dataDes=${DATA_MAGRE_REAL}&dataFins=${DATA_MAGRE_REAL}&agrupacioRendiment=MAGRE`,
+      });
+
+      expect(res.statusCode).toBe(200);
+      const cuerpo = cuerpoJson<PanellProduccioApi>(res);
+      // Las 4 agrupaciones MAGRE de este fixture, 10.000 kg cada una —
+      // demanda real, fix que sigue vigente.
+      expect(cuerpo.totals.totalKgAElaborar).toBe('40.000');
+      // REVERT (Francesc, confirmado 23/09/2026) — aunque este fixture
+      // tiene rendiments_porcs reales para PERNIL/RETALLS 1RA/RETALLS
+      // 2NA/ESPATLLA (unitatsPerPorc≠1 en 2 de las 4), estos 4 campos son
+      // las constantes fijas de siempre (12/6/7 × nombrePorcs=10),
+      // totalmente ajenos a esos datos.
+      expect(cuerpo.totals.kgJamon).toBe('120.000');
+      expect(cuerpo.totals.kgRecortes).toBe('60.000');
+      expect(cuerpo.totals.kgPaletillas).toBe('70.000');
+      expect(cuerpo.totals.totalKgMagro).toBe('250.000');
 
       await fastify.close();
     });

@@ -94,6 +94,11 @@ están documentadas ahí mismo y en el agente `woocommerce-integration`.
   línea, **obligatorios**, arrancan en cero, requieren checkbox de
   confirmación explícita aunque coincidan con lo pedido (doble confirmación:
   por mermas se puede enviar menos de lo pedido, y eso dispara abono/cargo).
+  Issue #19 (Francesc, confirmado 23/09/2026) — a diferencia de la regla de
+  arriba (unidades/peso de línea, que sigue sin poder ser cero), estos dos
+  campos SÍ pueden guardarse en 0 (rotura total, artículo agotado): la
+  restricción de "mayor que cero" que tenían se sacó a propósito, reabriendo
+  y reemplazando una decisión anterior.
 - Cuatro estados de pedido: `oberta`, `en_proces`, `tancada`, `amb_incidencia`.
 - Cuatro paneles: oficina, obrador, empaquetado, producció/planificació. **Sólo
   empaquetado edita**; los otros tres son de sólo lectura con filtros y
