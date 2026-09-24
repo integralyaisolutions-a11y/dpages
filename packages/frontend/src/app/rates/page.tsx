@@ -269,9 +269,9 @@ export default function RatesPage() {
   // FilaMatriuTarifesApi (contrato §4.3) no trae categoria/format: la matriz
   // de tarifas sólo expone producteId/codi/descripcio/preus. Se derivan acá
   // cruzando por producteId contra el catàleg (useCatalog) en vez de
-  // duplicar el dato a mano, como hacía el mock viejo (ver AUDITORIA_FRONTEND.md
-  // §4). Con los datos de ejemplo de hoy la mayoría no cruza (mocks/rates.ts
-  // usa otro conjunto de SKUs que mocks/catalog.ts, gap documentado ahí) y
+  // duplicar el dato a mano, para no tener dos fuentes de verdad separadas
+  // para el mismo producto. Con los datos de ejemplo de hoy la mayoría no
+  // cruza (mocks/rates.ts usa otro conjunto de SKUs que mocks/catalog.ts) y
   // queda en "—" — eso es correcto, no un bug de este cruce.
   const categoryByProductId = useMemo(() => {
     const map = new Map<number, string>();
