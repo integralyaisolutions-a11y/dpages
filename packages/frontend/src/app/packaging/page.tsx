@@ -339,8 +339,8 @@ export default function PackagingPage() {
   // Es guarda l'opció sencera (id+label): no hi ha cap array complet
   // d'on resoldre l'etiqueta a mostrar després.
   const [selectedClient, setSelectedClient] = useState<ComboboxOption | null>(null);
-  // Capa 37 — dataLliuramentDes/Fins (rang) i producte (exacte,
-  // case-insensitive) ja tenen suport real al backend. Mateix patró que
+  // dataLliuramentDes/Fins (rang) i producte (exacte, case-insensitive) ja
+  // tenen suport real al backend. Mateix patró que
   // "Data d'expedició" (un sol camp, enviat com Des=Fins=mateix valor).
   // Producte segueix en mode LOCAL (filtrant `catalog` ja carregat, mateix
   // criteri que Producte a OrderForm.tsx): GET /productes?cerca= fa
@@ -392,7 +392,7 @@ export default function PackagingPage() {
     [shippingDateFilter, carrierId, selectedClient, deliveryDateFilter, productFilter],
   );
 
-  // Capa 46 — "pendents primer" ja ve per defecte des del backend (GET
+  // "pendents primer" ja ve per defecte des del backend (GET
   // /panells/empaquetat, ORDER BY confirmat_a IS NOT NULL ASC), sense cap
   // paràmetre — confirmat amb curl real abans de treure el sort
   // client-side que hi havia acá com a pedaç temporal.

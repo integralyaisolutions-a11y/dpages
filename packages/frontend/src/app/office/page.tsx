@@ -64,7 +64,7 @@ function OfficeOrderCard({ order, onClick }: { order: FilaPanellOficinaApi; onCl
 
       <div className="mt-3 flex gap-6 border-t border-gray-100 pt-3">
         <label className="flex items-center gap-2 text-sm text-gray-700">
-          {/* Capa 35 — FilaPanellOficinaApi.obsProduccio ya es boolean acá
+          {/* FilaPanellOficinaApi.obsProduccio ya es boolean acá
               (cabecera O línia activa), el backend ja fa el càlcul. NO és
               string: cap .trim() acá (a diferència del detall, on
               ComandaLiniaApi.obsProduccio segueix sent string | null). */}
@@ -95,7 +95,7 @@ export default function OfficePage() {
   const { tariffColumns } = useRates();
   const { data: carriers } = useCarriers();
 
-  // Capa 35 — els 8 filtres reals de GET /panells/oficina, tots connectats.
+  // Els 8 filtres reals de GET /panells/oficina, tots connectats.
   // Client ja no ve d'un <select> amb els 200 clients carregats de cop
   // (useClientTariffs()) — AsyncCombobox el resol via GET /clients?cerca=,
   // per això acá es guarda l'opció sencera (id+label), no només l'id: no
@@ -167,7 +167,7 @@ export default function OfficePage() {
   // disponible sense un endpoint dedicat. Es descarten els nulls: no hi ha
   // manera de filtrar per "sense població" contra un backend que compara
   // per igualtat exacta de text (enviar-ho literal no matchejaria res).
-  // LIMITACIÓ CONEGUDA amb paginació real (2026-08-30): només reflecteix
+  // LIMITACIÓ CONEGUDA amb paginació real: només reflecteix
   // les poblacions presents a la pàgina actual (20 comandes), no totes les
   // que existeixen — no hi ha cap fix net possible sense un endpoint nou.
   const destinationOptions = useMemo(

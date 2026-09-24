@@ -14,8 +14,8 @@ import { usePageClamp } from './usePageClamp';
 
 /**
  * Els 5 filtres reals de GET /panells/empaquetat (confirmat contra
- * panells.ts) — dataLliuramentDes/Fins i producte són capa 37, abans no
- * tenien suport al backend.
+ * panells.ts) — dataLliuramentDes/Fins i producte abans no tenien suport
+ * al backend.
  */
 export type PackagingPanelFilters = {
   dataExpedicioDes?: string;

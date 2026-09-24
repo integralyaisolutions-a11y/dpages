@@ -69,8 +69,8 @@ export default function ClientTariffsPage() {
     [tariffFilter, tariffColumns],
   );
 
-  // Migració server-side (bug reportat per Francesc): `tariffFilter` es
-  // filtrava client-side sobre `data` (només els 20 clients de la pàgina
+  // Migració server-side: `tariffFilter` es filtrava client-side sobre
+  // `data` (només els 20 clients de la pàgina
   // actual) — `useClientTariffs()` mai detectava el canvi (no formava part
   // de `clientFilters`) i `pagina` no es resetejava mai. Ara viatja com a
   // `tarifaId` real (GET /clients?tarifaId=, confirmat contra clients.ts),

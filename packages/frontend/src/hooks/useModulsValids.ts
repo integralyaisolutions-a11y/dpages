@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 
 /**
- * Capa 44 — `GET /rols/moduls-valids` expone la MISMA constante que valida
+ * `GET /rols/moduls-valids` expone la MISMA constante que valida
  * `POST`/`PATCH /rols` en el backend (rols.ts), reemplazando el
  * `MODULS_VALIDS` que antes vivía hardcodeado y duplicado a mano en
  * `lib/roles.ts` (con el riesgo real de desincronizarse en silencio — ya

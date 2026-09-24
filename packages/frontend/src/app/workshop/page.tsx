@@ -30,7 +30,7 @@ function leftBorderClass(treballat: boolean) {
 }
 
 /**
- * Capa 40 — a diferència del checkbox de sòl lectura d'Empaquetat
+ * A diferència del checkbox de sòl lectura d'Empaquetat
  * (`WorkedCheckbox`, packaging/page.tsx), aquest SÍ dispara la crida real:
  * el propi click és l'acció, sense formulari ni botó "Guardar" separat.
  * Estat optimista local: es marca a l'instant i es desactiva mentre la
@@ -239,7 +239,7 @@ export default function WorkshopPage() {
     [productFilter, envasatFilter, formatFilter, productionDateFilter],
   );
 
-  // Capa 46 — "pendents primer" ja ve per defecte des del backend (GET
+  // "pendents primer" ja ve per defecte des del backend (GET
   // /panells/obrador, ORDER BY treballat_a IS NOT NULL ASC), sense cap
   // paràmetre — confirmat amb curl real abans de treure el sort client-side
   // que hi havia acá com a pedaç temporal.

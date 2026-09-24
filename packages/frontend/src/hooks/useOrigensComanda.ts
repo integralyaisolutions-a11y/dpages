@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError, type OrigenComandaApi, type RespostaPaginada } from '@/lib/api';
 
-// Volum real: 5 files fixes (woocommerce/manual/whatsapp/telefon/correu,
-// capa 43) — molt per sota del màxim de pàgina (200), sense cap pantalla
+// Volum real: 5 files fixes (woocommerce/manual/whatsapp/telefon/correu) —
+// molt per sota del màxim de pàgina (200), sense cap pantalla
 // de gestió pròpia que ho requereixi encara. Sense create/edit acá: aquest
 // hook només alimenta el desplegable d'Origen a OrderForm.tsx.
 const MIDA_LLISTAT = 50;

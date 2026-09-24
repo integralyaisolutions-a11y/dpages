@@ -125,11 +125,11 @@ export default function OrderDetailPage() {
       );
     }
 
-    // Capa 30 — una llamada por línia nova/editada (el backend no ofereix
-    // un endpoint batch). Cap error interromp les altres: es guarden totes
+    // Una llamada por línia nova/editada (el backend no ofereix un
+    // endpoint batch). Cap error interromp les altres: es guarden totes
     // les que es puguin i s'avisa amb el detall de les que han fallat.
-    // Capa 34 — el cas delicat: editar NOMÉS la capçalera (headerFailed
-    // amunt) també pot xocar amb una línia existent que ni tan sols
+    // El cas delicat: editar NOMÉS la capçalera (headerFailed amunt)
+    // també pot xocar amb una línia existent que ni tan sols
     // s'estigui tocant en aquest request (ver comentari a comandes.ts,
     // PATCH /comandes/:id) — extractComandaErrorMessage ja inclou quina
     // línia és, encara que aquí no hi hagi cap `lineChanges` que la referenci.

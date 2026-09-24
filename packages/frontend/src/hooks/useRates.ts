@@ -108,9 +108,9 @@ export function useRates(filters: RatesFilters = {}): UseRatesResult {
   // (ex. crear una tarifa nova) deixa l'usuari en una pàgina buida.
   usePageClamp(paginacio, setPagina);
 
-  // Una PATCH por celda cambiada y un DELETE por celda vaciada (capa 28: el
-  // backend ya soporta borrar una fila de tarifa_preu para volver a "sin
-  // precio en esta tarifa") — el contrato no soporta guardar toda la fila
+  // Una PATCH por celda cambiada y un DELETE por celda vaciada (el backend
+  // soporta borrar una fila de tarifa_preu para volver a "sin precio en
+  // esta tarifa") — el contrato no soporta guardar toda la fila
   // de una vez. Promise.all en vez de fallar rápido: el backend no
   // garantiza atomicidad entre celdas, así que cada una se resuelve
   // independiente y se informa cuál falló, no todo-o-nada.

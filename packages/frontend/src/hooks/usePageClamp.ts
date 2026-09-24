@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import type { Paginacio } from '@/lib/api';
 
 /**
- * Hallazgo A (auditoria de paginació, Francesc) — corregeix `pagina` quan
+ * Hallazgo A (auditoria de paginació) — corregeix `pagina` quan
  * la pàgina on estava l'usuari deixa d'existir per un motiu que NO és
  * canviar un filtre (l'únic cas que ja cobria el mecanisme de
  * `filtersKey`/`prevFiltersKey` repetit als 12 hooks paginats): esborrar

@@ -35,7 +35,7 @@ const FORMAT_OPTIONS = ['SENCER', 'TALLAT', 'LLESCAT'];
 // l'usuari comença a scrollejar, en lloc de quedar-se on ja estava.
 //
 // Pressupost real a 320px (abans deixava només ~18px lliures, insuficient
-// per percebre cap columna de tarifa — ver informe d'investigació):
+// per percebre cap columna de tarifa):
 //   320 viewport − 48 padding de <main> (px-6×2) − ~2 border del
 //   contenidor de scroll = 270px disponibles.
 //   270 − 150 (DESCRIPCIO_WIDTH_MOBILE) = 120px lliures per la propera
@@ -109,8 +109,8 @@ function RateProductRow({
   }, [product, tariffColumns]);
 
   const { draft, setField, save, isDirty } = useEditableRow(initialPrices, async (prices) => {
-    // PATCH para las celdas que cambiaron a un valor no vacío; DELETE (capa
-    // 28) para las que tenían precio y el usuario vació — ninguna de las
+    // PATCH para las celdas que cambiaron a un valor no vacío; DELETE
+    // para las que tenían precio y el usuario vació — ninguna de las
     // dos toca las celdas sin cambios reales.
     const changes: Record<string, string> = {};
     const deletions: string[] = [];
@@ -210,8 +210,8 @@ export default function RatesPage() {
         : undefined,
     [category, catalog],
   );
-  // Migració server-side parcial (bug reportat per Francesc): Categoria
-  // viatja ara com a `categoriaId` real (GET /tarifes/matriu?categoriaId=,
+  // Migració server-side parcial: Categoria viatja ara com a
+  // `categoriaId` real (GET /tarifes/matriu?categoriaId=,
   // confirmat contra tarifes.ts). Format es queda client-side A PROPÒSIT —
   // aquest endpoint NO té cap query param de format (confirmat llegint
   // tarifes.ts sencer: només accepta categoriaId/cerca), no és un descuit
@@ -284,8 +284,8 @@ export default function RatesPage() {
     return map;
   }, [catalog]);
 
-  // Efecte col·lateral de la paginació (2026-08-30) resolt: abans es
-  // derivava de `data` (les 20 files de tarifes de la pàgina actual) — ara
+  // Efecte col·lateral de la paginació ja resolt: abans es derivava de
+  // `data` (les 20 files de tarifes de la pàgina actual) — ara
   // ve de `catalog`, que ja és la font completa (useCatalog() sense `mida`,
   // per defecte 200) que aquesta mateixa pantalla ja carregava per resoldre
   // categoria/format de cada fila. Format segueix hardcodejat (enum tancat).

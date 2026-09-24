@@ -18,7 +18,7 @@ type UseRolsResult = {
   editRole: (id: number, input: EditRoleInput) => Promise<RolApi>;
 };
 
-// Capa 46 — GET /rols ya pagina de verdad (mismo shape que el resto,
+// GET /rols ya pagina de verdad (mismo shape que el resto,
 // confirmado contra rols.ts: parsearPaginacio/construirPaginacio). No hi ha
 // DELETE /rols — aquest hook no en té cap funció equivalent, la UI tampoc
 // ofereix l'acció.

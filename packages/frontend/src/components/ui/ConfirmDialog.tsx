@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { Modal } from "@/components/ui/Modal";
+import { Modal } from '@/components/ui/Modal';
 
 export function ConfirmDialog({
   isOpen,
   title,
   message,
-  confirmLabel = "Confirmar",
-  confirmingLabel = "Eliminant...",
-  cancelLabel = "Cancel·lar",
+  confirmLabel = 'Confirmar',
+  confirmingLabel = 'Eliminant...',
+  cancelLabel = 'Cancel·lar',
   onConfirm,
   onCancel,
   errorMessage,
@@ -28,7 +28,7 @@ export function ConfirmDialog({
   errorMessage?: string | null;
   /** Deshabilita el botón de confirmar mientras la acción está en curso — evita doble click/doble request. */
   isConfirming?: boolean;
-  /** Campo de texto adicional dentro del diálogo (ej. motivo obligatorio al marcar incidència, capa 31) — si se pasa, el botón de confirmar queda deshabilitado mientras value esté vacío. */
+  /** Campo de texto adicional dentro del diálogo (ej. motivo obligatorio al marcar incidència) — si se pasa, el botón de confirmar queda deshabilitado mientras value esté vacío. */
   detailField?: {
     label: string;
     value: string;
@@ -36,7 +36,7 @@ export function ConfirmDialog({
     placeholder?: string;
   };
 }) {
-  const detailMissing = detailField !== undefined && detailField.value.trim() === "";
+  const detailMissing = detailField !== undefined && detailField.value.trim() === '';
 
   return (
     <Modal isOpen={isOpen} onClose={onCancel} title={title}>
@@ -55,7 +55,11 @@ export function ConfirmDialog({
       )}
       {errorMessage && <p className="mt-3 text-sm text-red-600">{errorMessage}</p>}
       <div className="mt-6 flex items-center justify-between">
-        <button type="button" onClick={onCancel} className="text-sm font-medium text-gray-500 hover:text-gray-700">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-sm font-medium text-gray-500 hover:text-gray-700"
+        >
           {cancelLabel}
         </button>
         <button

@@ -80,8 +80,8 @@ export default function UsersPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState(ALL);
 
-  // Issue #17 (Michelle/Francesc) — `cerca` ja és real a GET /usuaris
-  // (ILIKE sobre nom/email, confirmat contra usuaris.ts): reemplaça el
+  // Issue #17 — `cerca` ja és real a GET /usuaris (ILIKE sobre nom/email,
+  // confirmat contra usuaris.ts): reemplaça el
   // filtre client-side que donava totals/resultats inconsistents en
   // filtrar només sobre la pàgina ja carregada (mateix bug que Catàleg).
   const userFilters = useMemo(
@@ -101,7 +101,7 @@ export default function UsersPage() {
     createUser,
     editUser,
   } = useUsers(userFilters);
-  // Capa 46 — GET /rols ja pagina de veritat (abans no ho feia).
+  // GET /rols ja pagina de veritat (abans no ho feia).
   const {
     data: roles,
     paginacio: rolesPaginacio,

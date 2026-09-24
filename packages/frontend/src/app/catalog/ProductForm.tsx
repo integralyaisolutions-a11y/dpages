@@ -105,7 +105,7 @@ export function ProductForm({
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {initialData !== undefined ? (
-            // Issue de robustesa (Francesc) — codi és immutable un cop creat
+            // Issue de robustesa — codi és immutable un cop creat
             // (decisió de negoci confirmada): en edició es mostra com a text
             // de sòl lectura, mateix component/classes exactes que "Codi" a
             // ClientFormModal.tsx (mai un TextField disabled, que es veuria

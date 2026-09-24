@@ -25,7 +25,7 @@ export type WorkshopPanelFilters = {
   dataProduccioFins?: string;
 };
 
-/** Capa 40 — `PATCH .../treball`. El 409 (comanda congelada) no porta `detalls` per camp, mateix criteri que `LliuramentSaveResult`. */
+/** `PATCH .../treball`. El 409 (comanda congelada) no porta `detalls` per camp, mateix criteri que `LliuramentSaveResult`. */
 export type ToggleTreballResult = { success: true } | { success: false; error: string };
 
 /**

@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 /**
- * Issue #15 (Francesc) — abans de crear aquest guard NO existia cap
+ * Issue #15 — abans de crear aquest guard NO existia cap
  * mecanisme de "canvis sense desar" enlloc del projecte (confirmat per
  * grep de beforeunload/onNavigate/unsaved a tot src/, investigació
  * prèvia). Next.js App Router (v16.3.1, docs reals a

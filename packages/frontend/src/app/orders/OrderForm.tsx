@@ -42,16 +42,16 @@ const NO_ORIGIN = 'Selecciona origen...';
 // canvi rellevant.
 const TARIFF_COVERAGE_DEBOUNCE_MS = 300;
 
-// Capa 43 — un pedido NUEVO sólo puede cargarse manualmente por estos 3
-// canales (whatsapp/telefon/correu, ver origen_comanda). "manual" y
-// "woocommerce" siguen siendo códigos válidos (pedidos viejos/sincronizados
-// ya los tienen), pero nunca se ofrecen como opción al crear uno desde acá
-// — por eso el filtro es explícito por código, no "todo lo que devuelva
+// Un pedido NUEVO sólo puede cargarse manualmente por estos 3 canales
+// (whatsapp/telefon/correu, ver origen_comanda). "manual" y "woocommerce"
+// siguen siendo códigos válidos (pedidos viejos/sincronizados ya los
+// tienen), pero nunca se ofrecen como opción al crear uno desde acá — por
+// eso el filtro es explícito por código, no "todo lo que devuelva
 // GET /origens-comanda".
 const CODIS_ORIGEN_ELEGIBLES = ['whatsapp', 'telefon', 'correu'];
 
-// amb_incidencia queda FORA d'aquesta llista a propòsit (capa 31, decisió
-// de UX confirmada): el selector de capçalera només serveix per triar
+// amb_incidencia queda FORA d'aquesta llista a propòsit (decisió de UX
+// confirmada): el selector de capçalera només serveix per triar
 // lliurement entre els 3 estats que no exigeixen motiu. L'única via cap a
 // amb_incidencia és el botó "Marcar com a incidència" (pantalla pare), que
 // sí demana `detall`. Si la comanda ja estava amb_incidencia en carregar
@@ -119,9 +119,9 @@ function createEmptyLine(ordinal: number): LineDraft {
     envasat: null,
     unitatsDemanades: '0',
     // "0" pla, no "0.000": mateix criteri que unitatsDemanades — evita que
-    // el cursor caigui enmig dels decimals en fer clic (fricció original
-    // reportada per Francesc). Només afecta el default d'una línia nova
-    // "a mida" (kgEditable=true) — un producte amb pes de fitxa el
+    // el cursor caigui enmig dels decimals en fer clic. Només afecta el
+    // default d'una línia nova "a mida" (kgEditable=true) — un producte amb
+    // pes de fitxa el
     // sobreescriu de seguida amb el pes real calculat (ver applyProduct).
     kgDemanats: '0',
     kgEditable: true,
@@ -129,9 +129,9 @@ function createEmptyLine(ordinal: number): LineDraft {
     kgLliurats: '0.000',
     confirmatA: null,
     // El backend calcula preuUnitari/totalLinia al crear la línia
-    // (resolverPreuLinia: cascada tarifa→preu base→incidència, ver
-    // investigación) — nunca se precalculan acá, quedan en "0.00" hasta
-    // que la respuesta real del backend los complete.
+    // (resolverPreuLinia: cascada tarifa→preu base→incidència) — nunca se
+    // precalculan acá, quedan en "0.00" hasta que la respuesta real del
+    // backend los complete.
     preuUnitari: '0.00',
     totalLinia: '0.00',
     dataProduccio: null,
@@ -142,17 +142,16 @@ function createEmptyLine(ordinal: number): LineDraft {
 
 /**
  * Línia nova → shape de POST /comandes (alta completa) i POST
- * /comandes/:comandaId/linies (capa 30, afegir línia a una comanda ja
- * creada) — mateix `LiniaCreacioApi` als dos casos. `dataProduccio` és
- * capa 34: abans no existia aquest camp al body de creació, així que el
- * valor que l'usuari carregava a la línia es perdia en silenci en
- * comptes de guardar-se.
+ * /comandes/:comandaId/linies (afegir línia a una comanda ja creada) —
+ * mateix `LiniaCreacioApi` als dos casos. `dataProduccio`: abans no
+ * existia aquest camp al body de creació, així que el valor que l'usuari
+ * carregava a la línia es perdia en silenci en comptes de guardar-se.
  */
 function toLiniaCreacio(line: LineDraft): LiniaCreacioApi {
   return {
     producteId: line.producte!.id,
-    // Capa 38 — LineDraft.unitatsDemanades és string (NUMERIC(10,2) al
-    // GET), però el body de POST/PATCH segueix esperant un JS number.
+    // LineDraft.unitatsDemanades és string (NUMERIC(10,2) al GET), però el
+    // body de POST/PATCH segueix esperant un JS number.
     unitatsDemanades: Number(line.unitatsDemanades),
     kgDemanats: line.kgEditable ? line.kgDemanats : undefined,
     // Issue #21 — LiniaCreacioApi.dataProduccio torna a admetre null: ja no
@@ -161,7 +160,7 @@ function toLiniaCreacio(line: LineDraft): LiniaCreacioApi {
   };
 }
 
-/** Línia existent → shape de PATCH .../linies/:liniaId (capa 30) — mai inclou producteId ni preuUnitari. */
+/** Línia existent → shape de PATCH .../linies/:liniaId — mai inclou producteId ni preuUnitari. */
 function toLiniaEdicio(line: LineDraft): LiniaEdicioApi {
   return {
     unitatsDemanades: Number(line.unitatsDemanades),
@@ -174,8 +173,8 @@ function toLiniaEdicio(line: LineDraft): LiniaEdicioApi {
 /**
  * Compara dues dates "YYYY-MM-DD" — buida a qualsevol banda mai viola res
  * (camps opcionals). ESTRICTE a propòsit (`>`, no `>=`): dates IGUALS
- * estan permeses — mateix criteri confirmat al backend (capa 34,
- * `validarCoherenciaDatesComanda` a comandes.ts), que documenta
+ * estan permeses — mateix criteri confirmat al backend
+ * (`validarCoherenciaDatesComanda` a comandes.ts), que documenta
  * explícitament aquest cas límit com a resolt (no com un buit).
  */
 function isDateAfter(a: string, b: string): boolean {
@@ -193,14 +192,14 @@ function today(): string {
 }
 
 /**
- * Regles 2/3/7 — validació de client per feedback immediat; capa 34 les
- * aplica també al backend (POST /comandes, PATCH /comandes/:id i els dos
- * endpoints de línia) com a última paraula, per si aquest formulari deixa
- * passar algun cas (ver `extractComandaErrorMessage` a useOrders.ts).
+ * Regles 2/3/7 — validació de client per feedback immediat; el backend les
+ * aplica també (POST /comandes, PATCH /comandes/:id i els dos endpoints de
+ * línia) com a última paraula, per si aquest formulari deixa passar algun
+ * cas (ver `extractComandaErrorMessage` a useOrders.ts).
  *
  * Fusió Data producció / Data comanda de capçalera (decisió de negoci,
- * Michelle, confirmada per investigació: `dataProduccio` de capçalera no
- * s'usa en cap filtre/pantalla més que aquesta pròpia validació) — el
+ * confirmada per investigació: `dataProduccio` de capçalera no s'usa en
+ * cap filtre/pantalla més que aquesta pròpia validació) — el
  * formulari ja no té cap input separat per a `dataProduccio` de capçalera,
  * es manda sempre idèntica a `dataComanda`. Això absorbeix l'antiga regla 1
  * ("dataLliurament no anterior a dataProduccio de capçalera"), que passa a
@@ -288,13 +287,13 @@ function tariffCoverageKey(tarifaId: number, producteId: number): string {
  * resolt — mirall exacte de la cascada real de `resolverPreuLinia`
  * (comandes.ts): (1) preu de la tarifa vigent, (2) si no n'hi ha,
  * `producte.preuVenda`, (3) si tampoc, es registra la incidència però
- * la comanda es desa igualment (decisió de negoci, Francesc, confirmada
- * — ja no bloqueja ni canvia l'estat de la comanda).
+ * la comanda es desa igualment (decisió de negoci confirmada — ja no
+ * bloqueja ni canvia l'estat de la comanda).
  *
  * Dos casos:
  * - Sense tarifa (`tarifaId === null`): certesa local, no cal cap crida —
  *   si `preuVenda` també és null, els dos passos de la cascada fallen sí o
- *   sí (cas original, capa anterior).
+ *   sí (cas original).
  * - Amb tarifa vigent i `preuVenda === null` (l'únic altre cas on el pas 2
  *   no serveix de xarxa de seguretat): abans es callava perquè el
  *   frontend no tenia manera de saber si aquesta tarifa concreta cobreix
@@ -355,8 +354,8 @@ function LineFormCard({
   );
   const { risk: priceRisk } = resolvePriceRisk(line, tarifaId, products, tariffCoverage);
   // Línia ja existent (persistida, id>0): PATCH /comandes/:id/linies/:liniaId
-  // (capa 30) no accepta producteId — no hi ha manera de comunicar un canvi
-  // de producte al backend en una línia ja creada. Es desactiva el selector
+  // no accepta producteId — no hi ha manera de comunicar un canvi de
+  // producte al backend en una línia ja creada. Es desactiva el selector
   // perquè triar-ne un altre aquí no es guardaria mai en silenci.
   const productLocked = !disabled && line.id > 0;
 
@@ -566,9 +565,9 @@ export const OrderForm = forwardRef<
   // (el tipus ComandaDetallApi.dataComanda ja no és nullable) — el `?? today()`
   // només s'activa en mode creació.
   //
-  // Fusió Data producció / Data comanda de capçalera (decisió de negoci,
-  // Michelle) — ja NO hi ha estat separat per a `dataProduccio` de
-  // capçalera: es manda sempre idèntica a `dataComanda` en construir el
+  // Fusió Data producció / Data comanda de capçalera (decisió de negoci) —
+  // ja NO hi ha estat separat per a `dataProduccio` de capçalera: es manda
+  // sempre idèntica a `dataComanda` en construir el
   // payload (ver useOrders.ts createOrder/editOrder), sense mostrar cap
   // input separat a l'usuari. El de cada LÍNIA (`line.dataProduccio`) és un
   // concepte real i distint que NO es toca.
@@ -577,10 +576,10 @@ export const OrderForm = forwardRef<
   // rebutja buida); en edició segueix sent nullable de veritat a la base
   // (PATCH la deixa buidar).
   //
-  // Sense default d'"avui" (correcció posterior, Michelle): la migració
-  // 0019 i docs/contrato-api.md atribuïen aquest default a una confirmació
-  // de negoci que en realitat no es va donar per a aquest camp concret
-  // (Gerardo ajusta la documentació per separat) — mateix criteri que ja
+  // Sense default d'"avui" (correcció posterior): la migració 0019 i
+  // docs/contrato-api.md atribuïen aquest default a una confirmació de
+  // negoci que en realitat no es va donar per a aquest camp concret (la
+  // documentació es corregeix per separat) — mateix criteri que ja
   // fan servir dataExpedicio i el dataProduccio de cada línia: obligatori,
   // sense cap valor precarregat, l'usuari sempre l'omple a mà.
   const [dataLliurament, setDataLliurament] = useState(
@@ -824,8 +823,8 @@ export const OrderForm = forwardRef<
           ? touchedLines
           : touchedLines.filter((line) => dirtyLineIds.has(line.id) && line.id < 0);
 
-      // Capa 30 — en edición, las línias nuevas/editadas se guardan por su
-      // propio endpoint (POST/PATCH .../linies), nunca embebidas en el
+      // En edición, las línias nuevas/editadas se guardan por su propio
+      // endpoint (POST/PATCH .../linies), nunca embebidas en el
       // PATCH de cabecera. En creación siguen viajando dentro de
       // ComandaCreacioApi.linies (embed original), lineChanges queda vacío.
       const lineChanges: OrderLineChanges =
@@ -841,9 +840,9 @@ export const OrderForm = forwardRef<
       void onSave(
         {
           clientId,
-          // Capa 43 — en edición, origen viaja informativo (PATCH nunca lo
-          // acepta, ver comentari a useOrders.ts) — se manda el que ya
-          // tenía el pedido, sin pasar por `origenCodi` (que en edició ni
+          // En edición, origen viaja informativo (PATCH nunca lo acepta,
+          // ver comentari a useOrders.ts) — se manda el que ya tenía el
+          // pedido, sin pasar por `origenCodi` (que en edició ni
           // es toca, el camp queda de sòl lectura).
           origen: mode === 'create' ? origenCodi : (initialData?.origen ?? null),
           tarifaId,
@@ -851,7 +850,7 @@ export const OrderForm = forwardRef<
           // Issue #16 — sempre non-buida en aquest punt (validat a dalt).
           // `dataProduccio` de capçalera ja NO viatja des d'acá — es
           // sintetitza a useOrders.ts (createOrder/editOrder) a partir
-          // d'aquest mateix `dataComanda` (fusió de conceptes, Michelle).
+          // d'aquest mateix `dataComanda` (fusió de conceptes).
           dataComanda: `${dataComanda}T00:00:00Z`,
           dataExpedicio: dataExpedicio ? `${dataExpedicio}T00:00:00Z` : null,
           dataLliurament: dataLliurament ? `${dataLliurament}T00:00:00Z` : null,
@@ -895,7 +894,7 @@ export const OrderForm = forwardRef<
     ? ESTAT_OPTIONS_SELECCIONABLES
     : [estat, ...ESTAT_OPTIONS_SELECCIONABLES];
 
-  // Capa 43 — "manual"/"woocommerce" mai apareixen com a opció triable
+  // "manual"/"woocommerce" mai apareixen com a opció triable
   // (CODIS_ORIGEN_ELEGIBLES dalt), encara que siguin codis vàlids per a
   // comandes ja existents.
   const eligibleOrigins = origins.filter((origin) => CODIS_ORIGEN_ELEGIBLES.includes(origin.codi));
@@ -992,9 +991,9 @@ export const OrderForm = forwardRef<
               setTransportistaId(carrier?.id ?? null);
             }}
           />
-          {/* Issue #16 (fusió posterior, Michelle) — "Data producció" de
-              capçalera va desaparèixer com a input separat: investigació
-              confirmada, no s'usava en cap filtre/pantalla més que la
+          {/* Issue #16 — "Data producció" de capçalera va desaparèixer com
+              a input separat: investigació confirmada, no s'usava en cap
+              filtre/pantalla més que la
               pròpia validació de coherència (ara fusionada amb dataComanda,
               ver validateHeaderDates). Columna real comanda.dataComanda
               (NOT NULL), distinta de creat_en (mai exposada a l'API).

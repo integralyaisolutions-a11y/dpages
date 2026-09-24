@@ -113,7 +113,7 @@ export default function OrdersPage() {
     [statusFilter],
   );
 
-  // Issue #17 (Michelle/Francesc) — `cerca` ja és real a GET /comandes
+  // Issue #17 — `cerca` ja és real a GET /comandes
   // (ILIKE sobre `c.num` O `cl.nom`, confirmat contra comandes.ts):
   // reemplaça els dos buscadors separats ("Núm. comanda" i "Client") que
   // hi havia abans, un d'ells (Client) filtrant client-side amb
@@ -126,8 +126,8 @@ export default function OrdersPage() {
   // pel CODI del client (`client.codi`, ex. "CLI213"), creuant contra
   // useClientTariffs(). El `cerca` real del backend NOMÉS cobreix
   // `cl.nom` — no `cl.codi` (confirmat llegint comandes.ts sencer). Buscar
-  // un pedido pel codi del seu client ja no funciona; caldria que Gerardo
-  // ampliés el OR del backend per recuperar-ho.
+  // un pedido pel codi del seu client ja no funciona; caldria ampliar el
+  // OR del backend per recuperar-ho.
   const filters = useMemo(
     () => ({
       ...(statusCode ? { estat: statusCode } : {}),

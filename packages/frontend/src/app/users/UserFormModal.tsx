@@ -56,8 +56,8 @@ export function UserFormModal({
   const grantsUsersModule = selectedRole?.modulsPermesos.includes('usuaris') ?? false;
   const isSelfRoleChange = mode === 'edit' && roleChanged && currentUser?.id === initialData?.id;
   // Fricció extra pròpia del frontend — avui PATCH /usuaris/:id no té cap
-  // guard real al backend (hallazgo de seguretat ja reportat a Gerardo),
-  // aquest ConfirmDialog és l'única barrera mentre tant.
+  // guard real al backend (hallazgo de seguretat), aquest ConfirmDialog és
+  // l'única barrera mentre tant.
   const needsRoleConfirmation =
     (mode === 'create' || roleChanged) && (grantsUsersModule || isSelfRoleChange);
 

@@ -28,7 +28,7 @@ export type OrderListFilters = {
 export type OrderFormValues = {
   clientId: number | null;
   /**
-   * Capa 43 — `OrigenComandaApi.codi`. Sólo se usa en creación (ver
+   * `OrigenComandaApi.codi`. Sólo se usa en creación (ver
    * `createOrder` más abajo); `PATCH /comandes/:id` no acepta `origen`
    * (confirmado contra comandes.ts, el handler nunca lee `cos.origen`), así
    * que en edición este valor viaja informativo pero `editOrder` lo ignora.
@@ -37,7 +37,7 @@ export type OrderFormValues = {
    */
   origen: string | null;
   /**
-   * Capa 32 — `POST /comandes` acepta `tarifaId` directo (createOrder, más
+   * `POST /comandes` acepta `tarifaId` directo (createOrder, más
    * abajo). En edición viaja igual en el PATCH.
    */
   tarifaId: number | null;
@@ -47,8 +47,8 @@ export type OrderFormValues = {
    * buida). Mai `null` a diferència de les altres 3 dates: OrderForm.tsx
    * bloqueja el submit abans si estigués buida.
    *
-   * Fusió posterior (decisió de negoci, Michelle, confirmada per
-   * investigació: `comanda.dataProduccio` de capçalera no s'usa en cap
+   * Fusió posterior (decisió de negoci, confirmada per investigació:
+   * `comanda.dataProduccio` de capçalera no s'usa en cap
    * filtre/pantalla més que la pròpia validació de coherència) —
    * `OrderFormValues` ja NO té cap camp `dataProduccio` de capçalera
    * separat. `createOrder`/`editOrder` (més avall) l'envien sempre
@@ -66,7 +66,7 @@ export type OrderFormValues = {
   poblacioDesti: string | null;
   adrecaLliurament: string | null;
   /**
-   * Capa 31 — `PATCH /comandes/:id` acepta `estat`, con transición libre
+   * `PATCH /comandes/:id` acepta `estat`, con transición libre
    * entre `oberta`/`en_proces`/`tancada`. El único camino hacia
    * `amb_incidencia` es `markIncidence` (más abajo, exige `detall`) — este
    * valor nunca se manda como `"amb_incidencia"` desde `editOrder` (ver
@@ -77,14 +77,14 @@ export type OrderFormValues = {
   linies: LiniaCreacioApi[];
 };
 
-/** Línies noves (POST) i línies editades (PATCH) d'una comanda ja creada — capa 30. Buit en mode "create" (les línies viatgen dins ComandaCreacioApi). */
+/** Línies noves (POST) i línies editades (PATCH) d'una comanda ja creada. Buit en mode "create" (les línies viatgen dins ComandaCreacioApi). */
 export type OrderLineChanges = {
   novaLinies: LiniaCreacioApi[];
   liniesEditades: { liniaId: number; patch: LiniaEdicioApi }[];
 };
 
 /**
- * Capa 34 — el 400 de coherència de dates (POST /comandes, PATCH
+ * El 400 de coherència de dates (POST /comandes, PATCH
  * /comandes/:id, i els dos endpoints de línia) ve amb `missatge` genèric
  * al nivell superior ("Les dates no són coherents") i el detall REAL
  * (quina regla, i per a les línies, quina línia — "línia núm. 38008: ...")
@@ -131,11 +131,11 @@ type UseOrdersResult = {
   ) => Promise<{ order: ComandaDetallApi; patchError: ApiError | null }>;
   editOrder: (id: number, values: OrderFormValues) => Promise<void>;
   deleteLine: (comandaId: number, liniaId: number) => Promise<void>;
-  /** Capa 31 — PATCH { estat: "amb_incidencia", detall }. `detall` és obligatori (400 si arriba buit). */
+  /** PATCH { estat: "amb_incidencia", detall }. `detall` és obligatori (400 si arriba buit). */
   markIncidence: (comandaId: number, detall: string) => Promise<ComandaDetallApi>;
-  /** Capa 30 — POST /comandes/:comandaId/linies. */
+  /** POST /comandes/:comandaId/linies. */
   addLine: (comandaId: number, linia: LiniaCreacioApi) => Promise<ComandaDetallApi>;
-  /** Capa 30 — PATCH /comandes/:comandaId/linies/:liniaId. */
+  /** PATCH /comandes/:comandaId/linies/:liniaId. */
   editLine: (
     comandaId: number,
     liniaId: number,
@@ -221,8 +221,8 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
   // Alta real (POST) + PATCH encadenado para los campos que POST no acepta
   // (bultos/poblacioDesti/adrecaLliurament/obsProduccio/dataProduccio/
   // dataExpedicio — fuera de ComandaCreacioApi, contrato §4.5). tarifaId
-  // SÍ viaja directo en el POST (capa 32), igual que dataComanda/
-  // dataLliurament desde issue #16 (antes esta última era opcional y podía
+  // SÍ viaja directo en el POST, igual que dataComanda/dataLliurament
+  // desde issue #16 (antes esta última era opcional y podía
   // ir en cualquiera de los dos, ahora viaja siempre en el POST). Si el POST
   // tiene éxito pero el PATCH falla, la comanda YA existe — nunca se
   // reintenta el POST (evitaría duplicados); se devuelve la comanda creada
@@ -230,7 +230,7 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
   // guardaron.
   const createOrder = useCallback(
     async (values: OrderFormValues) => {
-      // Capa 43 — OrderForm.tsx ya valida que `origen` no sea null antes de
+      // OrderForm.tsx ya valida que `origen` no sea null antes de
       // llegar acá (mode create); el "manual" de reserva nunca debería
       // disparar en la práctica, sólo defensivo.
       // Issue #16 — dataComanda/dataLliurament passen a viatjar sempre
@@ -253,8 +253,8 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
       const creada = await api.post<ComandaDetallApi>('/comandes', cos);
 
       // Fusió Data producció / Data comanda de capçalera (decisió de
-      // negoci, Michelle) — `dataProduccio` de capçalera ja no és un camp
-      // que l'usuari trii per separat (OrderForm.tsx no en té cap input);
+      // negoci) — `dataProduccio` de capçalera ja no és un camp que
+      // l'usuari trii per separat (OrderForm.tsx no en té cap input);
       // sempre viatja idèntic a `dataComanda`, per això és l'única clau
       // incondicional d'aquest PATCH.
       const patchCos: Record<string, unknown> = { dataProduccio: values.dataComanda };
@@ -292,9 +292,9 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
         // rebutja buida, mai null: OrderFormValues.dataComanda ja és
         // `string`, no cal cap guarda acá).
         dataComanda: values.dataComanda,
-        // Fusió Data producció / Data comanda de capçalera (Michelle) —
-        // mateix criteri que createOrder: sempre idèntica a dataComanda,
-        // mai un valor triat per separat.
+        // Fusió Data producció / Data comanda de capçalera — mateix
+        // criteri que createOrder: sempre idèntica a dataComanda, mai un
+        // valor triat per separat.
         dataProduccio: values.dataComanda,
         dataExpedicio: values.dataExpedicio,
         dataLliurament: values.dataLliurament,
@@ -304,7 +304,7 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
         poblacioDesti: values.poblacioDesti,
         adrecaLliurament: values.adrecaLliurament,
       };
-      // Capa 31 — el selector de capçalera (OrderForm.tsx) només ofereix
+      // El selector de capçalera (OrderForm.tsx) només ofereix
       // oberta/en_proces/tancada, mai amb_incidencia: si l'estat carregat
       // ja era amb_incidencia i l'usuari no l'ha tocat, NO es reenvia (el
       // backend exigeix `detall` sempre que `estat` sigui amb_incidencia
@@ -327,8 +327,8 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
     [refetch],
   );
 
-  // Capa 31 — único camino real hacia amb_incidencia: detall es obligatori
-  // al backend (400 si arriba buit), la pantalla ha de pedirlo abans de cridar.
+  // Único camino real hacia amb_incidencia: detall es obligatori al
+  // backend (400 si arriba buit), la pantalla ha de pedirlo abans de cridar.
   const markIncidence = useCallback(
     async (comandaId: number, detall: string): Promise<ComandaDetallApi> => {
       const actualitzada = await api.patch<ComandaDetallApi>(`/comandes/${comandaId}`, {
@@ -341,7 +341,7 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
     [refetch],
   );
 
-  // Capa 30 — agregar una línia a una comanda ja creada.
+  // Agregar una línia a una comanda ja creada.
   const addLine = useCallback(
     async (comandaId: number, linia: LiniaCreacioApi): Promise<ComandaDetallApi> => {
       const actualitzada = await api.post<ComandaDetallApi>(`/comandes/${comandaId}/linies`, linia);
@@ -351,8 +351,8 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
     [refetch],
   );
 
-  // Capa 30 — editar unitatsDemanades/kgDemanats/dataProduccio/obsProduccio
-  // d'una línia existent. Mai re-resol preuUnitari (ver LiniaEdicioApi).
+  // Editar unitatsDemanades/kgDemanats/dataProduccio/obsProduccio d'una
+  // línia existent. Mai re-resol preuUnitari (ver LiniaEdicioApi).
   const editLine = useCallback(
     async (
       comandaId: number,

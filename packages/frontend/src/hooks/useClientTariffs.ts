@@ -31,7 +31,7 @@ export type ClientTariffsFilters = { cerca?: string };
  * pàgina de 20. Només `app/client-tariffs/page.tsx` passa `mida: 20`
  * explícit per paginar de veritat la seva pròpia llista.
  *
- * BUG real corregit (2026-09): amb 1291 clients reals, "sense `mida`" no
+ * BUG real corregit: amb 1291 clients reals, "sense `mida`" no
  * volia dir "tots" — el backend té un topall dur de 200 files per petició
  * (MIDA_PAGINA_MAXIMA, comu.ts), així que els 5 llocs de dalt es quedaven
  * en silenci amb només els primers 200. Quan `params.mida` no es passa,
@@ -142,8 +142,8 @@ export function useClientTariffs(
 
   const createClient = useCallback(
     async (values: ClientFormValues) => {
-      // codi no se manda: el backend lo autogenera siempre (capa 29), lo
-      // ignoraría igual si viajara. POST /clients tampoco acepta
+      // codi no se manda: el backend lo autogenera siempre, lo ignoraría
+      // igual si viajara. POST /clients tampoco acepta
       // tarifaId: null (sólo PATCH tiene esa rama) — confirmado con curl
       // real: mandarlo explícito da un 400 falso ("la tarifa no existeix").
       // "Sense tarifa" en alta = directamente omitir la clave, no mandarla

@@ -33,9 +33,7 @@ function isNegative(value: string | null): boolean {
   return value !== null && Number(value) < 0;
 }
 
-// Issue #20 (Francesc, confirmat — corregit després d'una primera
-// implementació que extrapolava malament el missatge original de
-// WhatsApp) — Rendiment/Diferència per fila NOMÉS tenen sentit de negoci
+// Issue #20 — Rendiment/Diferència per fila NOMÉS tenen sentit de negoci
 // per KG/PAQ (l'única branca del backend que els calcula per línia, ver
 // panells.ts). La condició depèn del tipus de CADA FILA
 // (row.agrupacioRendiment), no del filtre global seleccionat: amb
@@ -113,13 +111,13 @@ export default function ProductionPage() {
   const [nombrePorcsInput, setNombrePorcsInput] = useState('1');
   const [agrupacioFilter, setAgrupacioFilter] = useState(ALL);
   const [productFilter, setProductFilter] = useState(ALL);
-  // Issue #18 (Francesc, confirmada) — "sense dades = totes les dades"
-  // aplica també acá: ja NO es precarrega cap default visual (abans
-  // mirroreava hoy+1..hoy+7, el mateix que aplicava el backend sol quan no
-  // rebia dataDes/dataFins). Els camps arrenquen buits de veritat; mentre
-  // ho estiguin, `dataDes`/`dataFins` no viatgen al request — el backend
-  // (canvi paral·lel de Gerardo) interpreta la seva absència com "sense
-  // filtre de data", no com "aplica el teu propi default".
+  // Issue #18 — "sense dades = totes les dades" aplica també acá: ja NO es
+  // precarrega cap default visual (abans mirroreava hoy+1..hoy+7, el
+  // mateix que aplicava el backend sol quan no rebia dataDes/dataFins).
+  // Els camps arrenquen buits de veritat; mentre ho estiguin,
+  // `dataDes`/`dataFins` no viatgen al request — el backend interpreta la
+  // seva absència com "sense filtre de data", no com "aplica el teu propi
+  // default".
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
@@ -147,7 +145,7 @@ export default function ProductionPage() {
 
   // nombrePorcs és obligatori pel backend (400 sense ell) — mai s'envia
   // un default inventat des del frontend (el "12" del mockup no tenia cap
-  // suport real, ver informe d'investigació). Mentre el camp estigui buit
+  // suport real). Mentre el camp estigui buit
   // o no sigui > 0, el hook no dispara cap fetch (isReady).
   const nombrePorcs = nombrePorcsInput.trim() === '' ? null : Number(nombrePorcsInput);
   const nombrePorcsValid = nombrePorcs !== null && Number.isFinite(nombrePorcs) && nombrePorcs > 0;
@@ -162,9 +160,9 @@ export default function ProductionPage() {
       nombrePorcs: nombrePorcsValid ? nombrePorcs : null,
       ...(agrupacioFilter !== ALL ? { agrupacioRendiment: agrupacioFilter } : {}),
       ...(productFilter !== ALL ? { producte: productFilter } : {}),
-      // Issue #18 — buit = sense filtre de data, es manda tal qual el
-      // backend un cop Gerardo apliqui el seu costat (ver comentari a
-      // dateFrom/dateTo més amunt). Ja no fa falta cap flag "touched": el
+      // Issue #18 — buit = sense filtre de data, es manda tal qual al
+      // backend (ver comentari a dateFrom/dateTo més amunt). Ja no fa
+      // falta cap flag "touched": el
       // propi valor (buit o no) ja diu tot el que cal.
       ...(dateFrom ? { dataDes: dateFrom } : {}),
       ...(dateTo ? { dataFins: dateTo } : {}),
@@ -253,8 +251,8 @@ export default function ProductionPage() {
         </div>
 
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-          {/* Issue #20 (Francesc, confirmat) — aquests 3 totals només tenen
-              sentit quan el dataset pot incloure files MAGRE (és l'única
+          {/* Issue #20 — aquests 3 totals només tenen sentit quan el
+              dataset pot incloure files MAGRE (és l'única
               agrupació que alimenta totalKgMagro): filtrant per KG o PAQ es
               queden en 0 sempre, no perquè no hi hagi magre, sinó perquè el
               propi filtre ja les va excloure — mostrar-ho seria enganyós. */}
@@ -283,26 +281,25 @@ export default function ProductionPage() {
           )}
 
           {/* Franja de CANALS — independent de qualsevol filtre d'agrupació
-              o producte (elaborat_porc=false a propòsit, confirmat per
-              Francesc), només respon al filtre de data que ja viatja al
-              fetch. Sempre visible, encara que `showTopCards` sigui fals
-              (agrupacioFilter=KG/PAQ oculta el bloc de dalt): Canals és el
-              requisit central d'aquest disseny, mai pot desaparèixer.
-              Ajust (Michelle, confirmat visualment): color subtil en
-              comptes de l'accent fort — `bg-gray-50`/`text-gray-500` són el
-              to secundari ja establert al projecte (hover de DataCard,
-              opció seleccionada de SimpleDropdown/AsyncCombobox, etc.), no
-              un color nou.
-              Ajust (bug real d'overflow, ver comentari extens més amunt):
-              es va abandonar l'alineació EXACTA de columnes amb la graella
-              de dalt (`grid-cols-3` calcat) perquè depenia del mateix
-              mecanisme de columnes fixes que causava el desbordament —
-              amb `flex flex-wrap` cada fila troba el seu propi ample
-              natural, ja no hi ha garantia de coincidència píxel a píxel,
-              però mai desborda ni es talla, i en el cas normal (valors
-              curts) segueix quedant visualment a prop de sota de la
-              graella de dalt. */}
-          {/* Ajust (Michelle) — la franja quedava massa alta copiant el
+              o producte (elaborat_porc=false a propòsit), només respon al
+              filtre de data que ja viatja al fetch. Sempre visible, encara
+              que `showTopCards` sigui fals (agrupacioFilter=KG/PAQ oculta
+              el bloc de dalt): Canals és el requisit central d'aquest
+              disseny, mai pot desaparèixer.
+              Color subtil en comptes de l'accent fort — `bg-gray-50`/
+              `text-gray-500` són el to secundari ja establert al projecte
+              (hover de DataCard, opció seleccionada de
+              SimpleDropdown/AsyncCombobox, etc.), no un color nou.
+              Alineació: es va abandonar l'alineació EXACTA de columnes amb
+              la graella de dalt (`grid-cols-3` calcat) perquè depenia del
+              mateix mecanisme de columnes fixes que causava el
+              desbordament (ver comentari extens més amunt) — amb `flex
+              flex-wrap` cada fila troba el seu propi ample natural, ja no
+              hi ha garantia de coincidència píxel a píxel, però mai
+              desborda ni es talla, i en el cas normal (valors curts)
+              segueix quedant visualment a prop de sota de la graella de
+              dalt. */}
+          {/* La franja quedava massa alta copiant el
               padding vertical complet de StatCard (p-6 + label/valor en 2
               línies). `px-6` (horitzontal, sense canvis) però `py-3` en
               comptes de `p-6`, i etiqueta+valor en UNA sola línia

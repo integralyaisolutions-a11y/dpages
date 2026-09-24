@@ -48,7 +48,7 @@ export function PigYieldFormModal({
   // Agrupació Rendiment (l'enum KG/MAGRE/PAQ de la categoria) NO és un camp
   // triable: era un selector real fins ara però el backend mai el va
   // necessitar (2d90c10 ja identifica la fila per categoriaId, no per
-  // aquest valor) — treure'l és el fix de l'issue #4 reobert per Francesc.
+  // aquest valor) — treure'l és el fix de l'issue #4.
   const categoriaByNom = useMemo(() => new Map(categories.map((c) => [c.nom, c])), [categories]);
   // Sólo les categories amb agrupacioRendiment definit poden tenir línies de
   // rendiment (el backend rebutja la resta amb 400 VALIDACIO) — el cascade

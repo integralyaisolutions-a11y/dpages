@@ -10,8 +10,8 @@ import {
 } from '@/lib/api';
 import { usePageClamp } from './usePageClamp';
 
-// Decisió de negoci (acordada amb Gerardo): "codi" surt de la UI de
-// Transportistes per complet — ni es demana ni es mostra. El backend NO
+// Decisió de negoci: "codi" surt de la UI de Transportistes per complet —
+// ni es demana ni es mostra. El backend NO
 // canvia (POST/PATCH el segueixen acceptant com a opcional), però la
 // clau `codi` s'ha d'ometre del tot al body, no mandar-la com a `null`:
 // el PATCH real (transportistes.ts) fa `codi = CASE WHEN cos.codi !==

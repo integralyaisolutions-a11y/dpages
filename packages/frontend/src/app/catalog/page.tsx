@@ -89,8 +89,8 @@ export default function CatalogPage() {
   const [packaging, setPackaging] = useState(ALL);
   const [status, setStatus] = useState(ALL);
 
-  // Efecte col·lateral de la paginació (2026-08-30) resolt: Categoria i
-  // Agrupació producció ja no deriven de `data` (paginat a 20) — es
+  // Efecte col·lateral de la paginació ja resolt: Categoria i Agrupació
+  // producció ja no deriven de `data` (paginat a 20) — es
   // resolen contra fonts completes ja disponibles, mateix patró que
   // Format/Envasat/Estat (constants) però per a valors oberts que no ho
   // poden ser. `useCategories()`/`useCatalog()` acá SENSE `mida: 20` és una
@@ -120,8 +120,8 @@ export default function CatalogPage() {
     [category, allCategories],
   );
 
-  // Migració server-side dels 5 filtres (bug reportat per Francesc): abans
-  // Categoria/Agrupació producció/Format/Envasat/Estat es filtraven
+  // Migració server-side dels 5 filtres: abans Categoria/Agrupació
+  // producció/Format/Envasat/Estat es filtraven
   // client-side sobre `data` (només els 20 items de la pàgina actual), així
   // que `useCatalog()` mai detectava un canvi de filtre (no formaven part
   // de `filters`) i `pagina` no es resetejava mai — el total mostrat

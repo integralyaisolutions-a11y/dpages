@@ -9,8 +9,8 @@ import { ApiError, type ClientApi, type TarifaResumApi } from '@/lib/api';
 
 const NO_TARIFF = 'Sense tarifa';
 
-// codi no es editable acá: el backend lo autogenera siempre (capa 25/29),
-// así que un error de ese campo no tiene dónde mostrarse junto a un input
+// codi no es editable acá: el backend lo autogenera siempre, así que un
+// error de ese campo no tiene dónde mostrarse junto a un input
 // — cae al mensaje genérico.
 type FieldErrors = { nom?: string; poblacio?: string; tarifaId?: string };
 

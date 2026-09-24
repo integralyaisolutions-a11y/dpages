@@ -13,8 +13,8 @@ import { usePageClamp } from './usePageClamp';
 
 /**
  * Els 8 filtres reals de GET /panells/oficina (contrato §4.6, confirmat
- * contra panells.ts) — capa 35 va afegir tarifaId/poblacioDesti i els
- * rangos dataComandaDes/Fins i dataLliuramentDes/Fins.
+ * contra panells.ts): tarifaId/poblacioDesti i els rangos
+ * dataComandaDes/Fins i dataLliuramentDes/Fins.
  */
 export type OfficePanelFilters = {
   estat?: string;
