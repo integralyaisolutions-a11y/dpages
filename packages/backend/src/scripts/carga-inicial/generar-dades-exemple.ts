@@ -1,13 +1,13 @@
 /**
- * Genera los tres .xlsx de ejemplo en entrada/ — SIMULACIÓN de la capa 18,
- * no el Excel real del cliente (que todavía no llegó). Sirve para probar
+ * Genera los tres .xlsx de ejemplo en entrada/ — SIMULACIÓN, no el Excel
+ * real del cliente (que todavía no llegó). Sirve para probar
  * de punta a punta que el mecanismo de importación funciona, con datos de
  * mentira pero con la forma correcta. Se puede volver a correr en
  * cualquier momento para regenerar los tres archivos desde cero.
  *
  * Las 8 categorías que usa "articles-exemple.xlsx" son las sembradas por
- * seed-arranque.ts (capa 13) — si esos nombres cambian ahí, hay que
- * actualizarlos acá también.
+ * seed-arranque.ts — si esos nombres cambian ahí, hay que actualizarlos
+ * acá también.
  *
  * Uso: tsx --env-file-if-exists=../../.env src/scripts/carga-inicial/generar-dades-exemple.ts
  */

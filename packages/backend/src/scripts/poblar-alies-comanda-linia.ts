@@ -1,6 +1,6 @@
 /**
- * Capa 50 — de un solo uso, diagnóstico/reparación puntual. NO se despliega
- * a Cloud Run, sin script en package.json (mismo criterio que el resto de
+ * De un solo uso, diagnóstico/reparación puntual. NO se despliega a Cloud
+ * Run, sin script en package.json (mismo criterio que el resto de
  * `scripts/`, ver README.md de la carpeta).
  *
  * Contexto: 97 SKUs de líneas de pedido reales (`comanda_linia`) quedaron

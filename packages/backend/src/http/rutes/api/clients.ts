@@ -108,10 +108,10 @@ export function registrarRutesClients(fastify: FastifyInstance): void {
    * email/telefon/nif no aparecen en ese modal pero van a hacer falta para
    * tener un dato de contacto en esos pedidos.
    *
-   * `codi` NO se lee del cuerpo (capa 29): se autogenera siempre, mismo
-   * mecanismo que ya usa el sync de WooCommerce desde la capa 25
-   * (`assignarCodiAutogenerat`) — decisión de negocio confirmada, sin
-   * distinguir origen. Es de sólo lectura para siempre, así que ni
+   * `codi` NO se lee del cuerpo: se autogenera siempre, mismo mecanismo
+   * que ya usa el sync de WooCommerce (`assignarCodiAutogenerat`) —
+   * decisión de negocio confirmada, sin distinguir origen. Es de sólo
+   * lectura para siempre, así que ni
    * `ClientCreacioApi` (packages/shared) ni este `Partial<{...}>` declaran
    * el campo — si llega en el body, se ignora en silencio (mismo criterio
    * que `firebaseUid`/`email` en `PATCH /usuaris/:id`).
@@ -185,8 +185,8 @@ export function registrarRutesClients(fastify: FastifyInstance): void {
     const idPublic = parsearIdPublic((req.params as { id: string }).id);
     if (idPublic === null) return enviarNoTrobat(reply);
 
-    // codi és immutable un cop assignat (capa 29, autogenerat sempre) — no
-    // es llegeix del cos encara que vingui, no hi ha camp per a ell acà
+    // codi és immutable un cop assignat (autogenerat sempre) — no es
+    // llegeix del cos encara que vingui, no hi ha camp per a ell acà
     // (mateix criteri que firebaseUid/email a PATCH /usuaris/:id).
     const cos = req.body as Partial<{
       nom: string | null;

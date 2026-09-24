@@ -53,9 +53,9 @@ describe('resolverOCrearClient (Postgres real, esquema aislado)', () => {
       email: 'restaurant.example@example.com',
       nom: 'Restaurant Example',
     });
-    // Capa 25: el sync asigna codi automáticamente — CLI + id_seq, SIN
-    // padding fijo (un ancho fijo truncaba en vez de ensanchar con id_seq
-    // de 4+ cifras — bug real, ver el comentario en resolucio-client.ts).
+    // El sync asigna codi automáticamente — CLI + id_seq, SIN padding
+    // fijo (un ancho fijo truncaba en vez de ensanchar con id_seq de 4+
+    // cifras — bug real, ver el comentario en resolucio-client.ts).
     // Único camino de alta de client sin codi obligatorio.
     expect(fila.rows[0]?.codi).toBe(`CLI${fila.rows[0]!.id_seq}`);
 

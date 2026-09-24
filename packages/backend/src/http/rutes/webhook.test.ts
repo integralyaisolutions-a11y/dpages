@@ -61,8 +61,8 @@ beforeAll(async () => {
   await setup.query(`SET search_path TO "${esquema}"`);
   await migrarArriba(setup);
   // Dato de arranque mínimo (ver seed-arranque.ts, no lo aplica la
-  // migración): desde la capa 15 (migración 0013), comanda.origen_id es
-  // NOT NULL y el procesamiento del webhook crea comanda vía crearComanda().
+  // migración): desde la migración 0013, comanda.origen_id es NOT NULL y
+  // el procesamiento del webhook crea comanda vía crearComanda().
   await setup.query(
     `INSERT INTO origen_comanda (codi, nom) VALUES ('woocommerce', 'WooCommerce'), ('manual', 'Manual')`,
   );

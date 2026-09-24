@@ -1,12 +1,11 @@
 /**
- * Capa 51 — de un solo uso. Carga COMPLETA del catálogo real de WooCommerce
- * (no incremental) — paso previo a un reset controlado de producción (fase
+ * De un solo uso. Carga COMPLETA del catálogo real de WooCommerce (no
+ * incremental) — paso previo a un reset controlado de producción (fase
  * pre-productiva, ADR-007 permite esto). Distinta de sync-cataleg
  * (incremental, por cursor): acá se trae TODO, no sólo lo modificado
  * recientemente.
  *
- * Reusa el 100% de la lógica existente, sin reescribir nada — auditado
- * antes de escribir esto (capa 51, ver resumen de la auditoría):
+ * Reusa el 100% de la lógica existente, sin reescribir nada:
  *   - `listarProductos()` (woocommerce/cliente.ts) llamado sin
  *     `modifiedAfter` ya trae el catálogo completo — no hizo falta ningún
  *     cambio ahí, el filtro siempre fue opcional.
@@ -22,8 +21,8 @@
  *     TODO lo aterrizado (no sólo lo reciente), ya resuelve el duplicado
  *     por idioma (ADR-008) por `codi` sin crear un `producte` repetido, y
  *     ya deja `agrupacio_produccio`/`agrupacio_rendiment`/`format`/`envasat`
- *     en NULL — el `INSERT` no los toca, quedan para que Francesc los
- *     complete después.
+ *     en NULL — el `INSERT` no los toca, quedan pendientes de completar
+ *     después.
  *
  * Dry-run por defecto: sólo LEE de WooCommerce real (ninguna escritura —
  * estructuralmente imposible contra WooCommerce, ver cliente.ts — ni contra

@@ -43,23 +43,21 @@ function esAgrupacioRendimentValida(valor: unknown): valor is AgrupacioRendiment
 }
 
 /**
- * Rendimiento fijo por cerdo — Francesc, WhatsApp 25/08/2026: "De media, de
- * 1 cerdo salen 12Kg de jamón, 6Kg de recortes, y 7Kg de paletillas."
- * Valores fijos confirmados por el cliente, NO calculados desde
- * `rendiments_porcs` (no hay artículos de catálogo individuales para
- * "jamón"/"recortes"/"paletillas" con esos rendimientos cargados) —
- * pendiente de exponer como configuración si cambian en el futuro.
+ * Rendimiento fijo por cerdo, confirmado por el cliente: de 1 cerdo salen
+ * 12Kg de jamón, 6Kg de recortes, y 7Kg de paletillas — de media. Valores
+ * fijos, NO calculados desde `rendiments_porcs` (no hay artículos de
+ * catálogo individuales para "jamón"/"recortes"/"paletillas" con esos
+ * rendimientos cargados) — pendiente de exponer como configuración si
+ * cambian en el futuro.
  *
- * REVERT (Francesc, confirmado 23/09/2026) — el 23/09/2026 se intentó
- * "arreglar" esto conectándolo a `rendiments_porcs` (PERNIL/RETALLS
- * 1RA+2NA/ESPATLLA), asumiendo que el desajuste contra `totalKgMagro` era
- * un bug. Francesc aclaró explícitamente que NO lo era: estas 3 tasas son
- * una decisión de negocio fija e independiente, sin relación con
- * `rendiments_porcs` (esa tabla es para el cálculo de Rendiment/
- * Diferència de las FILAS KG/PAQ de la tabla principal — un concepto
- * distinto, que nunca estuvo en discusión). Su ejemplo real: con 1 cerdo,
- * Total Kg Magre = 25.000 (12+6+7), NO 30.000. NO reconectar esto a
- * `rendiments_porcs` bajo ningún concepto — ya se intentó y se revirtió.
+ * ADVERTENCIA — NO reconectar esto a `rendiments_porcs` (PERNIL/RETALLS
+ * 1RA+2NA/ESPATLLA) bajo ningún concepto: ya se intentó, asumiendo que el
+ * desajuste contra `totalKgMagro` era un bug, y el cliente confirmó
+ * explícitamente que NO lo es. Estas 3 tasas son una decisión de negocio
+ * fija e independiente, sin relación con `rendiments_porcs` (esa tabla es
+ * para el cálculo de Rendiment/Diferència de las FILAS KG/PAQ de la tabla
+ * principal — un concepto distinto). Ejemplo real: con 1 cerdo, Total Kg
+ * Magre = 25.000 (12+6+7), NO 30.000.
  */
 const KG_JAMON_PER_CERDO = 12;
 const KG_RECORTES_PER_CERDO = 6;
@@ -82,8 +80,8 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       condicions.push(condicioDataFinsInclusiva('c.data_expedicio', valors.length + 1));
       valors.push(query.dataExpedicioFins);
     }
-    // Capa 35 — mismo criterio que dataExpedicioDes/Fins de arriba, sobre
-    // las otras dos fechas de cabecera del pedido. Issue #16: dataComanda ya
+    // Mismo criterio que dataExpedicioDes/Fins de arriba, sobre las otras
+    // dos fechas de cabecera del pedido. Issue #16: dataComanda ya
     // NO es c.creat_en — es c.data_comanda (columna propia, editable,
     // migración 0019); creat_en sigue siendo sólo el timestamp de auditoría.
     if (typeof query.dataComandaDes === 'string' && query.dataComandaDes !== '') {
@@ -125,7 +123,7 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       condicions.push(`c.client_id = $${valors.length + 1}`);
       valors.push(clientUuid);
     }
-    // Capa 35 — mismo patrón que transportistaId/clientId de arriba.
+    // Mismo patrón que transportistaId/clientId de arriba.
     const tarifaUuid = await resolverFiltreEntitat(reply, query.tarifaId, 'tarifaId', (id) =>
       resolverTarifaUuid(pool, id),
     );
@@ -301,9 +299,9 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
     }
     const where = `WHERE ${condicions.join(' AND ')}`;
 
-    // INNER JOIN a producte: igual que antes de esta reescritura, una línia
-    // sin artículo resuelto (producte_id nulo — ver migración 0005) no tiene
-    // nada que mostrar acá y queda fuera.
+    // INNER JOIN a producte: una línia sin artículo resuelto (producte_id
+    // nulo — ver migración 0005) no tiene nada que mostrar acá y queda
+    // fuera.
     const base = `
       FROM comanda_linia cl
       JOIN comanda c ON c.id = cl.comanda_id
@@ -315,9 +313,9 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
     `;
 
     const totals = await pool.query<{ linies: string; total_unitats: string; total_kg: string }>(
-      // Capa 38 — unitats_demanades ahora es NUMERIC(10,2) (antes INTEGER):
-      // el total agregado gana el mismo cast explícito que totalKg (mismo
-      // criterio, mismo riesgo de precisión que evitar sumar en JS).
+      // unitats_demanades ahora es NUMERIC(10,2) (antes INTEGER): el total
+      // agregado gana el mismo cast explícito que totalKg (mismo criterio,
+      // mismo riesgo de precisión que evitar sumar en JS).
       `SELECT count(*) AS linies,
               COALESCE(SUM(cl.unitats_demanades), 0)::numeric(10,2) AS total_unitats,
               COALESCE(SUM(cl.pes_calculat_kg), 0)::numeric(14,3) AS total_kg
@@ -350,10 +348,10 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
               cl.obs_produccio, cl.treballat_a,
               tu.id_seq AS treballat_per_id_seq, tu.nom AS treballat_per_nom
        ${base}
-       -- Capa 46 — pendents primer, per defecte (no és un parametre
-       -- opcional): amb paginacio real de 20/50 files, una pagina podria
-       -- mostrar nomes linies ja treballades si les pendents queien en una
-       -- altra pagina. (cl.treballat_a IS NOT NULL) val false per a
+       -- Pendents primer, per defecte (no és un parametre opcional): amb
+       -- paginacio real de 20/50 files, una pagina podria mostrar nomes
+       -- linies ja treballades si les pendents queien en una altra pagina.
+       -- (cl.treballat_a IS NOT NULL) val false per a
        -- pendents i true per a treballades — ASC posa false (pendents)
        -- primer. La resta de l'ordre (data_produccio, num, ordinal) es
        -- exactament el mateix que ja hi havia, sense tocar.
@@ -379,7 +377,7 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       unitats: f.unitats,
       kg: f.kg,
       obsProduccio: f.obs_produccio,
-      // Capa 40 — ver PATCH /comandes/:comandaId/linies/:liniaId/treball.
+      // Ver PATCH /comandes/:comandaId/linies/:liniaId/treball.
       treballatA: formatearDataApi(f.treballat_a),
       treballatPer:
         f.treballat_per_id_seq !== null && f.treballat_per_nom !== null
@@ -390,7 +388,7 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
     return {
       totals: {
         linies: Number(totals.rows[0]?.linies ?? 0),
-        // Capa 38 — string desde ahora (ver nota en el SELECT de arriba).
+        // String desde ahora (ver nota en el SELECT de arriba).
         totalUnitats: totals.rows[0]?.total_unitats ?? '0.00',
         totalKg: totals.rows[0]?.total_kg ?? '0.000',
       },
@@ -415,8 +413,8 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       condicions.push(condicioDataFinsInclusiva('c.data_expedicio', valors.length + 1));
       valors.push(query.dataExpedicioFins);
     }
-    // Capa 37 — mismo criterio que dataExpedicioDes/Fins de arriba, sobre
-    // la fecha de entrega del pedido.
+    // Mismo criterio que dataExpedicioDes/Fins de arriba, sobre la fecha
+    // de entrega del pedido.
     if (typeof query.dataLliuramentDes === 'string' && query.dataLliuramentDes !== '') {
       condicions.push(`c.data_lliurament >= $${valors.length + 1}`);
       valors.push(query.dataLliuramentDes);
@@ -444,9 +442,9 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       condicions.push(`c.client_id = $${valors.length + 1}`);
       valors.push(clientUuid);
     }
-    // Capa 37 — coincidencia EXACTA, case-insensitive — regla 3.1
-    // transversal (mismo criterio que ?producte= en /panells/obrador,
-    // /panells/produccio y /rendiments-porcs), no substring.
+    // Coincidencia EXACTA, case-insensitive — regla 3.1 transversal (mismo
+    // criterio que ?producte= en /panells/obrador, /panells/produccio y
+    // /rendiments-porcs), no substring.
     if (typeof query.producte === 'string' && query.producte.trim() !== '') {
       condicions.push(`LOWER(p.descripcio) = LOWER($${valors.length + 1})`);
       valors.push(query.producte.trim());
@@ -470,8 +468,8 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       kg_lliurats: string;
       linies_confirmades: string;
     }>(
-      // Capa 38 — unitats_demanades/unitats_lliurades ahora son NUMERIC(10,2)
-      // (antes INTEGER): mismos casts explícitos que ya tenían kg_demanades/
+      // unitats_demanades/unitats_lliurades ahora son NUMERIC(10,2) (antes
+      // INTEGER): mismos casts explícitos que ya tenían kg_demanades/
       // kg_lliurats, por el mismo motivo (evitar sumar en JS con floats).
       `SELECT count(*) AS linies,
               COALESCE(SUM(cl.unitats_demanades), 0)::numeric(10,2) AS unitats_demanades,
@@ -505,9 +503,9 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
               cl.unitats_demanades, cl.pes_calculat_kg AS kg_demanats, cl.unitats_lliurades,
               cl.kg_lliurats, cl.confirmat_a, cl.confirmat_per
        ${base}
-       -- Capa 46 — mismo criterio que /panells/obrador (ver comentario ahí):
-       -- pendents (confirmat_a IS NULL) primer, per defecte, sense tocar la
-       -- resta de l'ordre existent.
+       -- Mismo criterio que /panells/obrador (ver comentario ahí): pendents
+       -- (confirmat_a IS NULL) primer, per defecte, sense tocar la resta de
+       -- l'ordre existent.
        ORDER BY (cl.confirmat_a IS NOT NULL) ASC,
                 c.data_expedicio ASC NULLS LAST, c.num ASC, cl.ordinal ASC
        LIMIT $${valors.length + 1} OFFSET $${valors.length + 2}`,
@@ -532,8 +530,8 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       unitatsLliurades: f.unitats_lliurades,
       kgLliurats: f.kg_lliurats,
       confirmatA: formatearDataApi(f.confirmat_a),
-      // Sin tabla de usuarios todavía (capa posterior): se muestra el uid
-      // real de Firebase (o el marcador de desarrollo con AUTH_DISABLED),
+      // Sin tabla de usuarios todavía: se muestra el uid real de Firebase
+      // (o el marcador de desarrollo con AUTH_DISABLED),
       // no un nombre — no hay ningún directorio del que sacarlo.
       confirmatPer: f.confirmat_per,
     }));
@@ -541,7 +539,7 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
     return {
       totals: {
         linies: totalLinies,
-        // Capa 38 — string desde ahora (ver nota en el SELECT de arriba).
+        // String desde ahora (ver nota en el SELECT de arriba).
         unitatsDemanades: totals.rows[0]?.unitats_demanades ?? '0.00',
         unitatsLliurades: totals.rows[0]?.unitats_lliurades ?? '0.00',
         kgDemanats: totals.rows[0]?.kg_demanats ?? '0.000',
@@ -588,15 +586,15 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       // PanellProduccioFilaApi (contrato) — una línia cuyo producte no
       // tiene agrupació de producció, o cuya categoria no tiene agrupació
       // de rendiment, no tiene con qué rellenar esos campos. Mismo
-      // criterio que rendiments-porcs.ts (capa 14): queda fuera en vez de
-      // romper el contrato con un null donde no lo admite.
+      // criterio que rendiments-porcs.ts: queda fuera en vez de romper el
+      // contrato con un null donde no lo admite.
       'p.agrupacio_produccio IS NOT NULL',
       'cat.agrupacio_rendiment IS NOT NULL',
     ];
     const valors: unknown[] = [];
 
-    // Principio confirmado por Francesc (WhatsApp, evidencia de Michelle):
-    // "sin datos = todos los datos", para TODOS los filtros del sistema. Acá
+    // Principio confirmado por el cliente: "sin datos = todos los datos",
+    // para TODOS los filtros del sistema. Acá
     // significa que sin dataDes NI dataFins no se agrega NINGUNA condición
     // de fecha (antes se sustituía por un rango oculto interno, mañana a
     // +7 días, vía dataIsoAmbOffset — eso ocultaba líneas elegibles fuera de
@@ -621,7 +619,7 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
     }
     if (typeof query.producte === 'string' && query.producte.trim() !== '') {
       // Coincidencia EXACTA por descripción, no substring — mismo criterio
-      // corregido en rendiments-porcs.ts (capa 14).
+      // corregido en rendiments-porcs.ts.
       condicions.push(`LOWER(p.descripcio) = LOWER($${valors.length + 1})`);
       valors.push(query.producte.trim());
     }
@@ -629,8 +627,8 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
 
     // Agrupado por agrupacio_produccio + agrupacio_rendiment (no por
     // producte_id): varios artículos pueden compartir una misma agrupación
-    // de producción — por eso, capa 22, `producte` YA NO viaja en la
-    // respuesta (ver PanellProduccioFilaApi, BREAKING). `categoria_nom`
+    // de producción — por eso `producte` YA NO viaja en la respuesta (ver
+    // PanellProduccioFilaApi, BREAKING). `categoria_nom`
     // sigue sin estar en el GROUP BY (que es por agrupacio_produccio, no por
     // categoria_id) y sigue necesitando un array_agg — issues #3/#4 no
     // tocaron esto, cat.nom es constante dentro del grupo por la misma
@@ -671,9 +669,9 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
       valors,
     );
 
-    // Sumatorio de CANALS — completamente independiente del resto del panel
-    // (confirmado por Francesc): CANALS tiene elaborat_porc=false A
-    // PROPÓSITO, así que queda fuera de `condicions`/`filas` de arriba (esa
+    // Sumatorio de CANALS — completamente independiente del resto del
+    // panel: CANALS tiene elaborat_porc=false A PROPÓSITO, así que queda
+    // fuera de `condicions`/`filas` de arriba (esa
     // query exige elaborat_porc=true, agrupacio_produccio y
     // agrupacio_rendiment no nulos — los productos de CANALS no cumplen
     // ninguna de las tres). Por eso es una query aparte, no una variante de
@@ -750,19 +748,18 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
         // ningún total de cabecera. "Total Kg Magre" (totals.totalKgMagro)
         // es la suma de kgJamon/kgRecortes/kgPaletillas, 3 tasas FIJAS de
         // negocio — ver el comentario junto a esas constantes, más arriba
-        // (REVERT 23/09/2026: no reconectar esto a rendiments_porcs).
+        // (NO reconectar esto a rendiments_porcs).
         //
-        // Fix (Francesc, confirmado) — "Total Kg a elaborar" (la tarjeta
-        // que se compara contra "Total Kg Magre"/"Diferència") suma
-        // EXCLUSIVAMENTE MAGRE, nunca KG: antes se acumulaba más arriba,
-        // fuera de este if/else, para KG+MAGRE juntas — con
-        // agrupacioRendiment=MAGRE explícito ya daba bien (porque `filas`
-        // sólo traía MAGRE en ese caso), el bug sólo se notaba con "Totes"
-        // o "KG" seleccionados. La columna "Kg a Elaborar" de CADA FILA
-        // (`kgAElaborar` más abajo, `f.kg_a_elaborar` crudo) es un campo
-        // completamente aparte — sigue igual para KG y MAGRE, sin tocar.
-        // Este fix SIGUE VIGENTE — el revert del 23/09/2026 sólo afecta a
-        // kgJamon/kgRecortes/kgPaletillas/totalKgMagro, no a esto.
+        // ADVERTENCIA — "Total Kg a elaborar" (la tarjeta que se compara
+        // contra "Total Kg Magre"/"Diferència") suma EXCLUSIVAMENTE MAGRE,
+        // nunca KG. Si se acumula más arriba, fuera de este if/else, para
+        // KG+MAGRE juntas, el bug sólo se nota con "Totes" o "KG"
+        // seleccionados (con agrupacioRendiment=MAGRE explícito ya da bien,
+        // porque `filas` sólo trae MAGRE en ese caso) — fácil de no
+        // detectar en una prueba superficial. La columna "Kg a Elaborar" de
+        // CADA FILA (`kgAElaborar` más abajo, `f.kg_a_elaborar` crudo) es
+        // un campo completamente aparte — sigue igual para KG y MAGRE, sin
+        // tocar.
         totalKgAElaborarNum += Number(f.kg_a_elaborar);
       }
 
@@ -779,15 +776,14 @@ export function registrarRutesPanells(fastify: FastifyInstance): void {
 
     const dades = dadesCompletes.slice(offset, offset + mida);
 
-    // Capa 24 — rendimiento fijo por cerdo (ver constantes arriba).
-    // nombrePorcs ya está validado como obligatorio y > 0 más arriba en el
-    // handler, así que estos tres campos siempre traen un valor.
+    // Rendimiento fijo por cerdo (ver constantes arriba). nombrePorcs ya
+    // está validado como obligatorio y > 0 más arriba en el handler, así
+    // que estos tres campos siempre traen un valor.
     //
-    // REVERT (Francesc, confirmado 23/09/2026) — totalKgMagro vuelve a ser
-    // la suma directa de estas 3 tasas fijas, NO un acumulado desde
-    // rendiments_porcs (eso se intentó y se revirtió — ver comentario junto
-    // a las constantes). Con nombrePorcs=1: 12+6+7=25.000, el ejemplo real
-    // que dio Francesc.
+    // ADVERTENCIA — totalKgMagro es la suma directa de estas 3 tasas
+    // fijas, NO un acumulado desde rendiments_porcs (ver comentario junto
+    // a las constantes: ya se intentó conectarlo y se revirtió). Con
+    // nombrePorcs=1: 12+6+7=25.000.
     const kgJamonNum = KG_JAMON_PER_CERDO * nombrePorcs;
     const kgRecortesNum = KG_RECORTES_PER_CERDO * nombrePorcs;
     const kgPaletillasNum = KG_PALETILLAS_PER_CERDO * nombrePorcs;

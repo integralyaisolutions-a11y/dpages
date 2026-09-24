@@ -31,8 +31,8 @@ describe('transformarComanda (Postgres real, esquema aislado)', () => {
     await setup.query(`SET search_path TO "${esquema}"`);
     await migrarArriba(setup);
     // Datos de arranque mínimos (ver seed-arranque.ts) que la migración no
-    // siembra — desde la capa 15 (migración 0013), comanda.origen_id es
-    // NOT NULL y crearComanda() resuelve contra la fila 'woocommerce'.
+    // siembra — desde la migración 0013, comanda.origen_id es NOT NULL y
+    // crearComanda() resuelve contra la fila 'woocommerce'.
     await setup.query(
       `INSERT INTO origen_comanda (codi, nom) VALUES ('woocommerce', 'WooCommerce'), ('manual', 'Manual')`,
     );
@@ -103,7 +103,7 @@ describe('transformarComanda (Postgres real, esquema aislado)', () => {
     );
     expect(linia.rows[0]).toEqual({
       producte_id: producteLlomId,
-      unitats_demanades: '1.00', // capa 38 — NUMERIC(10,2), string
+      unitats_demanades: '1.00', // NUMERIC(10,2), string
       pes_fitxa_kg: '1.250',
       pes_calculat_kg: '1.250',
       pes_editable: false,
@@ -230,7 +230,7 @@ describe('transformarComanda (Postgres real, esquema aislado)', () => {
       [linia.rows[0]?.id],
     );
     // Propiedad del sistema: intactos.
-    expect(liniaDespues.rows[0]?.unitats_lliurades).toBe('1.00'); // capa 38 — NUMERIC(10,2), string
+    expect(liniaDespues.rows[0]?.unitats_lliurades).toBe('1.00'); // NUMERIC(10,2), string
     expect(liniaDespues.rows[0]?.kg_lliurats).toBe('1.250');
     expect(liniaDespues.rows[0]?.confirmat_a?.toISOString()).toBe('2026-01-08T09:00:00.000Z');
     expect(liniaDespues.rows[0]?.confirmat_per).toBe('firebase-uid-empaquetat');

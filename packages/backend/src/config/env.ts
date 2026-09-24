@@ -100,7 +100,7 @@ const esquemaEnv = z
     // (ninguna petición cross-origin pasa), no abierto a cualquiera.
     CORS_ORIGIN: z.string().url('debe ser una URL válida, ej. https://app.dpages.cat').optional(),
 
-    // Capa 19 — POST /usuaris (crear/borrar usuario de Firebase, generar el
+    // Usada por POST /usuaris (crear/borrar usuario de Firebase, generar el
     // link de establecimiento de contraseña). Identity Toolkit gestiona sus
     // propios permisos por fuera de IAM de GCP: la cuenta de servicio de
     // Cloud Run (dpages-backend@...) nunca tuvo permiso real ahí pese a sus

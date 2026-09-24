@@ -10,7 +10,7 @@ import {
 } from './test-suport.js';
 
 /**
- * Capa 46 — pendents primer, per defecte (sense cap paràmetre), a
+ * Pendents primer, per defecte (sense cap paràmetre), a
  * GET /panells/obrador (pendent = treballat_a IS NULL) i
  * GET /panells/empaquetat (pendent = confirmat_a IS NULL). Esquema propi i
  * aïllat: no comparteix estat amb panells.test.ts, que assumeix totals

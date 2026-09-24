@@ -23,9 +23,8 @@ import {
   resolverTransportistaUuid,
 } from './comu.js';
 
-// Capa 31 — únicos 4 valors admesos per comanda.estat (mateixa llista que el
-// CHECK constraint de la taula, migració 0003). No hi havia cap constant
-// reutilitzable per a això abans d'aquesta capa.
+// Únics 4 valors admesos per comanda.estat (mateixa llista que el CHECK
+// constraint de la taula, migració 0003).
 const ESTATS_COMANDA_VALIDS = ['oberta', 'en_proces', 'tancada', 'amb_incidencia'] as const;
 
 interface FilaComandaResum {
@@ -95,12 +94,11 @@ function aApiResum(fila: FilaComandaResum): ComandaResumApi {
   };
 }
 
-// data_comanda (issue #16, Francesc): YA NO es comanda.creat_en. Es una
-// columna propia (DATE, migración 0019), dato de negocio EDITABLE que el
-// usuario carga/corrige — distinta de creat_en, que sigue siendo el
-// timestamp real e inalterable de auditoría (cuándo entró la fila a la
-// base, nunca expuesto en la API). El cambio fue consciente: antes de esta
-// capa no existía como campo de entrada en absoluto.
+// data_comanda (issue #16): YA NO es comanda.creat_en. Es una columna
+// propia (DATE, migración 0019), dato de negocio EDITABLE que el usuario
+// carga/corrige — distinta de creat_en, que sigue siendo el timestamp real
+// e inalterable de auditoría (cuándo entró la fila a la base, nunca
+// expuesto en la API).
 // tipus_incidencia: sólo se completa cuando TODAS las incidencias de la
 // comanda comparten el mismo tipus (min() de un conjunto de un solo valor
 // distinto); si hay más de un tipo mezclado, queda null — "resumen liviano",
@@ -133,8 +131,8 @@ const SELECT_COMANDA_RESUM = `
            CASE WHEN count(DISTINCT tipus) = 1 THEN min(tipus) END AS tipus_incidencia
     FROM incidencia_comanda WHERE comanda_id = c.id
   ) inc ON true
-  -- Capa 21: fechas de producción DISTINTAS entre las líneas del pedido,
-  -- ordenadas — ver ComandaResumApi.datesProduccioLinies.
+  -- Fechas de producción DISTINTAS entre las líneas del pedido, ordenadas
+  -- — ver ComandaResumApi.datesProduccioLinies.
   LEFT JOIN LATERAL (
     SELECT array_agg(DISTINCT data_produccio ORDER BY data_produccio) AS dates
     FROM comanda_linia
@@ -151,8 +149,8 @@ interface FilaComandaLinia {
   categoria_nom: string | null;
   format: string | null;
   envasat: string | null;
-  // Capa 38 — NUMERIC(10,2) desde la migración 0016 (antes INTEGER): `pg`
-  // siempre devuelve columnas NUMERIC como string, nunca number.
+  // NUMERIC(10,2) desde la migración 0016 (antes INTEGER): `pg` siempre
+  // devuelve columnas NUMERIC como string, nunca number.
   unitats_demanades: string;
   kg_demanats: string;
   pes_editable: boolean;
@@ -270,13 +268,13 @@ async function estaCongelada(dbPool: Pool, comandaUuid: string): Promise<boolean
  *
  * La "tarifa indicada" (`tarifaId`) depende de quién llama, esta función no
  * decide eso:
- * - `POST /comandes` (capa 32): el `tarifaId` explícito del body si vino,
- *   si no la del cliente (`client.tarifa_id`).
- * - `POST /comandes/:comandaId/linies` (capa 30): SIEMPRE la del cliente,
- *   resuelta fresca — no cambia con esta capa.
+ * - `POST /comandes`: el `tarifaId` explícito del body si vino, si no la
+ *   del cliente (`client.tarifa_id`).
+ * - `POST /comandes/:comandaId/linies`: SIEMPRE la del cliente, resuelta
+ *   fresca.
  * - `comanda.tarifa_id` editado después vía `PATCH /comandes/:id` NO pasa
  *   nunca por acá — esa edición no recalcula líneas existentes, a propósito
- *   (fuera de alcance de la capa 32, ver docs/contrato-api.md).
+ *   (fuera de alcance, ver docs/contrato-api.md).
  */
 async function resolverPreuLinia(
   dbPool: Pool,
@@ -296,8 +294,8 @@ async function resolverPreuLinia(
 }
 
 /**
- * Capa 30 — recalcula `comanda.total` a partir de las líneas activas, con
- * la MISMA fórmula que ya usa `SELECT_COMANDA_RESUM.agg.total_eur`
+ * Recalcula `comanda.total` a partir de las líneas activas, con la MISMA
+ * fórmula que ya usa `SELECT_COMANDA_RESUM.agg.total_eur`
  * (`SUM(unitats_demanades * preu_unitari) WHERE NOT esborrat`).
  *
  * IMPORTANTE, para quien lea esto después: ningún `GET` lee esta columna.
@@ -308,8 +306,8 @@ async function resolverPreuLinia(
  * (`transform/comandes.ts`), nunca se vuelve a leer por la API. Se
  * mantiene igual aquí por higiene de datos (que la columna no quede
  * desactualizada), no porque afecte ninguna respuesta visible. Ni
- * `DELETE /comandes/:comandaId/linies/:liniaId` (capa anterior) recalcula
- * esta columna — gap preexistente, no lo toco acá.
+ * `DELETE /comandes/:comandaId/linies/:liniaId` recalcula esta columna —
+ * gap preexistente, no se toca acá.
  */
 async function recalcularTotalComanda(client: PoolClient, comandaUuid: string): Promise<void> {
   await client.query(
@@ -324,8 +322,8 @@ async function recalcularTotalComanda(client: PoolClient, comandaUuid: string): 
 
 interface CapcaleraDatesComanda {
   /**
-   * Issue #16 (Francesc/Michelle, confirmat) — opcional a propòsit: la
-   * regla nova (7) que la compara amb dataLliurament només aplica a
+   * Issue #16 — opcional a propòsit: la regla nova (7) que la compara amb
+   * dataLliurament només aplica a
    * `POST /comandes` i `PATCH /comandes/:id` (els dos únics llocs on
    * dataComanda es fixa o pot canviar). `POST .../linies` i
    * `PATCH .../linies/:liniaId` no toquen dataComanda ni dataLliurament de
@@ -346,12 +344,12 @@ interface LiniaPerValidarDates {
 }
 
 /**
- * Capa 34 — les 6 regles originals de coherència temporal entre les dates
- * de capçalera d'un pedido i les dates de producció de les seves línies
+ * Les 6 regles originals de coherència temporal entre les dates de
+ * capçalera d'un pedido i les dates de producció de les seves línies
  * (documentades a `docs/contrato-api.md`, secció 4.5), més la regla 7
- * (issue #16, confirmada) que compara dataComanda amb dataLliurament. Punt
- * únic de veritat: NO duplicar aquesta comparació als 4 llocs que la
- * criden (`POST /comandes`, `POST .../linies`, `PATCH .../linies/:liniaId`,
+ * (issue #16) que compara dataComanda amb dataLliurament. Punt únic de
+ * veritat: NO duplicar aquesta comparació als 4 llocs que la criden
+ * (`POST /comandes`, `POST .../linies`, `PATCH .../linies/:liniaId`,
  * `PATCH /comandes/:id`).
  *
  * Cada regla només aplica si AMBDUES dates comparades tenen valor — si en
@@ -476,9 +474,9 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       condicions.push(condicioDataFinsInclusiva('c.data_comanda', valors.length + 1));
       valors.push(query.dataFins);
     }
-    // Capa 21 — filtra "el pedido tiene AL MENOS UNA línea cuya
-    // dataProduccio cae en el rango" (caso de uso: planificación de
-    // obrador). Las dos condiciones van en el MISMO EXISTS para que sea
+    // Filtra "el pedido tiene AL MENOS UNA línea cuya dataProduccio cae en
+    // el rango" (caso de uso: planificación de obrador). Las dos
+    // condiciones van en el MISMO EXISTS para que sea
     // una sola línea la que cumpla ambos extremos a la vez — dos EXISTS
     // separados matchearían igual si una línea cumple sólo "des" y otra
     // distinta cumple sólo "fins", sin que ninguna caiga realmente en el
@@ -508,8 +506,8 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       condicions.push(condicioDataFinsInclusiva('c.data_lliurament', valors.length + 1));
       valors.push(query.dataLliuramentFins);
     }
-    // Issue #17 (Michelle/Francesc) — `cerca` ya buscaba por `c.num`; se
-    // AMPLÍA (no se reemplaza) para que también encuentre por nombre de
+    // Issue #17 — `cerca` ya buscaba por `c.num`; se AMPLÍA (no se
+    // reemplaza) para que también encuentre por nombre de
     // CLIENTE, reemplazando un filtro client-side que daba totales/
     // resultados inconsistentes al filtrar sólo sobre la página ya cargada.
     // Substring (ILIKE), NO exacto — mismo criterio que `cerca` en
@@ -566,8 +564,8 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       }[];
     }>;
 
-    // Issue #16 (Francesc, bloqueant) — dataComanda/dataLliurament de
-    // capçalera passen a ser OBLIGATÒRIES, sense valor per defecte al
+    // Issue #16 — dataComanda/dataLliurament de capçalera passen a ser
+    // OBLIGATÒRIES, sense valor per defecte al
     // backend (el frontend precarrega HOY, però qui garanteix que arriba és
     // aquesta validació, no un default silenciós acá). Mateix estil que la
     // resta d'aquest bloc (origen/linies).
@@ -591,8 +589,8 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       return enviarValidacio(reply, 'Falten dades obligatòries', detalls);
     }
 
-    // Capa 34 — al crear, la comanda encara no té dataProduccio/dataExpedicio
-    // de capçalera (no són camps d'aquest body), així que de les 7 regles,
+    // Al crear, la comanda encara no té dataProduccio/dataExpedicio de
+    // capçalera (no són camps d'aquest body), així que de les 7 regles,
     // aquí només poden arribar a disparar-se les que depenen de
     // dataLliurament (regla 5 per a cada línia) o de dataComanda (regla 7,
     // issue #16 — dataComanda no pot ser posterior a dataLliurament; ambdues
@@ -610,9 +608,9 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       return enviarValidacio(reply, 'Les dates no són coherents', [violacioCreacio]);
     }
 
-    // origen ja no és un enum fix (capa 13/14, migració 0013): és el codi
-    // d'una fila d'origen_comanda — es resol igual que clientId/
-    // transportistaId més avall.
+    // origen ja no és un enum fix (migració 0013): és el codi d'una fila
+    // d'origen_comanda — es resol igual que clientId/transportistaId més
+    // avall.
     const origen = await pool.query<{ id: string }>(
       'SELECT id FROM origen_comanda WHERE codi = $1',
       [cos.origen],
@@ -639,8 +637,8 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       );
       clientTarifaId = clientFila.rows[0]?.tarifa_id ?? null;
     }
-    // Capa 32 — tarifaId explícito en el body de creación anula la del
-    // cliente SÓLO para resolver el precio de estas líneas, y se guarda en
+    // tarifaId explícito en el body de creación anula la del cliente SÓLO
+    // para resolver el precio de estas líneas, y se guarda en
     // comanda.tarifa_id (columna ya existente, hasta ahora sólo editable
     // vía PATCH y sin efecto real en el precio — ver nota en
     // resolverPreuLinia). Si no viene, comportamiento idéntico al de
@@ -682,7 +680,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       const linia = cos.linies![i]!;
       const camp = `linies[${i}]`;
 
-      // Capa 38 — unitats_demanades pasó de INTEGER a NUMERIC(10,2): admite
+      // unitats_demanades pasó de INTEGER a NUMERIC(10,2): admite
       // decimales (entregas/pedidos parciales de pieza), hasta 2 decimales.
       if (!esUnitatsValides(linia.unitatsDemanades)) {
         return enviarValidacio(reply, 'Les unitats demanades no poden ser zero', [
@@ -763,8 +761,8 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
          RETURNING id`,
         [
           origenUuid,
-          // Decisión de negocio (Francesc, confirmada) — una línea sin
-          // precio resuelto NUNCA queda silenciosa (se registra igual en
+          // Decisión de negocio confirmada — una línea sin precio resuelto
+          // NUNCA queda silenciosa (se registra igual en
           // incidencia_comanda, más abajo), pero ya no fuerza el pedido a
           // amb_incidencia: nace "oberta" siempre, el precio pendiente se
           // completa después sin bloquear el flujo normal.
@@ -865,8 +863,8 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
           { camp: 'estat', missatge: `ha de ser un de: ${ESTATS_COMANDA_VALIDS.join(', ')}` },
         ]);
       }
-      // Capa 31 — decisión de negocio: transiciones libres entre los 4
-      // estados, sin máquina de estados. Única excepción: pasar a
+      // Decisión de negocio: transiciones libres entre los 4 estados, sin
+      // máquina de estados. Única excepción: pasar a
       // amb_incidencia manualmente exige un motivo (detall), porque a
       // diferencia de las incidencias automáticas (sense_preu, etc.) acá no
       // hay ningún dato del sistema del que derivarlo.
@@ -877,16 +875,16 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       }
     }
 
-    // Capa 34 — el cas delicat: si aquest PATCH canvia alguna de les 3 dates
-    // de capçalera, cal calcular l'estat RESULTANT (valor nou si ha vingut,
+    // El cas delicat: si aquest PATCH canvia alguna de les 3 dates de
+    // capçalera, cal calcular l'estat RESULTANT (valor nou si ha vingut,
     // si no el que ja hi havia guardat) i validar-lo no només contra les
     // altres dates de capçalera (regles 1/2/3), sinó també contra TOTES les
     // línies actives del pedido (regles 4/5/6) — encara que cap d'elles
     // s'estigui tocant en aquest request. Un canvi de data de capçalera pot
     // invalidar una línia de la qual ningú s'està ocupant ara mateix.
     //
-    // Issue #16 (Francesc/Michelle, confirmat) — dataComanda entra al mateix
-    // càlcul de "resultant" per la regla 7 (dataComanda no pot ser posterior
+    // Issue #16 — dataComanda entra al mateix càlcul de "resultant" per la
+    // regla 7 (dataComanda no pot ser posterior
     // a dataLliurament): si el PATCH només canvia UNA de les dues (per
     // exemple, només dataComanda), cal comparar-la contra el valor ACTUAL a
     // la base de l'altra — mai contra null ni assumir que la regla no
@@ -1022,7 +1020,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
         ],
       );
 
-      // Capa 31 — a diferencia de las incidencias automáticas (sense_preu,
+      // A diferencia de las incidencias automáticas (sense_preu,
       // article_no_resolt, etc.), ésta la dispara un usuario de oficina a
       // mano, sin que el sistema haya detectado nada por sí solo. Mismo
       // array/tabla (incidencia_comanda), tipus distinto para diferenciarla.
@@ -1045,23 +1043,20 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
   });
 
   /**
-   * Capa 30 — agregar una línea a un pedido YA creado. Hasta ahora sólo se
-   * podían cargar líneas embebidas en `POST /comandes` (alta completa) —
-   * la única forma de corregir un pedido existente era borrarlo entero y
-   * recargarlo de cero, perdiendo el número de pedido original.
+   * Agregar una línea a un pedido YA creado. Hasta ahora sólo se podían
+   * cargar líneas embebidas en `POST /comandes` (alta completa) — la única
+   * forma de corregir un pedido existente era borrarlo entero y recargarlo
+   * de cero, perdiendo el número de pedido original.
    *
    * Precio: MISMA cascada que `POST /comandes` (`resolverPreuLinia`), sin
    * duplicar la lógica. La tarifa que se usa es la del CLIENTE asignado a
-   * la comanda (resuelta fresca acá) — OJO, esto sigue así después de la
-   * capa 32: `comanda.tarifa_id` puede tener un valor real (fijado al crear
-   * el pedido, o editado después vía `PATCH /comandes/:id`), pero esta ruta
-   * NUNCA lo consulta, siempre usa `client.tarifa_id`. No es un descuido:
-   * la capa 32 sólo tocó el momento de creación, a propósito.
+   * la comanda (resuelta fresca acá) — OJO: `comanda.tarifa_id` puede tener
+   * un valor real (fijado al crear el pedido, o editado después vía
+   * `PATCH /comandes/:id`), pero esta ruta NUNCA lo consulta, siempre usa
+   * `client.tarifa_id`. No es un descuido, es a propósito.
    *
-   * Capa 34 — el body acepta `dataProduccio` para la línea nueva (antes no
-   * existía este campo acá, sólo se podía fijar después vía
-   * `PATCH .../linies/:liniaId`). Si viene, se valida contra las fechas de
-   * cabecera YA GUARDADAS del pedido (reglas 4/5/6 de
+   * El body acepta `dataProduccio` para la línea nueva. Si viene, se valida
+   * contra las fechas de cabecera YA GUARDADAS del pedido (reglas 4/5/6 de
    * `validarCoherenciaDatesComanda`).
    *
    * Issue #21 — dataProduccio deja de ser obligatoria acá (revierte la
@@ -1090,7 +1085,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
         { camp: 'producteId', missatge: 'és obligatori' },
       ]);
     }
-    // Capa 38 — ver nota equivalente en POST /comandes.
+    // Ver nota equivalente en POST /comandes.
     if (!esUnitatsValides(cos.unitatsDemanades)) {
       return enviarValidacio(reply, 'Les unitats demanades no poden ser zero', [
         {
@@ -1128,8 +1123,8 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       pesEditable = true;
     }
 
-    // Capa 34 — validar la dataProduccio de la línia nova contra les dates
-    // de capçalera JA GUARDADES d'aquest pedido, abans d'inserir res.
+    // Validar la dataProduccio de la línia nova contra les dates de
+    // capçalera JA GUARDADES d'aquest pedido, abans d'inserir res.
     // Issue #21 — dataProduccio ja no és obligatòria: si no ve
     // (undefined/null), validarCoherenciaDatesComanda la salta sola (ja
     // tolera aquest cas, ver comu de les 6 regles).
@@ -1199,8 +1194,8 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
         ],
       );
 
-      // Decisión de negocio (Francesc, confirmada) — mismo criterio que
-      // POST /comandes: una línea sin precio resuelto nunca queda
+      // Decisión de negocio confirmada — mismo criterio que POST
+      // /comandes: una línea sin precio resuelto nunca queda
       // silenciosa (se registra igual en incidencia_comanda), pero ya no
       // fuerza el pedido a amb_incidencia — se queda en el estat que ya
       // tenía (oberta, en_proces, tancada...), el precio pendiente se
@@ -1230,15 +1225,15 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
   });
 
   /**
-   * Capa 30 — editar una línea existente (unitats/kg/dataProduccio/
-   * obsProduccio). NUNCA re-resuelve `preuUnitari` — sólo recalcula
-   * `totalLinia`, y eso ya es automático: `SELECT_COMANDA_LINIA` calcula
-   * `totalLinia` en vivo (`unitats_demanades * preu_unitari`), no es una
-   * columna guardada. Mientras esta ruta no toque `preu_unitari` (nunca lo
-   * hace), cualquier lectura posterior ya sale bien sola.
+   * Editar una línea existente (unitats/kg/dataProduccio/obsProduccio).
+   * NUNCA re-resuelve `preuUnitari` — sólo recalcula `totalLinia`, y eso ya
+   * es automático: `SELECT_COMANDA_LINIA` calcula `totalLinia` en vivo
+   * (`unitats_demanades * preu_unitari`), no es una columna guardada.
+   * Mientras esta ruta no toque `preu_unitari` (nunca lo hace), cualquier
+   * lectura posterior ya sale bien sola.
    *
-   * Capa 34 — si `dataProduccio` viene en el body, se valida contra las
-   * fechas de cabecera YA GUARDADAS del pedido (reglas 4/5/6 de
+   * Si `dataProduccio` viene en el body, se valida contra las fechas de
+   * cabecera YA GUARDADAS del pedido (reglas 4/5/6 de
    * `validarCoherenciaDatesComanda`) antes de escribir nada.
    */
   fastify.patch('/comandes/:comandaId/linies/:liniaId', async (req, reply) => {
@@ -1260,7 +1255,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       obsProduccio: string | null;
     }>;
 
-    // Capa 38 — ver nota equivalente en POST /comandes.
+    // Ver nota equivalente en POST /comandes.
     if (cos.unitatsDemanades !== undefined && !esUnitatsValides(cos.unitatsDemanades)) {
       return enviarValidacio(reply, 'Les unitats demanades no poden ser zero', [
         {
@@ -1306,8 +1301,8 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       pesCalculatKgNou = Number(cos.kgDemanats).toFixed(3);
     }
 
-    // Capa 34 — si aquest PATCH canvia dataProduccio de la línia, validar-la
-    // contra les dates de capçalera JA GUARDADES d'aquest pedido, abans
+    // Si aquest PATCH canvia dataProduccio de la línia, validar-la contra
+    // les dates de capçalera JA GUARDADES d'aquest pedido, abans
     // d'escriure res. Si dataProduccio NO ve al body, no hi ha res nou a
     // validar (ni la línia ni la capçalera van a canviar de valor per això).
     if (cos.dataProduccio !== undefined) {

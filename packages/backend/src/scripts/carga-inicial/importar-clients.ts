@@ -1,6 +1,6 @@
 /**
  * Carga inicial de clientes desde un .xlsx (docs/especificacion-funcional-
- * dpages-v2.md sección 6). Capa 18 — SIMULADA: el archivo de hoy es un
+ * dpages-v2.md sección 6). SIMULADA: el archivo de hoy es un
  * ejemplo generado a mano (generar-dades-exemple.ts), no el Excel real del
  * cliente — ver src/scripts/README.md.
  *

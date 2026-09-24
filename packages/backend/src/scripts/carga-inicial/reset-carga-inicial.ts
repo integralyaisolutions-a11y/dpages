@@ -2,8 +2,8 @@
  * Vuelve a estado limpio lo que los tres importadores de carga-inicial/
  * pudieron haber creado (producte, tarifa, tarifa_preu, client, y sus
  * dependientes — ver "Orden de borrado" abajo) — pensado para correr antes
- * del cut-over real, una vez que la simulación con datos de ejemplo
- * (capa 18) ya cumplió su propósito de probar el mecanismo.
+ * del cut-over real, una vez que la simulación con datos de ejemplo ya
+ * cumplió su propósito de probar el mecanismo.
  *
  * No hay ninguna columna que marque "esta fila vino de un importador de
  * carga inicial" — el criterio de borrado es "todo lo que hay en estas

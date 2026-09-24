@@ -15,8 +15,8 @@ import { env } from '../config/env.js';
 export const configRedaccio = {
   paths: [
     'req.headers.authorization',
-    // El serializer por defecto de Fastify para "req" (capa 7, servidor
-    // HTTP) vuelca la IP del emisor en cada línea de "incoming request" —
+    // El serializer por defecto de Fastify para "req" vuelca la IP del
+    // emisor en cada línea de "incoming request" —
     // dato personal bajo RGPD, no sólo credenciales o campos de negocio.
     'req.remoteAddress',
     'req.headers["x-forwarded-for"]',
@@ -30,7 +30,7 @@ export const configRedaccio = {
     '*.direccion',
     '*.billing',
     '*.shipping',
-    // POST /usuaris (capa 19) devuelve un link de un solo uso para
+    // POST /usuaris devuelve un link de un solo uso para
     // establecer contraseña (generatePasswordResetLink) — nunca debe
     // quedar en texto plano en un log. Fastify no loguea el body de la
     // respuesta por defecto (sólo statusCode/responseTime, ver

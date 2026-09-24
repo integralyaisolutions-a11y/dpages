@@ -220,15 +220,15 @@ export function registrarRutesCategories(fastify: FastifyInstance): void {
     if (categoriaUuid === null) return enviarNoTrobat(reply, 'Categoria no trobada');
 
     // Borrado protegido: CUALQUIER producto que la use bloquea el borrado,
-    // esté activo o no (capa 27 — decisión de negocio confirmada: un
-    // producto inactivo reactivado después no debe aparecer sin categoría
-    // sin que nadie lo haya tocado directamente). Sin el filtro `actiu`, el
-    // recuento coincide exactamente con lo que la FK producte.categoria_id
-    // (sin ON DELETE) va a bloquear de todos modos — así el 409 se dispara
-    // ANTES del DELETE, en vez de que Postgres lo rechace con un
-    // unique_violation/foreign_key_violation que el handler no capturaba
-    // y caía como 500 genérico (bug real: productos inactivos seguían
-    // bloqueando la FK pero no este COUNT, que sólo miraba los activos).
+    // esté activo o no — decisión de negocio: un producto inactivo
+    // reactivado después no debe aparecer sin categoría sin que nadie lo
+    // haya tocado directamente. Sin el filtro `actiu`, el recuento coincide
+    // exactamente con lo que la FK producte.categoria_id (sin ON DELETE) va
+    // a bloquear de todos modos — así el 409 se dispara ANTES del DELETE,
+    // en vez de que Postgres lo rechace con un
+    // unique_violation/foreign_key_violation que el handler no capturaba y
+    // caía como 500 genérico (productos inactivos seguían bloqueando la FK
+    // pero no este COUNT, que sólo miraba los activos).
     const enUs = await pool.query<{ count: string }>(
       'SELECT count(*) FROM producte WHERE categoria_id = $1',
       [categoriaUuid],

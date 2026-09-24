@@ -798,9 +798,9 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       expect(res.statusCode).toBe(201);
       const cuerpo = cuerpoJson<ComandaDetallApi>(res);
       expect(cuerpo.linies[0]?.preuUnitari).toBe('0.00');
-      // Decisión de negocio (Francesc, confirmada) — ya no cae en
-      // amb_incidencia automático: el registro de auditoría se mantiene,
-      // el pedido se guarda normalmente como cualquier otro.
+      // Decisión de negocio confirmada — ya no cae en amb_incidencia
+      // automático: el registro de auditoría se mantiene, el pedido se
+      // guarda normalmente como cualquier otro.
       expect(cuerpo.estat).toBe('oberta');
       expect(cuerpo.incidencies.some((i) => i.tipus === 'sense_preu')).toBe(true);
 
@@ -861,7 +861,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       expect(cuerpo.linies).toHaveLength(2);
       const liniaNova = cuerpo.linies.find((l) => l.producte?.id === producteFitxaId);
       expect(liniaNova?.preuUnitari).toBe('4.50'); // resuelto vía tarifa — misma cascada que POST /comandes
-      expect(liniaNova?.unitatsDemanades).toBe('3.00'); // capa 38 — NUMERIC(10,2), string
+      expect(liniaNova?.unitatsDemanades).toBe('3.00'); // NUMERIC(10,2), string
       expect(liniaNova?.totalLinia).toBe('13.50'); // 3 × 4.50
       expect(liniaNova?.kgDemanats).toBe('3.750'); // fitxa: 3 × 1.250
 
@@ -918,8 +918,8 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
 
       expect(res.statusCode).toBe(201);
       const cuerpo = cuerpoJson<ComandaDetallApi>(res);
-      // Decisión de negocio (Francesc, confirmada) — ya no cae en
-      // amb_incidencia automático: se mantiene en el estat que ya tenía.
+      // Decisión de negocio confirmada — ya no cae en amb_incidencia
+      // automático: se mantiene en el estat que ya tenía.
       expect(cuerpo.estat).toBe('oberta');
       expect(cuerpo.incidencies.some((i) => i.tipus === 'sense_preu')).toBe(true);
       const liniaNova = cuerpo.linies.find((l) => l.producte?.id === producteSensePreuId);
@@ -999,7 +999,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       expect(res.statusCode).toBe(200);
       const cuerpo = cuerpoJson<ComandaDetallApi>(res);
       const liniaEditada = cuerpo.linies.find((l) => l.id === liniaCreada.id);
-      expect(liniaEditada?.unitatsDemanades).toBe('5.00'); // capa 38 — NUMERIC(10,2), string
+      expect(liniaEditada?.unitatsDemanades).toBe('5.00'); // NUMERIC(10,2), string
       expect(liniaEditada?.preuUnitari).toBe('9.86'); // sin cambios — nunca se re-resuelve
       expect(liniaEditada?.totalLinia).toBe('49.30'); // 5 × 9.86
       expect(liniaEditada?.kgDemanats).toBe('6.250'); // fitxa: 5 × 1.250
@@ -1456,8 +1456,8 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       const tarifaBodyIdPublic = Number(tarifaBody.rows[0]!.id_seq);
 
       const fastify = construirServidor();
-      // La comanda nace con tarifaId explícito (capa 32) — comanda.tarifa_id
-      // queda con la tarifa del body (8.00), NO la del cliente (3.30).
+      // La comanda nace con tarifaId explícito — comanda.tarifa_id queda
+      // con la tarifa del body (8.00), NO la del cliente (3.30).
       const creada = await fastify.inject({
         method: 'POST',
         url: '/api/v1/comandes',
@@ -1480,8 +1480,8 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       expect(comandaCreada.linies[0]?.preuUnitari).toBe('8.00');
       expect(comandaCreada.tarifa?.id).toBe(tarifaBodyIdPublic);
 
-      // Agregar una línea nueva (capa 30) al mismo pedido: si usara
-      // comanda.tarifa_id resolvería 8.00; si usa (como debe) la tarifa del
+      // Agregar una línea nueva al mismo pedido: si usara comanda.tarifa_id
+      // resolvería 8.00; si usa (como debe) la tarifa del
       // cliente, resuelve 3.30.
       const res = await fastify.inject({
         method: 'POST',
@@ -1649,8 +1649,8 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       await fastify.close();
     });
 
-    // Issue #16 (Francesc) — BREAKING: antes dataLliurament de capçalera era
-    // opcional al crear (la regla 5 simplemente no aplicaba sin ella). Ahora
+    // Issue #16 — BREAKING: antes dataLliurament de capçalera era opcional
+    // al crear (la regla 5 simplemente no aplicaba sin ella). Ahora
     // es OBLIGATORIA — el mismo escenario de antes ("línia con dataProduccio,
     // capçalera sin dataLliurament") ya no es alcanzable vía la API, así que
     // este test pasa a verificar exactamente eso: el rechazo.
@@ -2070,8 +2070,8 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       expect(res.statusCode).toBe(201);
       const cuerpo = cuerpoJson<ComandaDetallApi>(res);
       const linia = cuerpo.linies[0]!;
-      // BREAKING (capa 38): string, no number — mismo patrón que
-      // kgDemanats/preuUnitari, que ya eran string.
+      // BREAKING: string, no number — mismo patrón que kgDemanats/
+      // preuUnitari, que ya eran string.
       expect(typeof linia.unitatsDemanades).toBe('string');
       expect(linia.unitatsDemanades).toBe('2.50');
       expect(linia.kgDemanats).toBe('3.125'); // fitxa: 2.5 × 1.250
@@ -2266,8 +2266,8 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
     });
   });
 
-  // Segona ronda de confirmació amb Francesc/Michelle sobre l'issue #16
-  // (docs/contrato-api.md): (1) dataComanda no pot ser posterior a
+  // Segona ronda de confirmació sobre l'issue #16 (docs/contrato-api.md):
+  // (1) dataComanda no pot ser posterior a
   // dataLliurament (regla 7, nova) i (2) dataProduccio també passa a ser
   // obligatòria a POST /comandes/:comandaId/linies (abans quedava fora
   // d'aquest abast a propòsit).
@@ -2430,8 +2430,8 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
     });
   });
 
-  // Issue #17 (Michelle/Francesc) — reemplaza un filtro client-side que daba
-  // totales/resultados inconsistentes al filtrar sólo sobre la página ya
+  // Issue #17 — reemplaza un filtro client-side que daba totales/resultados
+  // inconsistentes al filtrar sólo sobre la página ya
   // cargada. `cerca` ya buscaba por `num` del pedido (substring); se amplía
   // para que TAMBIÉN encuentre por nombre de cliente, sin dejar de matchear
   // por num.

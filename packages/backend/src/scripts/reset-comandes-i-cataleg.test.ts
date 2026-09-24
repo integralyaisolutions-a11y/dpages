@@ -9,8 +9,8 @@ const confirmarSi = (): Promise<boolean> => Promise.resolve(true);
 const confirmarNo = (): Promise<boolean> => Promise.resolve(false);
 
 /**
- * Capa 51, Parte 2 — esquema nuevo por test (no compartido): el borrado es
- * total sobre las 9 tablas, así que dos tests no pueden convivir en el
+ * Esquema nuevo por test (no compartido): el borrado es total sobre las 9
+ * tablas, así que dos tests no pueden convivir en el
  * mismo esquema sin que uno contamine el recuento del otro (mismo criterio
  * que reset-carga-inicial.test.ts).
  */

@@ -24,13 +24,13 @@ function aApi(fila: FilaOrigenComanda): OrigenComandaApi {
 }
 
 /**
- * Capa 43 — CRUD de origen_comanda (mismo patrón que transportistes.ts):
- * GET sin guard, POST/PATCH exigen el mòdul "comandes" (crearGuardaModul,
- * reusado de capa 39) — origen_comanda alimenta directamente el alta manual
- * de pedidos, mismo dominio que "comandes", no amerita un mòdul propio.
- * Sin DELETE (mismo criterio que /transportistes y que /usuaris, capa 39):
- * borrar de verdad podría dejar comanda.origen_id apuntando a nada — para
- * dar de baja un origen, PATCH { actiu: false }.
+ * CRUD de origen_comanda (mismo patrón que transportistes.ts): GET sin
+ * guard, POST/PATCH exigen el mòdul "comandes" (crearGuardaModul) —
+ * origen_comanda alimenta directamente el alta manual de pedidos, mismo
+ * dominio que "comandes", no amerita un mòdul propio. Sin DELETE (mismo
+ * criterio que /transportistes y que /usuaris): borrar de verdad podría
+ * dejar comanda.origen_id apuntando a nada — para dar de baja un origen,
+ * PATCH { actiu: false }.
  */
 export function registrarRutesOrigensComanda(fastify: FastifyInstance): void {
   fastify.get('/origens-comanda', async (req) => {

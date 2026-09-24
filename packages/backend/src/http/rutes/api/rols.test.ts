@@ -11,8 +11,8 @@ import {
 } from './test-suport.js';
 
 /**
- * Capa 39 — agujero de seguridad: POST/PATCH/DELETE /rols no tenían NINGÚN
- * guard. Estos tests cubren los tres guards nuevos (mismo criterio que
+ * Agujero de seguridad ya cerrado: POST/PATCH/DELETE /rols no tenían
+ * NINGÚN guard. Estos tests cubren los tres guards nuevos (mismo criterio que
  * POST /usuaris, ver comu.ts/crearGuardaModul), la validación de
  * modulsPermesos contra la lista real de módulos, y el DELETE nuevo con su
  * guarda de integridad (mismo patrón que DELETE /categories/:id).
@@ -138,8 +138,8 @@ describe('API negoci — /rols, guardas i validació de mòduls (capa 39, Postgr
     await fastify.close();
   });
 
-  // Issue de robustesa (Francesc, bug real: 500 en canviar producte.codi
-  // duplicat) — rol.nom també és UNIQUE i tenia el mateix buit (sense
+  // Issue de robustesa (bug real: 500 en canviar producte.codi duplicat) —
+  // rol.nom també és UNIQUE i tenia el mateix buit (sense
   // try/catch), tant a POST com a PATCH.
   it('POST /rols amb nom duplicat dona 409 CONFLICTE, no 500', async () => {
     const fastify = construirServidor();
@@ -249,8 +249,8 @@ describe('API negoci — /rols, guardas i validació de mòduls (capa 39, Postgr
     await fastify.close();
   });
 
-  // Capa 44 — Michel reportó MODULS_VALIDS duplicado a mano en el frontend,
-  // con riesgo de desincronizarse en silencio. Compara contra la constante
+  // MODULS_VALIDS estaba duplicado a mano en el frontend, con riesgo de
+  // desincronizarse en silencio. Compara contra la constante
   // real importada (no una lista hardcodeada acá): si mañana se agrega un
   // módulo nuevo a rols.ts, este test lo sigue viendo pasar sin tocarlo, y
   // el frontend puede dejar de mantener su propia copia.
@@ -266,8 +266,8 @@ describe('API negoci — /rols, guardas i validació de mòduls (capa 39, Postgr
     await fastify.close();
   });
 
-  // Capa 46 — Michel reportó que GET /rols era la única de ~12 rutas de
-  // listado sin objeto paginacio. El total real se lee de la base en vez de
+  // GET /rols era la única de ~12 rutas de listado sin objeto paginacio.
+  // El total real se lee de la base en vez de
   // hardcodearlo: otros tests de este archivo crean/borran roles, así que
   // el número exacto depende del orden de ejecución.
   it('GET /rols retorna paginacio real', async () => {

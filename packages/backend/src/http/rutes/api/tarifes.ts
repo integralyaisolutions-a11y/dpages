@@ -133,7 +133,7 @@ export function registrarRutesTarifes(fastify: FastifyInstance): void {
     return { tarifaId: tarifaIdPublic, producteId: producteIdPublic, preu: cos.preu };
   });
 
-  // Capa 28 — camino de vuelta a "sin precio": el PATCH de arriba no acepta
+  // Camino de vuelta a "sin precio": el PATCH de arriba no acepta
   // null/vacío (siempre exige un decimal válido), así que una vez cargada
   // una celda no había forma de volver a que la cascada de
   // resolverPreuLinia (comandes.ts) cayera al precio de catálogo. Borra la

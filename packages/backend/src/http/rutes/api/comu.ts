@@ -37,11 +37,11 @@ export function formatearDataApi(data: Date | string | null | undefined): string
 }
 
 /**
- * Capa 36 — fragmento SQL para el extremo superior de un filtro `...Fins`
- * de fecha, que INCLUYE el día completo. Bug sistémico encontrado en la
- * capa 35: `columna <= $n` con `$n = "2026-08-28"` se interpreta como
- * `2026-08-28T00:00:00Z` (medianoche del INICIO de ese día), no su final —
- * corta afuera cualquier registro con hora real dentro del mismo día.
+ * Fragmento SQL para el extremo superior de un filtro `...Fins` de fecha,
+ * que INCLUYE el día completo. Riesgo real: `columna <= $n` con
+ * `$n = "2026-08-28"` se interpreta como `2026-08-28T00:00:00Z` (medianoche
+ * del INICIO de ese día), no su final — corta afuera cualquier registro con
+ * hora real dentro del mismo día.
  *
  * El fix trata el límite como EXCLUSIVO contra el día siguiente en vez de
  * `<=` contra el valor tal cual — `$n::date` descarta cualquier hora que
@@ -59,14 +59,13 @@ export function condicioDataFinsInclusiva(columna: string, index: number): strin
 }
 
 /**
- * Capa 38 — `comanda_linia.unitats_demanades`/`unitats_lliurades` pasaron
- * de INTEGER a NUMERIC(10,2) (entregas/pedidos parciales de pieza: 2.5
- * unidades cuando no se produjo la pieza completa, migración 0016). Válido:
- * mayor que cero, como máximo 2 decimales — reemplaza el `Number.isInteger`
- * que usaban los 4 puntos de entrada de estos dos campos
- * (`POST /comandes`, `POST .../linies`, `PATCH .../linies/:liniaId`,
- * `PATCH .../lliurament`), NO había Zod schemas ahí (sólo en
- * `config/env.ts`) — la validación siempre fue manual en estos endpoints.
+ * `comanda_linia.unitats_demanades`/`unitats_lliurades` son NUMERIC(10,2)
+ * (entregas/pedidos parciales de pieza: 2.5 unidades cuando no se produjo
+ * la pieza completa, migración 0016). Válido: mayor que cero, como máximo
+ * 2 decimales — no hay Zod schemas acá (sólo en `config/env.ts`), la
+ * validación de estos 4 puntos de entrada (`POST /comandes`,
+ * `POST .../linies`, `PATCH .../linies/:liniaId`, `PATCH .../lliurament`)
+ * siempre es manual.
  *
  * La comparación de punto flotante es segura para este caso: los valores
  * que fallarían por imprecisión son justamente los que tienen MÁS de 2
@@ -102,24 +101,21 @@ export function enviarSensePermis(reply: FastifyReply, missatge: string): void {
 }
 
 /**
- * Primer endpoint que restringe por módulo (capa 19, `POST /usuaris`) —
- * hasta ahora ningún endpoint de negocio lo hacía (ADR-021: el cliente
- * pidió que nadie quedara bloqueado por rol). `req.usuariResolt` ya está
- * seteado acá porque `crearMiddlewareResoldreUsuari()` corre antes en el
- * mismo scope de plugin (ver servidor.ts) — se usa como `preHandler` de
- * ruta (tercer argumento de `fastify.post/get/...`), no como hook global,
- * para que sólo bloquee los endpoints que explícitamente lo pidan.
+ * Primer endpoint que restringe por módulo (`POST /usuaris`) — hasta ahora
+ * ningún endpoint de negocio lo hacía (ADR-021: el cliente pidió que nadie
+ * quedara bloqueado por rol). `req.usuariResolt` ya está seteado acá porque
+ * `crearMiddlewareResoldreUsuari()` corre antes en el mismo scope de plugin
+ * (ver servidor.ts) — se usa como `preHandler` de ruta (tercer argumento de
+ * `fastify.post/get/...`), no como hook global, para que sólo bloquee los
+ * endpoints que explícitamente lo pidan.
  *
  * Callback-style explícito (tercer parámetro `done`), no async/Promise:
- * Fastify siempre invoca un preHandler como `fn(req, reply, done)` —
- * si el hook no es `async` ni devuelve una Promise, TIENE que llamar a
- * `done()` él mismo, o Fastify se queda esperando esa señal para siempre
- * (nunca avanza al handler, sin error ni timeout — así se manifestó este
- * bug real la primera vez que un Administrador pasaba el guard: el 403
- * "funcionaba" porque `reply.send()` corta la cadena por otro camino,
- * pero el paso a través nunca llamaba a nada que le dijera a Fastify que
- * podía seguir). En el rechazo, `reply.send()` ya deja `reply.sent = true`
- * — NO llamar a `done()` también ahí (sería un doble envío de respuesta).
+ * Fastify siempre invoca un preHandler como `fn(req, reply, done)` — si el
+ * hook no es `async` ni devuelve una Promise, TIENE que llamar a `done()`
+ * él mismo, o Fastify se queda esperando esa señal para siempre (nunca
+ * avanza al handler, sin error ni timeout). En el rechazo, `reply.send()`
+ * ya deja `reply.sent = true` — NO llamar a `done()` también ahí (sería un
+ * doble envío de respuesta).
  */
 export function crearGuardaModul(modul: string) {
   return function guardaModul(
@@ -137,12 +133,11 @@ export function crearGuardaModul(modul: string) {
 }
 
 /**
- * `23505` = unique_violation. Sin precedente de "capturar y devolver
- * CONFLICTE" en las rutas hasta la capa 14 (el único otro lugar del
- * backend que traduce este código, resolucio-client.ts/ADR-023, resuelve
- * un caso de negocio distinto — un conflicto de identidad de cliente
- * durante el sync, no una alta manual por HTTP). Pensado para códigos
- * únicos definidos por el usuario (transportista.codi, tarifa.codi...):
+ * `23505` = unique_violation. El único otro lugar del backend que traduce
+ * este código (resolucio-client.ts/ADR-023) resuelve un caso de negocio
+ * distinto — un conflicto de identidad de cliente durante el sync, no una
+ * alta manual por HTTP. Pensado para códigos únicos definidos por el
+ * usuario (transportista.codi, tarifa.codi...):
  * en vez de dejar caer un 500 genérico, el `catch` de la ruta usa esto
  * para decidir si el error es "ya existe" (409) o algo inesperado (se
  * relanza, tal como antes).

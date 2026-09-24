@@ -12,8 +12,8 @@ import {
 } from './poblar-alies-comanda-linia.js';
 
 /**
- * Capa 50 — esquema nuevo por test (no compartido): el script reprocesa
- * TODAS las líneas sin resolver de la base, así que dos tests no pueden
+ * Esquema nuevo por test (no compartido): el script reprocesa TODAS las
+ * líneas sin resolver de la base, así que dos tests no pueden
  * convivir en el mismo esquema sin que uno contamine el recuento del otro
  * (mismo criterio que reset-carga-inicial.test.ts).
  */

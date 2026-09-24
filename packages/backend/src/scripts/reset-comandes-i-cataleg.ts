@@ -1,11 +1,11 @@
 /**
- * Capa 51, Parte 2 — de un solo uso. Reset COMPLETO de pedidos y catálogo
- * (fase pre-productiva, ADR-007 permite esto — ver la nota fechada dentro
- * de esa ADR en decisiones-arquitectura.md). Paso previo a reconstruir todo
- * desde cero con `carga-completa-cataleg.ts`.
+ * De un solo uso. Reset COMPLETO de pedidos y catálogo (fase
+ * pre-productiva, ADR-007 permite esto — ver la nota fechada dentro de esa
+ * ADR en decisiones-arquitectura.md). Paso previo a reconstruir todo desde
+ * cero con `carga-completa-cataleg.ts`.
  *
- * `reset-carga-inicial.ts` NO sirve para esto (auditado, capa 51 parte 2):
- * su lógica PROTEGE cualquier producte/client/tarifa que ya tenga un
+ * `reset-carga-inicial.ts` NO sirve para esto (auditado): su lógica
+ * PROTEGE cualquier producte/client/tarifa que ya tenga un
  * pedido real apuntándole — exactamente lo opuesto de lo que hace falta
  * acá. Tampoco toca `comanda`/`comanda_linia` en absoluto. Por eso este es
  * un script nuevo, no una reutilización — borra TODO, sin protección,
@@ -31,9 +31,9 @@
  *   8. categoria_producte
  *   9. incidencia_cataleg  — SIN FK real (woo_product_id es un BIGINT
  *      plano, no REFERENCES nada) — el orden respecto a las demás no
- *      importa, confirmado por Gerardo que se limpia igual.
+ *      importa, confirmado que se limpia igual.
  *
- * QUÉ NO SE TOCA (auditado, capa 51 parte 2):
+ * QUÉ NO SE TOCA (auditado):
  *   - client, tarifa, transportista, usuari, rol, origen_comanda — nada.
  *   - aterratge_woocommerce — el crudo histórico; carga-completa-cataleg.ts
  *     lo reusa (upsert idempotente), no hace falta re-descargar de

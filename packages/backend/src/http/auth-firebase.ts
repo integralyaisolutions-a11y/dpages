@@ -7,10 +7,10 @@ import { cosError } from './error-api.js';
 
 /**
  * Se adjunta a `req.usuari` en toda ruta de negocio (contrato, sección 2).
- * `rol` viene de un custom claim de Firebase (`rol`, ej. "oficina" —
- * decisión de VisioFlow, no del cliente: el cliente pidió que NINGÚN
- * endpoint restrinja acceso por rol, así que esto es sólo para auditoría
- * — ver `comanda_linia.confirmat_per` — no para autorización).
+ * `rol` viene de un custom claim de Firebase (`rol`, ej. "oficina") — el
+ * cliente pidió que NINGÚN endpoint restrinja acceso por rol, así que esto
+ * es sólo para auditoría (ver `comanda_linia.confirmat_per`), no para
+ * autorización.
  */
 export interface InfoUsuari {
   uid: string;
@@ -60,17 +60,16 @@ let appFirebaseAdmin: App | null = null;
 
 /**
  * App de Firebase SEPARADA de `obtenerAppFirebase()`, sólo para las
- * operaciones de gestión de usuarios (capa 19: `crearUsuari`,
- * `esborrarUsuari`, `generarLinkEstabliment`). NO la usa el middleware de
- * autenticación (`verificarTokenFirebase` sigue con `obtenerAppFirebase()`
- * y credenciales por defecto, sin cambios).
+ * operaciones de gestión de usuarios (`crearUsuari`, `esborrarUsuari`,
+ * `generarLinkEstabliment`). NO la usa el middleware de autenticación
+ * (`verificarTokenFirebase` sigue con `obtenerAppFirebase()` y credenciales
+ * por defecto, sin cambios).
  *
  * Motivo de la app separada: Identity Toolkit (el servicio detrás de
  * `createUser`/`generatePasswordResetLink`/`deleteUser`) gestiona sus
  * propios permisos por fuera de IAM de GCP — la cuenta de servicio de
- * Cloud Run (`dpages-backend@...`) nunca tuvo acceso real ahí pese a sus
- * roles de IAM a nivel de proyecto (encontrado probando este endpoint
- * contra Firebase real). La única cuenta que sí tiene el rol
+ * Cloud Run (`dpages-backend@...`) no tiene acceso real ahí pese a sus
+ * roles de IAM a nivel de proyecto. La única cuenta que sí tiene el rol
  * "Administrador de Firebase Authentication" aplicado de verdad es la que
  * el propio Firebase genera automáticamente
  * (`firebase-adminsdk-fbsvc@...`) — de ahí que esta app use una clave de
@@ -135,8 +134,8 @@ function extraerToken(header: string | undefined): string | undefined {
 }
 
 /**
- * Alta manual de usuarios (capa 19, `POST /api/v1/usuaris`) — operaciones
- * de administración sobre Firebase Auth, distintas de verificar un token.
+ * Alta manual de usuarios (`POST /api/v1/usuaris`) — operaciones de
+ * administración sobre Firebase Auth, distintas de verificar un token.
  * Inyectable (mismo criterio que `VerificadorToken`): en los tests se
  * reemplaza por un mock con `vi.fn()`, nunca se llama a Firebase real.
  */
@@ -150,9 +149,8 @@ export interface GestioUsuarisFirebase {
 }
 
 /**
- * Capa 47 — antes apuntaba fijo al placeholder de Cloud Run (nadie veía esa
- * URL, pero tampoco era la pantalla real). Mismo criterio de entorno que
- * `opcionsCors()` en cors.ts: fuera de producción, el origen fijo de
+ * Mismo criterio de entorno que `opcionsCors()` en cors.ts: fuera de
+ * producción, el origen fijo de
  * desarrollo; en producción, `env.CORS_ORIGIN`. A diferencia de CORS (que
  * si falta simplemente cierra el acceso, `origin: false`), acá NO hay un
  * fallback seguro posible — sin origen no hay URL que construir, así que
@@ -175,9 +173,8 @@ export function construirActionCodeSettingsEstabliment(): {
     );
   }
   return {
-    // Capa de UI de reset de contraseña (pedido de Michelle, frontend): los
-    // 3 flujos de contraseña (reset, verificación, alta) ahora los maneja
-    // una pantalla propia en `/action`, no la pantalla genérica de Firebase.
+    // Los 3 flujos de contraseña (reset, verificación, alta) los maneja una
+    // pantalla propia en `/action`, no la pantalla genérica de Firebase.
     // Los otros 2 flujos (controlados directo por el frontend) ya apuntaban
     // ahí — esto hace que el link de alta de usuario (POST /usuaris) sea
     // consistente con ellos.
@@ -186,14 +183,12 @@ export function construirActionCodeSettingsEstabliment(): {
     // riesgo real es OMITIR este campo (dejarlo `undefined`), no el valor
     // que lleve: sin él, el Admin SDK intenta generar un link corto vía
     // Firebase Dynamic Links, que Google dio de baja — la llamada queda
-    // colgada esperando una respuesta que nunca llega, sin lanzar error
-    // (encontrado probando este endpoint contra Firebase real, ver consola:
-    // "finalizó el período de baja de Firebase Dynamic Links"). `true`
-    // (antes `false`) porque ahora SÍ hay una pantalla propia en `/action`
-    // que maneja el código de acción dentro de la propia app — ya no hace
-    // falta que Firebase arme su propia pantalla ni un deep link a una app
-    // móvil (que tampoco existe). Lo que importa para evitar el bug
-    // histórico es que el campo siga siempre explícito, nunca ausente.
+    // colgada esperando una respuesta que nunca llega, sin lanzar error.
+    // `true` porque hay una pantalla propia en `/action` que maneja el
+    // código de acción dentro de la propia app — no hace falta que Firebase
+    // arme su propia pantalla ni un deep link a una app móvil (que tampoco
+    // existe). Lo que importa para evitar el bug es que el campo siga
+    // siempre explícito, nunca ausente.
     handleCodeInApp: true,
   };
 }

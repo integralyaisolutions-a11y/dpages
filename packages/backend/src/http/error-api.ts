@@ -3,9 +3,9 @@ import type { CodiErrorApi, CosErrorApi, DetallErrorApi } from '@dpages/shared';
 /**
  * Forma de error del contrato (docs/contrato-api.md, sección "Errores"):
  * { error: { codi, missatge, detalls? } } en cualquier código de estado.
- * Los tipos viven en @dpages/shared (Michel los importa igual que el resto
- * del contrato); esta función es sólo un helper de construcción, no hace
- * falta en el frontend.
+ * Los tipos viven en @dpages/shared (mismo contrato que consume el
+ * frontend); esta función es sólo un helper de construcción, no hace falta
+ * en el frontend.
  */
 export type { CodiErrorApi, CosErrorApi, DetallErrorApi };
 

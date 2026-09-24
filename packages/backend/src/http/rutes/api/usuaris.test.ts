@@ -124,8 +124,8 @@ describe('API negoci — /jo, /usuaris, /rols (Postgres real, esquema aislado)',
     await fastify.close();
   });
 
-  // Auditoría de Michelle — mismo bug que en productes.ts: ORDER BY u.nom ASC
-  // sin desempate único puede duplicar o perder filas entre páginas cuando
+  // Mismo bug que en productes.ts: ORDER BY u.nom ASC sin desempate único
+  // puede duplicar o perder filas entre páginas cuando
   // dos usuarios comparten el mismo nom.
   it('GET /usuaris: paginar amb mida=1 no duplica ni perd files quan dos usuaris tenen el mateix nom', async () => {
     const fastify = construirServidor();

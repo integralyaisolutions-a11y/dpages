@@ -15,15 +15,14 @@ import {
  * confirmación deliberada (mermas → abono/cargo). Una sola llamada
  * confirma Y graba; no hay un paso previo de "guardar sin confirmar".
  *
- * Issue #19 (Francesc, confirmado 23/09/2026) — reabre y reemplaza la
- * decisión anterior: estos dos campos YA NO exigen ser mayores que cero
- * (rotura total, artículo agotado, etc. son casos reales de negocio con 0
- * entregado). Por eso la validación de acá NO reusa `esUnitatsValides` de
- * `comu.js` — esa función es compartida con `unitatsDemanades`
- * (`POST /comandes`, `POST .../linies`, `PATCH .../linies/:liniaId`), cuya
- * regla de "mayor que cero" NO cambió (una línea de pedido sigue sin poder
- * pedirse en cero) — se validan acá con su propia lógica inline, mismo
- * criterio que ya usaba `kgLliurats`.
+ * Issue #19 — estos dos campos SÍ pueden valer 0 (rotura total, artículo
+ * agotado, etc. son casos reales de negocio con 0 entregado). Por eso la
+ * validación de acá NO reusa `esUnitatsValides` de `comu.js` — esa función
+ * es compartida con `unitatsDemanades` (`POST /comandes`,
+ * `POST .../linies`, `PATCH .../linies/:liniaId`), cuya regla de "mayor que
+ * cero" sigue vigente (una línea de pedido no puede pedirse en cero). Se
+ * valida acá con lógica inline propia, mismo criterio que ya usaba
+ * `kgLliurats`.
  */
 export function registrarRutaLliurament(fastify: FastifyInstance): void {
   fastify.patch('/comandes/:comandaId/linies/:liniaId/lliurament', async (req, reply) => {
@@ -37,12 +36,12 @@ export function registrarRutaLliurament(fastify: FastifyInstance): void {
     const cos = req.body as Partial<{ unitatsLliurades: number; kgLliurats: string }>;
     const detalls: { camp: string; missatge: string }[] = [];
 
-    // Capa 38 — unitats_lliurades pasó de INTEGER a NUMERIC(10,2): admite
-    // decimales (entregas parciales de pieza), hasta 2 decimales.
+    // unitats_lliurades es NUMERIC(10,2): admite decimales (entregas
+    // parciales de pieza), hasta 2 decimales.
     //
-    // Issue #19 — ya NO exige > 0 (0 es un valor válido, ver JSDoc de
-    // arriba): validación inline en vez de `esUnitatsValides` (compartida
-    // con `unitatsDemanades`, que sigue exigiendo > 0).
+    // No exige > 0 (0 es válido, ver JSDoc de arriba): validación inline en
+    // vez de `esUnitatsValides` (compartida con `unitatsDemanades`, que
+    // sigue exigiendo > 0).
     const unitatsLliurades = cos.unitatsLliurades;
     const unitatsLliuradesValides =
       typeof unitatsLliurades === 'number' &&
@@ -89,19 +88,18 @@ export function registrarRutaLliurament(fastify: FastifyInstance): void {
     );
     if (!resultat.rows[0]) return enviarNoTrobat(reply, 'Línia no trobada');
 
-    // Capa 17: ya existe la tabla de usuarios — el middleware
-    // (resoldre-usuari.ts) deja el usuario real resuelto en
-    // req.usuariResolt, así que id/nom ya no son un marcador.
+    // El middleware (resoldre-usuari.ts) deja el usuario real resuelto en
+    // req.usuariResolt, así que id/nom no son un marcador.
     const usuariResolt = req.usuariResolt!;
     const resposta: LliuramentRespostaApi = {
       liniaId: Number(resultat.rows[0].id_seq),
       comandaId: comandaIdPublic,
-      // Capa 38 — BREAKING: unitatsLliurades pasa a string (NUMERIC(10,2)).
-      // A diferencia del resto de campos de esta capa, este no vuelve a
-      // leerse de la base en este mismo endpoint (se graba y se devuelve el
-      // valor recibido tal cual) — se formatea acá a mano con 2 decimales
-      // para que la respuesta sea igual de consistente que si viniera de un
-      // SELECT posterior (mismo criterio que kgLliurats, que ya era string).
+      // unitatsLliurades es NUMERIC(10,2) → se expone como string. No se
+      // vuelve a leer de la base en este mismo endpoint (se graba y se
+      // devuelve el valor recibido tal cual) — se formatea acá a mano con 2
+      // decimales para que la respuesta sea igual de consistente que si
+      // viniera de un SELECT posterior (mismo criterio que kgLliurats, que
+      // ya era string).
       unitatsLliurades: cos.unitatsLliurades!.toFixed(2),
       kgLliurats: cos.kgLliurats!,
       confirmatA: formatearDataApi(resultat.rows[0].confirmat_a)!,

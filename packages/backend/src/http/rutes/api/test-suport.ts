@@ -27,9 +27,9 @@ export async function prepararEntornApi(prefix: string): Promise<EntornTestApi> 
   await setup.query(`SET search_path TO "${esquema}"`);
   await migrarArriba(setup);
   // origen_comanda no se siembra en la migración (sus filas son datos de
-  // arranque, ver seed-arranque.ts) — pero desde la capa 15 (migración
-  // 0013), comanda.origen_id es NOT NULL y toda alta de comanda (manual o
-  // sync) necesita resolver contra ella. Sin esto, cualquier test que cree
+  // arranque, ver seed-arranque.ts) — pero desde la migración 0013,
+  // comanda.origen_id es NOT NULL y toda alta de comanda (manual o sync)
+  // necesita resolver contra ella. Sin esto, cualquier test que cree
   // una comanda fallaría por falta de las filas mínimas que en un ambiente
   // real ya están cargadas antes de que el sistema reciba tráfico.
   await setup.query(`
@@ -60,9 +60,9 @@ export function cuerpoJson<T>(res: { json: () => unknown }): T {
 }
 
 /**
- * Capa 39 — helper compartido: promueve el usuario auto-provisionado de
- * test (uid fijo `dev-sense-auth`, ver `AUTH_DISABLED`) al rol
- * Administrador, para poder ejercer endpoints con guarda de módulo
+ * Helper compartido: promueve el usuario auto-provisionado de test (uid
+ * fijo `dev-sense-auth`, ver `AUTH_DISABLED`) al rol Administrador, para
+ * poder ejercer endpoints con guarda de módulo
  * (`usuaris`/`rols`) en los tests. El bypass de desarrollo siempre resuelve
  * al mismo uid — no hay forma de simular un segundo usuario real vía
  * headers — así que "ser Administrador" en un test es literalmente mover

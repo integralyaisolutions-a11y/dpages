@@ -149,8 +149,8 @@ describe('rutas fuera del scope de /api/v1: no pasan por este middleware', () =>
 });
 
 /**
- * Capa 47 — la URL del link de alta de usuario se arma con el mismo
- * criterio de entorno que opcionsCors() en cors.ts (ver cors.test.ts, del
+ * La URL del link de alta de usuario se arma con el mismo criterio de
+ * entorno que opcionsCors() en cors.ts (ver cors.test.ts, del
  * que se copia el patrón: fijar process.env ANTES de vi.resetModules() +
  * reimportar, un describe por escenario). Se testea la función pura
  * exportada, no generarLinkEstabliment — ese sí llama a Firebase real y

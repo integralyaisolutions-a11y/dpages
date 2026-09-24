@@ -9,7 +9,7 @@ import {
 } from './test-suport.js';
 
 /**
- * Issues #3/#4 (Francesc) — migración validada con Michelle (frontend): la
+ * Issues #3/#4 — migración validada con el frontend: la
  * fila se identifica por categoriaId + agrupacioProduccio, no por
  * producteId. El fixture crea DOS productos en la misma categoria/grupo
  * ('LLF01'/'LLF02', ambos 'Llom') para poder confirmar que un único
@@ -82,8 +82,8 @@ describe('API negoci — /rendiments-porcs (Postgres real, esquema aislado)', ()
 
     expect(res.statusCode).toBe(201);
     const cuerpo = cuerpoJson<RendimentPorcApi>(res);
-    // Capa 22 (BREAKING): producte ya NO viaja en la respuesta — confirmado
-    // en runtime, no sólo por el tipo (que ya ni lo declara).
+    // BREAKING: producte ya NO viaja en la respuesta — confirmado en
+    // runtime, no sólo por el tipo (que ya ni lo declara).
     expect(cuerpo).not.toHaveProperty('producte');
     expect(cuerpo.agrupacioRendiment).toBe('KG');
     expect(cuerpo.categoria).toBe('Fresc');
@@ -211,9 +211,9 @@ describe('API negoci — /rendiments-porcs (Postgres real, esquema aislado)', ()
     await fastify.close();
   });
 
-  // Capa 45 — hallazgo de Michel: este filtro quedó case-sensitive por
-  // descuido. El fixture guarda 'Llom' (con mayúscula inicial) — 'llom' y
-  // 'LLOM' tienen que matchear igual.
+  // Este filtro quedó case-sensitive por descuido. El fixture guarda
+  // 'Llom' (con mayúscula inicial) — 'llom' y 'LLOM' tienen que matchear
+  // igual.
   it('GET /rendiments-porcs?agrupacioProduccio= exige coincidencia exacta, case-insensitive', async () => {
     const fastify = construirServidor();
 

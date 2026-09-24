@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { contarPorCategoria, contarSinSku } from './carga-completa-cataleg.js';
 
 /**
- * Capa 51 — sólo se testea acá lo genuinamente nuevo de este script
+ * Sólo se testea acá lo genuinamente nuevo de este script
  * (`contarPorCategoria`/`contarSinSku`, para el informe del dry-run).
  * `ingerirCataleg`/`transformarCataleg` (reusadas sin cambios) ya tienen su
  * propia cobertura en sync/ingesta.test.ts y transform/cataleg.test.ts —

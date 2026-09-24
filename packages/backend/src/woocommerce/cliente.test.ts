@@ -57,8 +57,8 @@ describe('parámetros obligatorios', () => {
     expect(url.searchParams.get('dates_are_gmt')).toBe('true');
     expect(url.searchParams.get('orderby')).toBe('modified');
     expect(url.searchParams.get('order')).toBe('asc');
-    // Capa 49 — bajado de 100 a 30 tras el incidente real de "fetch failed"
-    // sostenido (ver docs/hallazgos-woocommerce.md).
+    // Bajado a 30 tras el incidente real de "fetch failed" sostenido (ver
+    // docs/hallazgos-woocommerce.md).
     expect(url.searchParams.get('per_page')).toBe('30');
   });
 
@@ -191,7 +191,7 @@ describe('reintentos', () => {
     expect(errorWoo.recurso).toBe('products');
     expect(errorWoo.status).toBe(429);
     expect(errorWoo.message).not.toContain('dato sensible');
-    // 1 intento inicial + REINTENTOS_MAXIMOS reintentos (capa 49ter: bajado a 2)
+    // 1 intento inicial + REINTENTOS_MAXIMOS reintentos (bajado a 2)
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
@@ -284,7 +284,7 @@ describe('respuestas no-JSON (WAF/Cloudflare)', () => {
 });
 
 /**
- * Capa 49 — incidente real de producción: "fetch failed" sostenido en
+ * Incidente real de producción: "fetch failed" sostenido en
  * orders Y products, cursores congelados varios días (ver
  * docs/hallazgos-woocommerce.md). PER_PAGE bajado a 30, TIMEOUT_PETICION_MS
  * subido a 45s, y se captura err.cause (antes descartado por completo) para

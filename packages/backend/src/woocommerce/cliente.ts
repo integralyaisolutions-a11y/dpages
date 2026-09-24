@@ -18,17 +18,17 @@ import { logger } from '../lib/logger.js';
  * nadie tenga que acordarse de repetirlas.
  */
 
-// Capa 49 — incidente real de producción (ver docs/hallazgos-woocommerce.md):
+// Incidente real de producción (ver docs/hallazgos-woocommerce.md):
 // PER_PAGE=100 dejaba páginas reales (con line items/meta por pedido) más
 // pesadas de lo necesario en el hosting real de dpages.cat. Bajado a 30
-// (peticiones más chicas y rápidas) — este valor no cambió en capas
-// posteriores, el problema real resultó estar en los timeouts, no acá.
+// (peticiones más chicas y rápidas) — el problema real resultó estar en
+// los timeouts, no acá.
 const PER_PAGE = 30;
 
 /**
- * Capa 49ter — REINTENTOS_MAXIMOS bajado de 5 a 2 (ver
- * docs/hallazgos-woocommerce.md para el detalle completo). Con 5
- * reintentos, una sola página que falla los 6 intentos completos consume
+ * REINTENTOS_MAXIMOS=2 (ver docs/hallazgos-woocommerce.md para el detalle
+ * completo). Con 5 reintentos, una sola página que falla los 6 intentos
+ * completos consume
  * casi todo el presupuesto de Cloud Run (300s) ella sola — confirmado con
  * un caso real: 6 × 45s + 15,5s de backoff = 285,5s calculados contra
  * 285.568ms observados. Con más de una página fallando así, el request
@@ -46,31 +46,26 @@ const ESPERA_BASE_MS = 500;
 const ESPERA_MAXIMA_MS = 10_000;
 
 /**
- * Capa 49bis — el diagnóstico original (página lenta) era parcialmente
- * incorrecto: con err.cause ya visible en los logs reales, el error de
- * fondo resultó ser un `ConnectTimeoutError` de undici a los 10_000ms — el
- * `connectTimeout` POR DEFECTO de undici, que `AbortSignal.timeout()` NO
- * controla (son dos mecanismos independientes: el AbortSignal cubre toda
- * la petición desde que se llama a `fetch`, pero undici corta la fase de
- * CONEXIÓN por su cuenta antes de que el AbortSignal tenga oportunidad de
- * intervenir).
+ * El error de fondo detrás de "fetch failed" resultó ser un
+ * `ConnectTimeoutError` de undici a los 10_000ms — el `connectTimeout` POR
+ * DEFECTO de undici, que `AbortSignal.timeout()` NO controla (son dos
+ * mecanismos independientes: el AbortSignal cubre toda la petición desde
+ * que se llama a `fetch`, pero undici corta la fase de CONEXIÓN por su
+ * cuenta antes de que el AbortSignal tenga oportunidad de intervenir).
  *
- * Capa 49ter — usar el MISMO valor para las dos cosas (como se hizo en la
- * 49bis) fue un error de diseño, no sólo de rendimiento: con
- * connectTimeout y AbortSignal corriendo la misma carrera de 45s, cuál de
- * los dos dispara primero ante una conexión colgada pasa a depender de
- * detalles internos de scheduling de Node, no de en qué fase falló de
- * verdad — rompiendo exactamente la capacidad de diagnóstico que
- * buscábamos al capturar err.cause en la capa 49 (confirmado: en
- * producción volvió a aparecer el mensaje genérico del AbortSignal, no
- * ConnectTimeoutError, sin que eso implicara que el problema hubiera
- * cambiado de fase). TIMEOUT_CONEXIO_MS ahora es un valor propio y
- * MENOR que TIMEOUT_PETICION_MS — la fase de conectar (TCP/TLS) no
- * debería competir por el mismo presupuesto que la espera de una
- * respuesta completa. TIMEOUT_PETICION_MS bajado de 45s a 30s: la
- * evidencia real (pruebas manuales aisladas) nunca mostró más de ~24s en
- * el peor caso — 45s no aportaba margen real, sólo alargaba cada intento
- * fallido innecesariamente.
+ * ADVERTENCIA — NO usar el MISMO valor para las dos cosas: con
+ * connectTimeout y AbortSignal corriendo la misma carrera, cuál de los dos
+ * dispara primero ante una conexión colgada pasa a depender de detalles
+ * internos de scheduling de Node, no de en qué fase falló de verdad —
+ * rompiendo la capacidad de diagnóstico que da capturar `err.cause` (ya
+ * pasó: en producción volvió a aparecer el mensaje genérico del
+ * AbortSignal, no ConnectTimeoutError, sin que eso implicara que el
+ * problema hubiera cambiado de fase). TIMEOUT_CONEXIO_MS es un valor
+ * propio y MENOR que TIMEOUT_PETICION_MS — la fase de conectar (TCP/TLS)
+ * no debería competir por el mismo presupuesto que la espera de una
+ * respuesta completa. TIMEOUT_PETICION_MS=30s: la evidencia real (pruebas
+ * manuales aisladas) nunca mostró más de ~24s en el peor caso — 45s no
+ * aportaba margen real, sólo alargaba cada intento fallido innecesariamente.
  */
 const TIMEOUT_CONEXIO_MS = 15_000;
 const TIMEOUT_PETICION_MS = 30_000;
@@ -111,8 +106,8 @@ export class ErrorWooCommerce extends Error {
 }
 
 /**
- * Capa 41 — dpages.cat descarta el header `Authorization` antes de que
- * llegue a WordPress (confirmado con curl directo: el header da 401, el
+ * dpages.cat descarta el header `Authorization` antes de que llegue a
+ * WordPress (confirmado con curl directo: el header da 401, el
  * mismo par de credenciales por query string da 200). WooCommerce/WordPress
  * soportan las dos formas oficialmente (REST API Handbook), así que esto
  * no es un workaround frágil — es simplemente el mecanismo que el
@@ -129,7 +124,7 @@ function credencialsWoo(): Record<string, string> {
 
 /**
  * Red de seguridad — no la única barrera, pero sí obligatoria: desde que
- * las credenciales viajan en el query string (capa 41), cualquier texto
+ * las credenciales viajan en el query string, cualquier texto
  * que las contenga y termine en un log, o en una columna de auditoría
  * (`esdeveniment_webhook.error` en webhook.ts,
  * `cursor_sincronitzacio.ultim_error` en sync/ingesta.ts — ambos guardan
@@ -151,16 +146,14 @@ function redactarUrlEnTexto(texto: string): string {
 }
 
 /**
- * Capa 49 — incidente real: "fetch failed" es el mensaje genérico que usa
- * undici para fallos de conexión de bajo nivel (reset, DNS, TLS, socket
- * cerrado del otro lado) — el motivo real queda en `err.cause`, que hasta
- * esta capa se descartaba por completo. Sin esto, no había forma de
- * distinguir en los logs "se disparó nuestro AbortSignal" de "algo cortó la
- * conexión del otro lado" — exactamente lo que costó reconstruir a mano
- * durante la investigación de este incidente. `undefined` si no hay causa
- * (la mayoría de los errores no la tienen) — no se agrega nada a los logs
- * ni al mensaje en ese caso. Redactada igual que el mensaje principal: la
- * causa también puede traer texto armado por Node/undici que no controlamos.
+ * "fetch failed" es el mensaje genérico que usa undici para fallos de
+ * conexión de bajo nivel (reset, DNS, TLS, socket cerrado del otro lado) —
+ * el motivo real queda en `err.cause`. Sin esto, no hay forma de
+ * distinguir en los logs "se disparó nuestro AbortSignal" de "algo cortó
+ * la conexión del otro lado". `undefined` si no hay causa (la mayoría de
+ * los errores no la tienen) — no se agrega nada a los logs ni al mensaje
+ * en ese caso. Redactada igual que el mensaje principal: la causa también
+ * puede traer texto armado por Node/undici que no controlamos.
  *
  * `err.cause` no está garantizado a ser un `Error` — puede ser cualquier
  * valor (spec de `Error.cause`). Si es un `Error`, usamos `.message` (corto
@@ -225,8 +218,8 @@ async function peticionGet(recurso: string, params: Record<string, string>): Pro
 
       if (intento > REINTENTOS_MAXIMOS) {
         // redactarUrlEnTexto: err.message puede traer la URL completa —
-        // con credenciales en el query string desde esta capa — armada por
-        // Node/undici, no por este módulo. Ver la nota en la función.
+        // con credenciales en el query string — armada por Node/undici, no
+        // por este módulo. Ver la nota en la función.
         const mensaje = err instanceof Error ? err.message : String(err);
         throw new ErrorWooCommerce(
           recurso,

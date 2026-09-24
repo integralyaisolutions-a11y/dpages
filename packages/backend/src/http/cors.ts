@@ -2,11 +2,11 @@ import type { FastifyCorsOptions } from '@fastify/cors';
 import { env } from '../config/env.js';
 
 /**
- * El frontend de Michel corre acá en desarrollo — nada que configurar para
- * levantar los dos en local. Exportada (capa 47): auth-firebase.ts la
- * reusa para el mismo criterio de entorno al armar la URL del link de alta
- * de usuario — mismo módulo `http/`, sin necesidad de un archivo compartido
- * nuevo para una sola constante.
+ * El frontend corre acá en desarrollo — nada que configurar para levantar
+ * los dos en local. Exportada: auth-firebase.ts la reusa para el mismo
+ * criterio de entorno al armar la URL del link de alta de usuario — mismo
+ * módulo `http/`, sin necesidad de un archivo compartido nuevo para una
+ * sola constante.
  */
 export const ORIGEN_DESENVOLUPAMENT = 'http://localhost:3000';
 
@@ -15,10 +15,9 @@ export const ORIGEN_DESENVOLUPAMENT = 'http://localhost:3000';
  * se pasa explícito — sin esto, el preflight OPTIONS de cualquier
  * PATCH/DELETE (todas las pantallas de edición y borrado del sistema)
  * responde sin esos verbos en `access-control-allow-methods`, y el
- * navegador corta la petición real antes de mandarla (bug real, capa 26 —
- * confirmado con curl de preflight contra el backend corriendo). HEAD/PUT
- * no hacen falta: ningún endpoint del sistema los usa (verificado, grep
- * sobre todos los `fastify.<verbo>(` registrados).
+ * navegador corta la petición real antes de mandarla. HEAD/PUT no hacen
+ * falta: ningún endpoint del sistema los usa (verificado, grep sobre todos
+ * los `fastify.<verbo>(` registrados).
  */
 const METODES_PERMESOS = ['GET', 'POST', 'PATCH', 'DELETE'];
 

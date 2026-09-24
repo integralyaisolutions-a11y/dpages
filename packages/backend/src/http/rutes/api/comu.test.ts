@@ -28,8 +28,8 @@ function usuariAmb(modulsPermesos: string[]): UsuariResolt {
 }
 
 /**
- * Regresión directa del bug real encontrado en capa 19 (POST /usuaris
- * colgado indefinidamente en producción): `crearGuardaModul` es un
+ * Regresión directa de un bug real (POST /usuaris colgado indefinidamente
+ * en producción): `crearGuardaModul` es un
  * `preHandler` de Fastify, que SIEMPRE lo invoca como
  * `fn(request, reply, done)` — si el hook no llama a `done()` ni devuelve
  * una Promise, Fastify se queda esperando esa señal para siempre (sin

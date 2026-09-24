@@ -5,11 +5,11 @@ import { pool as poolPerDefecte } from '../db/pool.js';
 import { cosError } from './error-api.js';
 
 /**
- * Entidad de negocio (tabla `usuari`, capa 17) resuelta a partir del uid de
- * Firebase — distinta de `InfoUsuari` (auth-firebase.ts), que son sólo los
- * claims crudos del token. `rol.modulsPermesos` es lo que el FRONTEND usa
- * para decidir qué mostrar (ADR-021: ningún endpoint de negocio bloquea
- * todavía por rol).
+ * Entidad de negocio (tabla `usuari`) resuelta a partir del uid de Firebase
+ * — distinta de `InfoUsuari` (auth-firebase.ts), que son sólo los claims
+ * crudos del token. `rol.modulsPermesos` es lo que el FRONTEND usa para
+ * decidir qué mostrar (ADR-021: ningún endpoint de negocio bloquea todavía
+ * por rol).
  */
 export interface UsuariResolt {
   id: number;

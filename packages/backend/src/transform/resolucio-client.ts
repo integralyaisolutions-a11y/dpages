@@ -140,9 +140,9 @@ export async function resolverOCrearClient(
     );
     await client.query('RELEASE SAVEPOINT resolucio_client');
 
-    // Capa 25/29: todo cliente recibe un `codi` autogenerado, sin importar
-    // el origen (sync o alta manual) — ver assignarCodiAutogenerat. Acá
-    // cubre los dos caminos de este upsert sin distinguirlos: un cliente
+    // Todo cliente recibe un `codi` autogenerado, sin importar el origen
+    // (sync o alta manual) — ver assignarCodiAutogenerat. Acá cubre los
+    // dos caminos de este upsert sin distinguirlos: un cliente
     // nuevo siempre tiene `codi` null recién insertado; uno existente
     // resuelto por `ON CONFLICT` puede ya tener `codi` y no se toca.
     await assignarCodiAutogenerat(client, res.rows[0]!.id, res.rows[0]!.id_seq);

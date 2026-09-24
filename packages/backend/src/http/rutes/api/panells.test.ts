@@ -127,7 +127,7 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
     const fastify = construirServidor();
 
     // Cliente real — para verificar que "client" resuelve a un valor real y
-    // no queda hardcodeado en null (capa 15, cambio A).
+    // no queda hardcodeado en null.
     const client = await entorn.poolTest.query<{ id_seq: string }>(
       `INSERT INTO client (nom, poblacio) VALUES ('Restaurant Example', 'Manresa') RETURNING id_seq`,
     );
@@ -155,7 +155,7 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
     expect(filaNova).toBeDefined();
     expect(filaNova?.liniaId).toBe(liniaCreada.id);
     expect(filaNova?.client).toBe('Restaurant Example');
-    expect(filaNova?.unitats).toBe('3.00'); // capa 38 — NUMERIC(10,2), string
+    expect(filaNova?.unitats).toBe('3.00'); // NUMERIC(10,2), string
     expect(filaNova?.kg).toBe('3.750'); // 3 × 1.250
 
     // Las 3 líneas del beforeAll siguen ahí, sin agrupar y sin cliente —
@@ -171,9 +171,9 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
     await fastify.close();
   });
 
-  // Capa 20 — filtros nuevos de Obrador (producte/format/envasat), pedidos
-  // por el demo de Lovable. Al final del describe por el mismo motivo que
-  // el test anterior: no debe alterar los totales que asumen los tests de
+  // Filtros de Obrador (producte/format/envasat), pedidos por el demo de
+  // Lovable. Al final del describe por el mismo motivo que el test
+  // anterior: no debe alterar los totales que asumen los tests de
   // oficina/empaquetat de más arriba.
   it('GET /panells/obrador: filtros producte/format/envasat (capa 20)', async () => {
     const fastify = construirServidor();
@@ -247,9 +247,9 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
     await fastify.close();
   });
 
-  // Capa 35 — al final del describe por el mismo motivo que los dos
-  // anteriores: crea pedidos propios y no debe alterar los totales que
-  // asumen los tests de oficina/empaquetat de más arriba.
+  // Al final del describe por el mismo motivo que los dos anteriores: crea
+  // pedidos propios y no debe alterar los totales que asumen los tests de
+  // oficina/empaquetat de más arriba.
   describe('capa 35 — obsProduccio (capçalera o línia), 4 filtres nous i bultos a GET /panells/oficina', () => {
     it('obsProduccio: true quan NOMÉS una línia (activa) té contingut, encara que la capçalera estigui buida', async () => {
       const fastify = construirServidor();
@@ -507,9 +507,9 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
     });
   });
 
-  // Capa 36 — bug sistémico encontrado al verificar la capa 35: "...Fins"
-  // se interpretaba como medianoche del día, cortando afuera cualquier
-  // registro con hora real dentro de ese mismo día. Al final del describe
+  // Bug sistémico: "...Fins" se interpretaba como medianoche del día,
+  // cortando afuera cualquier registro con hora real dentro de ese mismo
+  // día. Al final del describe
   // por el mismo motivo que los bloques anteriores.
   describe('capa 36 — els filtres "...Fins" inclouen el dia complet', () => {
     it('GET /panells/oficina?dataExpedicioDes=&dataExpedicioFins= del MISMO día (con hora real) matchea', async () => {
@@ -664,9 +664,9 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
     });
   });
 
-  // Capa 38 — unitatsDemanades/unitatsLliurades pasaron de INTEGER a
-  // NUMERIC(10,2) (migración 0016). Al final del describe por el mismo
-  // motivo que los bloques anteriores.
+  // unitatsDemanades/unitatsLliurades pasaron de INTEGER a NUMERIC(10,2)
+  // (migración 0016). Al final del describe por el mismo motivo que los
+  // bloques anteriores.
   describe('capa 38 — unitatsDemanades/unitatsLliurades com a string (NUMERIC(10,2))', () => {
     it('GET /panells/obrador: el tipus de sortida d’unitats és string, amb decimals reals', async () => {
       const fastify = construirServidor();
@@ -726,9 +726,9 @@ describe('API negoci — /panells (Postgres real, esquema aislado)', () => {
     });
   });
 
-  // Capa 37 — 2 filtros faltantes en GET /panells/empaquetat, reportados por
-  // Michel. Al final del describe por el mismo motivo que los bloques
-  // anteriores: crea pedidos propios y no debe alterar los totales que
+  // 2 filtros que faltaban en GET /panells/empaquetat. Al final del
+  // describe por el mismo motivo que los bloques anteriores: crea pedidos
+  // propios y no debe alterar los totales que
   // asumen los tests de oficina/empaquetat de más arriba.
   describe('capa 37 — filtres dataLliuramentDes/Fins i producte a GET /panells/empaquetat', () => {
     it('filtres ?dataLliuramentDes=/?dataLliuramentFins=: rang complet del dia (capa 36), fora de rang → dades: []', async () => {

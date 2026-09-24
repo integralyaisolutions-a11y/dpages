@@ -22,8 +22,8 @@ describe('API negoci — /productes (Postgres real, esquema aislado)', () => {
     await entorn.poolTest.query(
       `INSERT INTO producte (codi, descripcio, tipus) VALUES ('PIC01', 'Picada de porc', 'simple')`,
     );
-    // Capa 45 — agrupacio_produccio con mayúscula inicial, para el test de
-    // filtro case-insensitive de más abajo.
+    // agrupacio_produccio con mayúscula inicial, para el test de filtro
+    // case-insensitive de más abajo.
     await entorn.poolTest.query(
       `INSERT INTO producte (codi, descripcio, tipus, agrupacio_produccio)
        VALUES ('COS01', 'Costelletes de porc', 'simple', 'Costelletes')`,
@@ -74,8 +74,8 @@ describe('API negoci — /productes (Postgres real, esquema aislado)', () => {
     await fastify.close();
   });
 
-  // Capa 45 — hallazgo de Michel: este filtro quedó case-sensitive por
-  // descuido, inconsistente con ?cerca= de arriba. El fixture guarda
+  // Este filtro quedó case-sensitive por descuido, inconsistente con
+  // ?cerca= de arriba. El fixture guarda
   // 'Costelletes' (mayúscula inicial) — 'costelletes' y 'COSTELLETES'
   // tienen que matchear igual.
   it('GET /productes?agrupacioProduccio= exige coincidencia exacta, case-insensitive', async () => {
@@ -152,9 +152,9 @@ describe('API negoci — /productes (Postgres real, esquema aislado)', () => {
     await fastify.close();
   });
 
-  // Bug real reportado por Francesc — cambiar codi a un valor duplicado
-  // daba 500 (sin try/catch alrededor del INSERT/UPDATE). Decisión de
-  // negocio confirmada: codi se escribe a mano SÓLO al crear.
+  // Bug real: cambiar codi a un valor duplicado daba 500 (sin try/catch
+  // alrededor del INSERT/UPDATE). Decisión de negocio confirmada: codi se
+  // escribe a mano SÓLO al crear.
   it('POST /productes amb codi duplicat dona 409 CONFLICTE, no 500', async () => {
     const fastify = construirServidor();
     const res = await fastify.inject({
@@ -197,8 +197,8 @@ describe('API negoci — /productes (Postgres real, esquema aislado)', () => {
     await fastify.close();
   });
 
-  // Auditoría de Michelle — reproduce con datos reales: "PRESTA TALLADA 330G"
-  // aparecía 2 veces en producte.descripcio, sin un desempate único en el
+  // Reproduce con datos reales: "PRESTA TALLADA 330G" aparecía 2 veces en
+  // producte.descripcio, sin un desempate único en el
   // ORDER BY (sólo descripcio ASC). Con descripciones empatadas, Postgres no
   // garantiza un orden estable entre páginas — puede repetir o saltear filas.
   it('GET /productes: paginar amb mida=1 no duplica ni perd files quan dues descripcions són idèntiques', async () => {

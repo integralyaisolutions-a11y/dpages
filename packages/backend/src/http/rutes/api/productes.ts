@@ -109,9 +109,8 @@ export function registrarRutesProductes(fastify: FastifyInstance): void {
       valors.push(query.envasat);
     }
     if (typeof query.agrupacioProduccio === 'string' && query.agrupacioProduccio.trim() !== '') {
-      // Capa 45 — mismo hallazgo y mismo fix que rendiments-porcs.ts: quedó
-      // case-sensitive por descuido. Regla 3.1 transversal: coincidencia
-      // EXACTA, case-insensitive.
+      // Mismo criterio que rendiments-porcs.ts — regla 3.1 transversal:
+      // coincidencia EXACTA, case-insensitive.
       condicions.push(`LOWER(p.agrupacio_produccio) = LOWER($${valors.length + 1})`);
       valors.push(query.agrupacioProduccio.trim());
     }
@@ -241,9 +240,9 @@ export function registrarRutesProductes(fastify: FastifyInstance): void {
     const idPublic = parsearIdPublic((req.params as { id: string }).id);
     if (idPublic === null) return enviarNoTrobat(reply);
 
-    // Issue de robustesa (Francesc) — codi és immutable un cop creat el
-    // producte (decisió de negoci confirmada: es carrega manualment NOMÉS
-    // en crear-lo). No es llegeix del cos encara que vingui, no hi ha camp
+    // codi és immutable un cop creat el producte (decisió de negoci
+    // confirmada: es carrega manualment NOMÉS en crear-lo). No es llegeix
+    // del cos encara que vingui, no hi ha camp
     // per a ell acá — mateix criteri exacte que client.codi a
     // PATCH /clients/:id i usuari.firebaseUid a PATCH /usuaris/:id.
     const cos = req.body as Partial<{

@@ -98,8 +98,8 @@ describe('API negoci — /clients (Postgres real, esquema aislado)', () => {
     await fastify.close();
   });
 
-  // Issue de robustesa (Francesc, bug real: 500 en canviar producte.codi
-  // duplicat) — PATCH /clients/:id ja tenia el try/catch per a codi al
+  // Issue de robustesa (bug real: 500 en canviar producte.codi duplicat) —
+  // PATCH /clients/:id ja tenia el try/catch per a codi al
   // POST, però no per a nif/email al PATCH (ambdós amb índex únic parcial,
   // migració 0009): mateix buit, mateix fix.
   it('PATCH /clients/:id amb nif duplicat dona 409 CONFLICTE, no 500', async () => {

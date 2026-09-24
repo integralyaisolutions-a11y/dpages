@@ -1,6 +1,6 @@
 /**
- * Backfill (capa 25, una sola vez): asigna `codi` a clientes YA
- * sincronizados desde WooCommerce que quedaron sin código antes de que el
+ * Backfill (de una sola vez): asigna `codi` a clientes YA sincronizados
+ * desde WooCommerce que quedaron sin código antes de que el
  * sync empezara a generarlo automáticamente (ver
  * `transform/resolucio-client.ts`, `resolverOCrearClient`).
  *
@@ -17,8 +17,8 @@
  * blanco" es equivalente a filtrar por "origen woocommerce", sin necesitar
  * (ni inventar) una columna que no existe.
  *
- * Mismo patrón que el sync desde capa 25 (`CLI` + id_seq, SIN padding
- * fijo — un ancho fijo de 3 dígitos truncaba en vez de ensanchar en cuanto
+ * Mismo patrón que el sync (`CLI` + id_seq, SIN padding fijo — un ancho
+ * fijo de 3 dígitos truncaba en vez de ensanchar en cuanto
  * `id_seq` llegaba a 4 cifras; bug real encontrado contra datos reales,
  * ver `transform/resolucio-client.ts` para el detalle). Acá el `id_seq` YA
  * existe (la fila se insertó hace tiempo); no hay nada que generar, sólo
@@ -26,7 +26,7 @@
  *
  * Idempotente: sólo toca filas con `codi` NULL o vacío — correrlo de nuevo
  * sobre clientes que ya tienen `codi` (asignado por este mismo script, o
- * por el sync desde que existe capa 25) no hace nada.
+ * por el sync) no hace nada.
  *
  * NO es destructivo (sólo completa un campo vacío, nunca borra ni
  * sobrescribe un `codi` existente) — a diferencia de

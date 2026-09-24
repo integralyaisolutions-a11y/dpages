@@ -168,9 +168,9 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
     // MAGRE — tres agrupaciones (nombres arbitrarios, PERNIL/ESPATLLA/
     // PAPADA no coinciden con las agrupaciones reales de negocio), con
     // kgAElaborar propios que suman 387.979 — ese es el totalKgAElaborar
-    // esperado (fix Francesc: sólo MAGRE, ya no KG+MAGRE). kgJamon/
-    // kgRecortes/kgPaletillas/totalKgMagro son constantes fijas — no
-    // dependen de esta fixture en absoluto (ver REVERT 23/09/2026).
+    // esperado (sólo MAGRE, ya no KG+MAGRE). kgJamon/kgRecortes/
+    // kgPaletillas/totalKgMagro son constantes fijas — no dependen de esta
+    // fixture en absoluto.
     await crearAgrupacio({
       categoriaNom: 'Peces Magres',
       agrupacioRendiment: 'MAGRE',
@@ -278,17 +278,16 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
 
     expect(cuerpo.dades).toHaveLength(9);
     expect(cuerpo.totals).toEqual({
-      // Fix (Francesc, confirmado) — "Total Kg a elaborar" ahora suma
-      // EXCLUSIVAMENTE MAGRE (antes sumaba KG+MAGRE: 125.003 + 387.979 =
-      // 512.982). Este dataset tiene PERNIL/ESPATLLA/PAPADA con
-      // unitatsPerPorc='1.00' (ver crearAgrupacio más arriba), así que
-      // totalKgMagro no cambia con el otro fix (unitatsPerPorc×1 = mismo
-      // valor) — el test dedicado de más abajo cubre unitatsPerPorc≠1.
+      // "Total Kg a elaborar" suma EXCLUSIVAMENTE MAGRE (antes sumaba
+      // KG+MAGRE: 125.003 + 387.979 = 512.982). Este dataset tiene
+      // PERNIL/ESPATLLA/PAPADA con unitatsPerPorc='1.00' (ver
+      // crearAgrupacio más arriba), así que totalKgMagro no cambia con el
+      // otro fix (unitatsPerPorc×1 = mismo valor) — el test dedicado de
+      // más abajo cubre unitatsPerPorc≠1.
       totalKgAElaborar: '387.979',
-      // REVERT (Francesc, confirmado 23/09/2026) — kgJamon/kgRecortes/
-      // kgPaletillas vuelven a ser constantes fijas (12/6/7 × nombrePorcs),
-      // NO calculadas desde rendiments_porcs (se intentó conectarlas y se
-      // revirtió — Francesc aclaró que es una tasa de negocio fija e
+      // kgJamon/kgRecortes/kgPaletillas son constantes fijas (12/6/7 ×
+      // nombrePorcs), NO calculadas desde rendiments_porcs (ya se intentó
+      // conectarlas y se revirtió: es una tasa de negocio fija e
       // independiente). Con nombrePorcs=5: 60+30+35=125, coincide con
       // totalKgMagro (pura coincidencia con este fixture, no por diseño).
       totalKgMagro: '125.000',
@@ -316,8 +315,7 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
     expect(conUnPorc.totals.kgRecortes).toBe('6.000');
     expect(conUnPorc.totals.kgPaletillas).toBe('7.000');
 
-    // Ejemplo exacto confirmado por Francesc: 10 cerdos → Jamón 120,
-    // Recortes 60, Paletillas 70.
+    // Ejemplo confirmado: 10 cerdos → Jamón 120, Recortes 60, Paletillas 70.
     const conDiezPorcs = cuerpoJson<PanellProduccioApi>(
       await fastify.inject({
         method: 'GET',
@@ -365,14 +363,14 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
     const cuerpo = cuerpoJson<PanellProduccioApi>(res);
     expect(cuerpo.dades).toHaveLength(2);
     expect(cuerpo.dades.every((f) => f.agrupacioRendiment === 'KG')).toBe(true);
-    // Fix (Francesc, confirmado) — "Total Kg a elaborar" es EXCLUSIVAMENTE
-    // MAGRE ahora: filtrando por KG no hay ninguna línia MAGRE en `filas`,
-    // así que da "0.000" (antes daba la suma de las 2 filas KG mostradas,
-    // 125.003 — mezclaba lo que se ve en la tabla con lo que muestra esta
-    // tarjeta puntual, que son cosas distintas por diseño).
+    // "Total Kg a elaborar" es EXCLUSIVAMENTE MAGRE: filtrando por KG no
+    // hay ninguna línia MAGRE en `filas`, así que da "0.000" (antes daba
+    // la suma de las 2 filas KG mostradas, 125.003 — mezclaba lo que se ve
+    // en la tabla con lo que muestra esta tarjeta puntual, que son cosas
+    // distintas por diseño).
     expect(cuerpo.totals.totalKgAElaborar).toBe('0.000');
     // totalKgMagro es constante fija (12+6+7)×nombrePorcs — NO depende de
-    // agrupacioRendiment (REVERT 23/09/2026).
+    // agrupacioRendiment.
     expect(cuerpo.totals.totalKgMagro).toBe('125.000');
 
     await fastify.close();
@@ -389,7 +387,7 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
     expect(cuerpo.dades).toHaveLength(1);
     // producteCodi/descripcio y agrupacioProduccio valen 'LLOM' los tres en
     // este fixture (ver crearAgrupacio) — agrupacioProduccio confirma que
-    // matcheó la fila correcta ahora que producte ya no viaja (capa 22).
+    // matcheó la fila correcta ahora que producte ya no viaja.
     expect(cuerpo.dades[0]?.agrupacioProduccio).toBe('LLOM');
     expect(cuerpo.dades[0]).not.toHaveProperty('producte');
 
@@ -414,10 +412,9 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
     expect(cuerpo.dades).toHaveLength(0);
     expect(cuerpo.totals).toEqual({
       totalKgAElaborar: '0.000',
-      // REVERT (Francesc, confirmado 23/09/2026) — kgJamon/kgRecortes/
-      // kgPaletillas/totalKgMagro son constantes fijas × nombrePorcs — NO
-      // dependen de si hay datos en el rango filtrado (capa 24, revertido
-      // el intento de conectarlas a rendiments_porcs).
+      // kgJamon/kgRecortes/kgPaletillas/totalKgMagro son constantes fijas
+      // × nombrePorcs — NO dependen de si hay datos en el rango filtrado
+      // (ya se intentó conectarlas a rendiments_porcs y se revirtió).
       totalKgMagro: '125.000',
       diferencia: '125.000',
       kgJamon: '60.000',
@@ -431,7 +428,7 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
   });
 
   /**
-   * Issues #3/#4 (Francesc) — el bug de fondo que motivó la migración a
+   * Issues #3/#4 — el bug de fondo que motivó la migración a
    * clave por agrupació: bajo el modelo viejo (rendiments_porcs por
    * producte_id), cargar el rendimiento de UN producto del grupo no
    * beneficiaba a los demás — el join `rp.producte_id = p.id` sólo
@@ -509,12 +506,12 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
     await fastify.close();
   });
 
-  // Confirmado por Francesc (WhatsApp, evidencia de Michelle): "sin datos =
-  // todos los datos", principio general para TODOS los filtros del sistema.
-  // Antes, sin dataDes/dataFins el backend sustituía por un rango oculto
-  // interno (mañana a +7 días) — eso ocultaba líneas elegibles fuera de ese
-  // rango sin que nadie lo hubiera pedido. Fixtures propios con fechas MUY
-  // separadas (2020 y 2030) para no depender de la fecha real del sistema.
+  // Principio confirmado: "sin datos = todos los datos", para TODOS los
+  // filtros del sistema. Antes, sin dataDes/dataFins el backend sustituía
+  // por un rango oculto interno (mañana a +7 días) — eso ocultaba líneas
+  // elegibles fuera de ese rango sin que nadie lo hubiera pedido. Fixtures
+  // propios con fechas MUY separadas (2020 y 2030) para no depender de la
+  // fecha real del sistema.
   describe('"sin datos = todos los datos" — GET /panells/produccio sin dataDes/dataFins', () => {
     let comandaFiltreId: string;
 
@@ -615,8 +612,8 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
     });
   });
 
-  // Confirmado por Francesc (evidencia de Michelle): sumatorio nuevo,
-  // totalmente independiente del resto del panel — CANALS tiene
+  // Sumatorio nuevo, totalmente independiente del resto del panel — CANALS
+  // tiene
   // elaborat_porc=false A PROPÓSITO, por eso nunca puede aparecer en
   // `dades` (que exige elaborat_porc=true), pero sí necesita su propio
   // total agregado, sensible sólo al filtro de fecha y al estat='oberta'.
@@ -707,10 +704,10 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
       await fastify.close();
     });
 
-    // Issue #18 (Francesc, confirmada) — "sense dades = totes les dades"
-    // aplica también a CANALS: sin dataDes NI dataFins, la línia oberta de
-    // CANALS (creada arriba, fecha DATA) tiene que aparecer igual, sin que
-    // el endpoint le aplique ninguna ventana oculta por defecto.
+    // Issue #18 — "sense dades = totes les dades" aplica también a CANALS:
+    // sin dataDes NI dataFins, la línia oberta de CANALS (creada arriba,
+    // fecha DATA) tiene que aparecer igual, sin que el endpoint le aplique
+    // ninguna ventana oculta por defecto.
     it('sin dataDes ni dataFins ("sin datos = todos los datos", issue #18): la línia de CANALS igual suma', async () => {
       const fastify = construirServidor();
       const res = await fastify.inject({
@@ -726,21 +723,20 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
     });
   });
 
-  // Fix (Francesc, confirmado) — reproduce EXACTO el escenario real
-  // reportado como regresión: categoria PECES MAGRES con las 4 agrupaciones
-  // reales de rendiments_porcs (unitatsPerPorc≠1 en 2 de las 4, a propósito
-  // — la fixture de más arriba usa siempre '1.00'). Confirma
-  // totalKgAElaborar (demanda real, exclusivamente MAGRE — fix que SIGUE
-  // vigente).
+  // Reproduce EXACTO el escenario real reportado como regresión: categoria
+  // PECES MAGRES con las 4 agrupaciones reales de rendiments_porcs
+  // (unitatsPerPorc≠1 en 2 de las 4, a propósito — la fixture de más
+  // arriba usa siempre '1.00'). Confirma totalKgAElaborar (demanda real,
+  // exclusivamente MAGRE — fix que SIGUE vigente).
   //
-  // REVERT (Francesc, confirmado 23/09/2026): este describe originalmente
-  // también probaba que totalKgMagro/kgJamon/kgRecortes/kgPaletillas se
-  // calculaban desde estos mismos datos de rendiments_porcs — esa conexión
-  // se revirtió por completo (Francesc: son 3 tasas fijas de negocio, sin
-  // relación con rendiments_porcs). El test de abajo ahora confirma
-  // justamente lo contrario: que tener agrupaciones PERNIL/RETALLS/
-  // ESPATLLA reales en rendiments_porcs NO afecta esos 4 campos — para que
-  // nadie repita este mismo error sin que un test lo agarre.
+  // Este describe originalmente también probaba que totalKgMagro/kgJamon/
+  // kgRecortes/kgPaletillas se calculaban desde estos mismos datos de
+  // rendiments_porcs — esa conexión se revirtió por completo (son 3 tasas
+  // fijas de negocio, sin relación con rendiments_porcs). El test de abajo
+  // ahora confirma justamente lo contrario: que tener agrupaciones
+  // PERNIL/RETALLS/ESPATLLA reales en rendiments_porcs NO afecta esos 4
+  // campos — para que nadie repita este mismo error sin que un test lo
+  // agarre.
   describe('totalKgAElaborar — datos reales de PECES MAGRES (Francesc)', () => {
     // Fecha propia ('2026-08-15'), distinta de `DATA` ('2026-08-20', usada
     // por el fixture del describe exterior) — y raw SQL en vez de
@@ -764,9 +760,9 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
       );
       const comandaId = comanda.rows[0]!.id;
 
-      // 7.0 + 12.0 + 7.0 + 4.0 = 30.0 kg/porc (dato real confirmado por
-      // Francesc) — la fórmula vieja (sin ×unitatsPerPorc) daba 3.5+6.0+
-      // 7.0+4.0 = 20.5 kg/porc, un resultado distinto pero NUNCA cero.
+      // 7.0 + 12.0 + 7.0 + 4.0 = 30.0 kg/porc (dato real confirmado) — la
+      // fórmula vieja (sin ×unitatsPerPorc) daba 3.5+6.0+7.0+4.0 = 20.5
+      // kg/porc, un resultado distinto pero NUNCA cero.
       const grupos: {
         codi: string;
         agrupacioProduccio: string;
@@ -831,11 +827,10 @@ describe('API negoci — GET /panells/produccio (Postgres real, esquema aislado)
       // Las 4 agrupaciones MAGRE de este fixture, 10.000 kg cada una —
       // demanda real, fix que sigue vigente.
       expect(cuerpo.totals.totalKgAElaborar).toBe('40.000');
-      // REVERT (Francesc, confirmado 23/09/2026) — aunque este fixture
-      // tiene rendiments_porcs reales para PERNIL/RETALLS 1RA/RETALLS
-      // 2NA/ESPATLLA (unitatsPerPorc≠1 en 2 de las 4), estos 4 campos son
-      // las constantes fijas de siempre (12/6/7 × nombrePorcs=10),
-      // totalmente ajenos a esos datos.
+      // Aunque este fixture tiene rendiments_porcs reales para
+      // PERNIL/RETALLS 1RA/RETALLS 2NA/ESPATLLA (unitatsPerPorc≠1 en 2 de
+      // las 4), estos 4 campos son las constantes fijas de siempre (12/6/7
+      // × nombrePorcs=10), totalmente ajenos a esos datos.
       expect(cuerpo.totals.kgJamon).toBe('120.000');
       expect(cuerpo.totals.kgRecortes).toBe('60.000');
       expect(cuerpo.totals.kgPaletillas).toBe('70.000');

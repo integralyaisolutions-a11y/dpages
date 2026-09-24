@@ -26,7 +26,7 @@ async function autenticarOResponder(req: FastifyRequest, reply: FastifyReply): P
  * el cursor si el lote se procesó entero (capa de ingesta); transformarComandes/
  * transformarCataleg aplican el guardián de versión y el upsert por código
  * (capa de transformación). Si Cloud Scheduler reintenta, correr esto de
- * nuevo no duplica nada — ya estaba probado en capas anteriores.
+ * nuevo no duplica nada.
  */
 export function registrarRutesTasques(fastify: FastifyInstance): void {
   fastify.post('/tasques/sync-comandes', async (req, reply) => {

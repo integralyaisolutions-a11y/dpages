@@ -7,8 +7,8 @@ import { logger } from '../lib/logger.js';
 import type { construirServidor as construirServidorType } from './servidor.js';
 
 /**
- * Bug real encontrado antes del push de capa 11: un 500 genuino (columna
- * inexistente por una migración sin aplicar) no dejaba ningún rastro en el
+ * Bug real: un 500 genuino (columna inexistente por una migración sin
+ * aplicar) no dejaba ningún rastro en el
  * log — sólo "request completed" con el código, nunca el error de fondo.
  * `setErrorHandler` propio reemplaza el logging automático de Fastify
  * entero, no sólo la respuesta al cliente — sin loguear explícitamente acá,

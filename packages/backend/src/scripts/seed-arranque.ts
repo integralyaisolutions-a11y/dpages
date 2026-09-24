@@ -1,6 +1,6 @@
 /**
- * Seed de datos de arranque — autorizado por el cliente (Francesc),
- * confirmado el 18/08/2026. Carga las categorías y los orígenes de pedido
+ * Seed de datos de arranque — autorizado por el cliente, confirmado el
+ * 18/08/2026. Carga las categorías y los orígenes de pedido
  * mínimos para poder arrancar mientras llegan los datos reales del
  * cliente en el cut-over — son reemplazables sin drama, NO son la fuente
  * de verdad final. Vienen del prototipo de Lovable.
@@ -25,7 +25,7 @@ interface CategoriaSeed {
   agrupacioRendiment: 'KG' | 'MAGRE' | 'PAQ' | null;
 }
 
-// Datos del prototipo de Lovable, autorizados por Francesc el 18/08/2026
+// Datos del prototipo de Lovable, autorizados por el cliente el 18/08/2026
 // para arrancar mientras llegan los datos reales del cliente.
 const CATEGORIES: CategoriaSeed[] = [
   { nom: 'ELABORAT CUIT', elaboratPorc: false, agrupacioRendiment: null },
@@ -47,12 +47,12 @@ interface OrigenComandaSeed {
 const ORIGENS_COMANDA: OrigenComandaSeed[] = [
   { codi: 'woocommerce', nom: 'WooCommerce', actiu: true },
   // 'manual' NO se borra ni se reasigna — es el valor histórico real de los
-  // pedidos ya cargados a mano antes de esta capa. Deja de ofrecerse en el
-  // desplegable de alta nueva (responsabilidad del frontend), pero sigue
-  // siendo un valor válido de FK para lo que ya existe (capa 43).
+  // pedidos ya cargados a mano antes de este cambio. Deja de ofrecerse en
+  // el desplegable de alta nueva (responsabilidad del frontend), pero
+  // sigue siendo un valor válido de FK para lo que ya existe.
   { codi: 'manual', nom: 'Manual', actiu: true },
-  // Capa 43 — los 3 canales reales de un pedido manual, reportados por
-  // Michel. Reemplazan a 'manual' como opciones del desplegable de alta.
+  // Los 3 canales reales de un pedido manual. Reemplazan a 'manual' como
+  // opciones del desplegable de alta.
   { codi: 'whatsapp', nom: 'WhatsApp', actiu: true },
   { codi: 'telefon', nom: 'Telèfon', actiu: true },
   { codi: 'correu', nom: 'Correu', actiu: true },
@@ -71,8 +71,8 @@ async function sembrarCategories(client: PoolClient): Promise<void> {
   }
 }
 
-// export: seed-arranque.test.ts (capa 43) la ejercita directo contra un
-// esquema aislado, mismo patrón que netejarCargaInicial en reset-carga-inicial.ts.
+// export: seed-arranque.test.ts la ejercita directo contra un esquema
+// aislado, mismo patrón que netejarCargaInicial en reset-carga-inicial.ts.
 export async function sembrarOrigensComanda(client: PoolClient): Promise<void> {
   for (const o of ORIGENS_COMANDA) {
     await client.query(
@@ -104,8 +104,8 @@ async function main(): Promise<void> {
   }
 }
 
-// Capa 43 — bug preexistente encontrado al hacer testeable este archivo:
-// sin esta guardia, un simple `import` del módulo (ej. seed-arranque.test.ts
+// Bug preexistente encontrado al hacer testeable este archivo: sin esta
+// guardia, un simple `import` del módulo (ej. seed-arranque.test.ts
 // importando sembrarOrigensComanda) disparaba el main() completo contra el
 // pool real. Mismo patrón que reset-carga-inicial.ts.
 const esEntryPoint =

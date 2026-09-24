@@ -69,14 +69,14 @@ describe('API negoci — PATCH .../lliurament (Postgres real, esquema aislado)',
     expect(cuerpo).toMatchObject({
       liniaId,
       comandaId,
-      unitatsLliurades: '8.00', // capa 38 — NUMERIC(10,2), string
+      unitatsLliurades: '8.00', // NUMERIC(10,2), string
       kgLliurats: '9.750',
     });
     expect(cuerpo.confirmatA).toMatch(/Z$/);
     // AUTH_DISABLED=true (default de test, ver vitest.config.ts): el middleware
     // de auth (ADR-021) adjunta el uid fijo 'dev-sense-auth' en vez de exigir
-    // un token real, y resoldre-usuari.ts lo auto-provisiona (capa 17) la
-    // primera vez que lo ve — de ahí que nom caiga al email sintético.
+    // un token real, y resoldre-usuari.ts lo auto-provisiona la primera
+    // vez que lo ve — de ahí que nom caiga al email sintético.
     expect(cuerpo.confirmatPer.id).toBeGreaterThan(0);
     expect(cuerpo.confirmatPer.nom).toBe('dev-sense-auth@dpages.local');
 

@@ -54,7 +54,7 @@ export type ResultatCreacioUsuari =
   | { tipus: 'conflicte'; missatge: string };
 
 /**
- * Alta manual de usuarios (capa 19) — pura respecto de Fastify (recibe
+ * Alta manual de usuarios — pura respecto de Fastify (recibe
  * `pool`/`gestioFirebase` en vez de leerlos de un módulo), para poder
  * testearla sin levantar el servidor ni pegarle a Firebase real (ver
  * usuaris.test.ts). El endpoint (`registrarRutesUsuaris` más abajo) es un
@@ -161,10 +161,10 @@ export function registrarRutesUsuaris(fastify: FastifyInstance): void {
       condicions.push(`u.actiu = $${valors.length + 1}`);
       valors.push(query.actiu === 'true');
     }
-    // Issue #17 (Michelle/Francesc) — reemplaza un filtro client-side que
-    // daba totales/resultados inconsistentes al filtrar sólo sobre la
-    // página ya cargada. Substring (ILIKE), NO exacto: buscar un usuario
-    // por parte de su nombre o email tiene sentido de negocio, a
+    // Issue #17 — reemplaza un filtro client-side que daba
+    // totales/resultados inconsistentes al filtrar sólo sobre la página ya
+    // cargada. Substring (ILIKE), NO exacto: buscar un usuario por parte de
+    // su nombre o email tiene sentido de negocio, a
     // diferencia del criterio de productes.ts/tarifes.ts (regla 3.1, LOWER
     // exacto para no traer "cabeza de lomo" al buscar "lomo"). Mismo
     // patrón que `cerca` en clients.ts, con OR multi-columna.
@@ -215,7 +215,7 @@ export function registrarRutesUsuaris(fastify: FastifyInstance): void {
     return resposta;
   });
 
-  // Capa 39 — agujero de seguridad: este endpoint no tenía NINGÚN guard —
+  // Agujero de seguridad ya cerrado: este endpoint no tenía NINGÚN guard —
   // cualquier usuario autenticado (incluido uno recién auto-provisionado
   // como General) podía editar rolId de cualquier usuario, incluido el
   // propio → auto-promoción a Administrador. Mismo guard que ya usaba

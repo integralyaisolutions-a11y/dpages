@@ -118,9 +118,9 @@ async function registrarIncidenciaConflicteIdentitatSiFalta(
 }
 
 /**
- * `origen_comanda` (capa 13, sembrado por seed-arranque.ts) reemplaza la
- * columna vieja `origen` (deprecated desde la migración 0013) — todo pedido
- * que entra por este transformador viene de WooCommerce, así que siempre
+ * `origen_comanda` (sembrado por seed-arranque.ts) reemplaza la columna
+ * vieja `origen` (deprecated desde la migración 0013) — todo pedido que
+ * entra por este transformador viene de WooCommerce, así que siempre
  * resuelve al mismo codi fijo.
  */
 async function resolverOrigenWoocommerceUuid(client: PoolClient): Promise<string> {

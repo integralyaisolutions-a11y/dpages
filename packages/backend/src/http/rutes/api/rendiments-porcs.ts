@@ -25,9 +25,9 @@ interface FilaRendimentPorc {
   pes_total: string;
 }
 
-// producte (capa 22, BREAKING): ya no viaja en la respuesta — ver la nota
-// en RendimentPorcApi (packages/shared). Issues #3/#4 (Francesc): la fila ya
-// no se identifica por producte_id/producte — agrupacio_produccio ahora es
+// producte ya no viaja en la respuesta — ver la nota en RendimentPorcApi
+// (packages/shared). Issues #3/#4: la fila ya no se identifica por
+// producte_id/producte — agrupacio_produccio ahora es
 // columna propia de rendiments_porcs (nunca null, es la identidad del
 // grupo), no algo derivado de un producto puntual.
 function aApi(fila: FilaRendimentPorc): RendimentPorcApi {
@@ -43,7 +43,7 @@ function aApi(fila: FilaRendimentPorc): RendimentPorcApi {
 }
 
 // INNER JOIN a categoria_producte + `cat.agrupacio_rendiment IS NOT NULL`:
-// RendimentPorcApi.agrupacioRendiment/categoria son no-nulos (capa 12), pero
+// RendimentPorcApi.agrupacioRendiment/categoria son no-nulos, pero
 // categoria_producte.agrupacio_rendiment sólo tiene valor cuando
 // elaborat_porc es true (migració 0011) — la UNIQUE de rendiments_porcs no
 // impide crear una fila contra una categoria SIN agrupació de rendiment
@@ -90,7 +90,6 @@ export function registrarRutesRendimentsPorcs(fastify: FastifyInstance): void {
       valors.push(categoriaUuid ?? '00000000-0000-0000-0000-000000000000');
     }
     if (typeof query.agrupacioProduccio === 'string' && query.agrupacioProduccio.trim() !== '') {
-      // Capa 45 — hallazgo de Michel: quedó case-sensitive por descuido.
       // Mismo criterio (regla 3.1 transversal): coincidencia EXACTA,
       // case-insensitive. Issues #3/#4: ahora es columna propia de
       // rendiments_porcs (r.agrupacio_produccio), ya no se llega a ella vía producte.
@@ -118,10 +117,9 @@ export function registrarRutesRendimentsPorcs(fastify: FastifyInstance): void {
   });
 
   fastify.post('/rendiments-porcs', async (req, reply) => {
-    // Issues #3/#4 (Francesc, migración validada con Michelle): la fila se
-    // identifica por categoriaId + agrupacioProduccio, no por producteId —
-    // el rendimiento de un cerdo se define a nivel de Agrupació Producció,
-    // no de artículo individual.
+    // Issues #3/#4 — la fila se identifica por categoriaId +
+    // agrupacioProduccio, no por producteId — el rendimiento de un cerdo se
+    // define a nivel de Agrupació Producció, no de artículo individual.
     const cos = req.body as Partial<{
       categoriaId: number;
       agrupacioProduccio: string;

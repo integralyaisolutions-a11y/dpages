@@ -10,8 +10,8 @@ import {
 } from './test-suport.js';
 
 /**
- * Capa 40 — PATCH /comandes/:comandaId/linies/:liniaId/treball. Mismo
- * patrón de test que lliurament.test.ts (mismo endpoint hermano, mismo
+ * PATCH /comandes/:comandaId/linies/:liniaId/treball. Mismo patrón de test
+ * que lliurament.test.ts (mismo endpoint hermano, mismo
  * guard de congelación).
  */
 describe('API negoci — PATCH .../treball (Postgres real, esquema aislado)', () => {

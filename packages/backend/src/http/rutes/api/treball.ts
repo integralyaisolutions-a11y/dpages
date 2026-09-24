@@ -10,9 +10,9 @@ import {
 } from './comu.js';
 
 /**
- * Capa 40 — Panell Obrador no tenía forma de marcar una línea como
- * "trabajada", a diferencia de Empaquetat (`confirmat_a`/`confirmat_per`,
- * ver `lliurament.ts`). Mismo patrón de guard (bloquear si la comanda está
+ * Panell Obrador no tenía forma de marcar una línea como "trabajada", a
+ * diferencia de Empaquetat (`confirmat_a`/`confirmat_per`, ver
+ * `lliurament.ts`). Mismo patrón de guard (bloquear si la comanda está
  * congelada) y mismo mecanismo para identificar al usuario autenticado
  * (`req.usuari.uid`, el uid de Firebase ya verificado por el middleware de
  * auth) — reusado, no reinventado.
@@ -77,9 +77,9 @@ export function registrarRutaTreball(fastify: FastifyInstance): void {
     );
     if (!resultat.rows[0]) return enviarNoTrobat(reply, 'Línia no trobada');
 
-    // Releída de la base, no ecoada del body (a diferencia del hallazgo de
-    // la capa 38 sobre LliuramentRespostaApi.unitatsLliurades) — el JOIN
-    // resuelve treballatPer a {id, nom} real, no sólo un uid de texto.
+    // Releída de la base, no ecoada del body (a diferencia de
+    // LliuramentRespostaApi.unitatsLliurades) — el JOIN resuelve
+    // treballatPer a {id, nom} real, no sólo un uid de texto.
     const actualitzada = await pool.query<{
       id_seq: string;
       treballat_a: Date | null;

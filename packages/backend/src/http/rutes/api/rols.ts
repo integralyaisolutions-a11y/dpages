@@ -14,8 +14,8 @@ import {
 } from './comu.js';
 
 /**
- * Capa 39 — única lista de módulos válidos del sistema. Auditada contra el
- * código antes de escribir el validador (no hardcodeada a ciegas):
+ * Única lista de módulos válidos del sistema. Auditada contra el código
+ * antes de escribir el validador (no hardcodeada a ciegas):
  * - Única fuente real: migración 0014 (`INSERT INTO rol ...`), que siembra
  *   'Administrador' con estos 12 y 'General' con los mismos MENOS
  *   'usuaris'/'rols'. `seed-arranque.ts` no siembra roles — sólo
@@ -26,9 +26,9 @@ import {
  *   sigue siendo un valor válido de permiso (gatea `POST`/`PATCH`/
  *   `DELETE /rols` — ver más abajo).
  */
-// export: capa 44, GET /rols/moduls-valids expone esta misma constante (no
-// una copia) — y rols.test.ts la importa para no hardcodear la lista
-// esperada en el test.
+// export: GET /rols/moduls-valids expone esta misma constante (no una
+// copia) — y rols.test.ts la importa para no hardcodear la lista esperada
+// en el test.
 export const MODULS_VALIDS = [
   'categories',
   'catalog',
@@ -92,9 +92,9 @@ function validarModulsPermesos(
 }
 
 export function registrarRutesRols(fastify: FastifyInstance): void {
-  // Capa 46 — Michel reportó que era la única de ~12 rutas de listado sin
-  // objeto paginacio. Mismo patrón que el resto (parsearPaginacio/
-  // construirPaginacio, ver comu.ts) — el ORDER BY nom ASC no cambia.
+  // Era la única de ~12 rutas de listado sin objeto paginacio. Mismo patrón
+  // que el resto (parsearPaginacio/construirPaginacio, ver comu.ts) — el
+  // ORDER BY nom ASC no cambia.
   fastify.get('/rols', async (req) => {
     const { pagina, mida, offset } = parsearPaginacio(req.query as Record<string, unknown>);
 
@@ -110,8 +110,8 @@ export function registrarRutesRols(fastify: FastifyInstance): void {
     };
   });
 
-  // Capa 44 — Michel reportó MODULS_VALIDS duplicado a mano en el frontend
-  // (lib/roles.ts), con riesgo de desincronizarse en silencio (ya pasó con
+  // MODULS_VALIDS estaba duplicado a mano en el frontend (lib/roles.ts),
+  // con riesgo real de desincronizarse en silencio (ya pasó con
   // 'transportistes'). Este endpoint expone la MISMA constante que valida
   // POST/PATCH /rols — no una copia — para que el frontend deje de mantener
   // la suya. Sin guard (igual que GET /rols): es información de referencia,
@@ -119,16 +119,16 @@ export function registrarRutesRols(fastify: FastifyInstance): void {
   // códigos (MODULS_VALIDS no tiene nombres legibles del lado del backend —
   // eso vive hoy sólo en el frontend, MODUL_LABELS de lib/roles.ts; agregar
   // un mapeo de labels acá sería inventar una segunda fuente de verdad para
-  // texto de UI, no lo que esta capa pide resolver).
+  // texto de UI).
   fastify.get('/rols/moduls-valids', () => {
     return { dades: MODULS_VALIDS };
   });
 
-  // Capa 39 — agujero de seguridad: hasta esta capa, POST/PATCH/DELETE
-  // /rols no tenían NINGÚN guard — cualquier usuario autenticado podía
-  // crear/editar/borrar roles, incluido agregarse 'usuaris'/'rols' a su
-  // propio rol. Mismo guard que ya usaba POST /usuaris (crearGuardaModul,
-  // ver comu.ts) — reusado tal cual, sin duplicar la lógica de chequeo.
+  // Agujero de seguridad ya cerrado: POST/PATCH/DELETE /rols no tenían
+  // NINGÚN guard — cualquier usuario autenticado podía crear/editar/borrar
+  // roles, incluido agregarse 'usuaris'/'rols' a su propio rol. Mismo guard
+  // que ya usaba POST /usuaris (crearGuardaModul, ver comu.ts) — reusado
+  // tal cual, sin duplicar la lógica de chequeo.
   fastify.post('/rols', { preHandler: crearGuardaModul('usuaris') }, async (req, reply) => {
     const cos = req.body as Partial<{ nom: string; modulsPermesos: string[] }>;
 
@@ -195,8 +195,8 @@ export function registrarRutesRols(fastify: FastifyInstance): void {
     }
   });
 
-  // Capa 39 — no existía. Mismo guard que arriba; mismo patrón de guarda de
-  // integridad que DELETE /categories/:id (categories.ts): cualquier
+  // Mismo guard que arriba; mismo patrón de guarda de integridad que
+  // DELETE /categories/:id (categories.ts): cualquier
   // usuario con este rol asignado bloquea el borrado — nunca se permite
   // borrar un rol en uso.
   fastify.delete('/rols/:id', { preHandler: crearGuardaModul('usuaris') }, async (req, reply) => {

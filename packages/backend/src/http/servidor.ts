@@ -70,8 +70,7 @@ export function construirServidor(): FastifyInstance {
   // del lado del servidor. Registrar un `setErrorHandler` propio reemplaza
   // el logging automático de Fastify entero, no sólo la respuesta: sin este
   // `logger.error` acá, un 500 real queda invisible en los logs — sólo se
-  // ve "request completed" con el código, nunca el motivo (bug real,
-  // encontrado en vivo: ver ADR correspondiente).
+  // ve "request completed" con el código, nunca el motivo.
   fastify.setErrorHandler((err: FastifyError, req, reply) => {
     const status =
       err.statusCode !== undefined && err.statusCode >= 400 && err.statusCode < 500
@@ -95,8 +94,8 @@ export function construirServidor(): FastifyInstance {
   registrarRutaWebhook(fastify);
   registrarRutesTasques(fastify);
 
-  // Endpoints de negocio (docs/contrato-api.md, capa 8) bajo /api/v1 — base
-  // URL que el contrato fija en su sección 2. El hook de autenticación (ADR-021)
+  // Endpoints de negocio (docs/contrato-api.md) bajo /api/v1 — base URL que
+  // el contrato fija en su sección 2. El hook de autenticación (ADR-021)
   // se registra ANTES que las rutas y sólo dentro de ESTE scope de plugin —
   // /salut, /webhooks/woocommerce y /tasques/* viven fuera de él, en la
   // instancia externa de `fastify`, y por eso nunca pasan por acá.

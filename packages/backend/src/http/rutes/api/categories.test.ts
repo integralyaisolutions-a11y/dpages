@@ -105,8 +105,8 @@ describe('API negoci — /categories (Postgres real, esquema aislado)', () => {
     await fastify.close();
   });
 
-  // Issue de robustesa (Francesc, bug real: 500 en canviar producte.codi
-  // duplicat) — categoria_producte.nom també és UNIQUE i tenia el mateix
+  // Issue de robustesa (bug real: 500 en canviar producte.codi duplicat) —
+  // categoria_producte.nom també és UNIQUE i tenia el mateix
   // buit (sense try/catch), tant a POST com a PATCH.
   it('POST /categories amb nom duplicat dona 409 CONFLICTE, no 500', async () => {
     const fastify = construirServidor();
@@ -175,7 +175,7 @@ describe('API negoci — /categories (Postgres real, esquema aislado)', () => {
     const fastify = construirServidor();
 
     // Con el producto todavía activo: 409 (ya cubierto arriba, se confirma
-    // de nuevo acá para dejar el ANTES/DESPUÉS exacto del repro de Michel).
+    // de nuevo acá para dejar el ANTES/DESPUÉS exacto del repro).
     const abans = await fastify.inject({
       method: 'DELETE',
       url: `/api/v1/categories/${categoriaAmbInactiu.rows[0]!.id_seq}`,
