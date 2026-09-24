@@ -1366,7 +1366,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       await fastify.close();
     });
 
-    it('el valor històric "manual" també es pot reassignar a un dels 3 canals (telefon)', async () => {
+    it('el valor històric "manual" també es pot reassignar a un dels 4 canals elegibles (telefon)', async () => {
       const fastify = construirServidor();
       const comandaCreada = await crearComandaAmbOrigen(fastify, 'manual');
 
@@ -1382,7 +1382,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
       await fastify.close();
     });
 
-    it('rebutja amb 400 VALIDACIO intentar reassignar cap a "woocommerce"', async () => {
+    it('"woocommerce" és triable a mà: un pedido "manual" es pot reassignar cap a "woocommerce"', async () => {
       const fastify = construirServidor();
       const comandaCreada = await crearComandaAmbOrigen(fastify, 'manual');
 
@@ -1390,6 +1390,30 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'PATCH',
         url: `/api/v1/comandes/${comandaCreada.id}`,
         payload: { origen: 'woocommerce' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(cuerpoJson<ComandaDetallApi>(res).origen).toBe('woocommerce');
+
+      // Confirmació real contra la base, no només la resposta HTTP.
+      const fila = await entorn.poolTest.query<{ codi: string }>(
+        `SELECT oc.codi FROM comanda c JOIN origen_comanda oc ON oc.id = c.origen_id
+         WHERE c.id_seq = $1`,
+        [comandaCreada.id],
+      );
+      expect(fila.rows[0]?.codi).toBe('woocommerce');
+
+      await fastify.close();
+    });
+
+    it('rebutja amb 400 VALIDACIO intentar reassignar cap a "manual" (l’únic codi no triable)', async () => {
+      const fastify = construirServidor();
+      const comandaCreada = await crearComandaAmbOrigen(fastify, 'woocommerce');
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { origen: 'manual' },
       });
 
       expect(res.statusCode).toBe(400);
@@ -1403,7 +1427,7 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
         method: 'GET',
         url: `/api/v1/comandes/${comandaCreada.id}`,
       });
-      expect(cuerpoJson<ComandaDetallApi>(detall).origen).toBe('manual');
+      expect(cuerpoJson<ComandaDetallApi>(detall).origen).toBe('woocommerce');
 
       await fastify.close();
     });

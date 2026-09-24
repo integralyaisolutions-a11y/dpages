@@ -29,7 +29,7 @@ export function Badge({
 }) {
   return (
     <span
-      className={`inline-block rounded-md px-2.5 py-1 text-xs font-semibold break-words ${VARIANT_STYLES[variant]}`}
+      className={`inline-block max-w-full rounded-md px-2.5 py-1 text-xs font-semibold break-words ${VARIANT_STYLES[variant]}`}
     >
       {children}
     </span>

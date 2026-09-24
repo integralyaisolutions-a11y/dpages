@@ -28,10 +28,12 @@ import {
 const ESTATS_COMANDA_VALIDS = ['oberta', 'en_proces', 'tancada', 'amb_incidencia'] as const;
 
 // Mateix criteri que CODIS_ORIGEN_ELEGIBLES al frontend (OrderForm.tsx):
-// "woocommerce" (sincronitzat) i "manual" (valor històric) mai es poden
-// triar a mà, ni en alta ni en edició — reassignar l'origen d'un pedido ja
-// creat només pot anar cap a un dels 3 canals manuals reals.
-const CODIS_ORIGEN_EDITABLES = ['whatsapp', 'telefon', 'correu'] as const;
+// "manual" (valor històric) és l'únic codi que mai es pot triar a mà, ni en
+// alta ni en edició. "woocommerce" SÍ és triable a mà (decisió de negoci
+// actualitzada) tant per a alta com per a reassignar l'origen d'un pedido ja
+// creat — coexisteix amb el fet que també sigui el valor que posa la
+// sincronització automàtica.
+const CODIS_ORIGEN_EDITABLES = ['whatsapp', 'telefon', 'correu', 'woocommerce'] as const;
 
 interface FilaComandaResum {
   id_seq: string;
@@ -882,11 +884,11 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       }
     }
 
-    // Reassignació d'origen (funcionalitat nova): només cap a un dels 3
-    // canals manuals — mai "woocommerce" ni "manual", sense importar quin
-    // sigui l'origen actual (inclou pedidos avui en 'woocommerce' o
-    // 'manual'). Es resol igual que a POST /comandes (codi → UUID), amb el
-    // mateix criteri de "no existeix" per si el codi no estigués sembrat.
+    // Reassignació d'origen: cap a qualsevol dels 4 canals triables a mà
+    // (CODIS_ORIGEN_EDITABLES) — mai "manual", sense importar quin sigui
+    // l'origen actual (inclou pedidos avui en 'woocommerce' o 'manual'). Es
+    // resol igual que a POST /comandes (codi → UUID), amb el mateix criteri
+    // de "no existeix" per si el codi no estigués sembrat.
     let origenUuid: string | undefined;
     if (cos.origen !== undefined) {
       if (!CODIS_ORIGEN_EDITABLES.includes(cos.origen as (typeof CODIS_ORIGEN_EDITABLES)[number])) {

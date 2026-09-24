@@ -242,7 +242,7 @@ export default function OrdersPage() {
                   <th className="w-[13%] px-2 py-2 text-left font-medium text-gray-500 break-words">
                     Client
                   </th>
-                  <th className="w-[7%] px-2 py-2 text-left font-medium text-gray-500 break-words">
+                  <th className="w-[9%] px-2 py-2 text-left font-medium text-gray-500 break-words">
                     Origen
                   </th>
                   <th className="hidden w-[8%] px-2 py-2 text-left font-medium text-gray-500 break-words xl:table-cell">
@@ -266,7 +266,7 @@ export default function OrdersPage() {
                   <th className="w-[9%] px-2 py-2 text-left font-medium text-gray-500 break-words">
                     Estat
                   </th>
-                  <th className="w-[13%] px-2 py-2 text-right font-medium text-gray-500 break-words">
+                  <th className="w-[11%] px-2 py-2 text-right font-medium text-gray-500 break-words">
                     Accions
                   </th>
                 </tr>

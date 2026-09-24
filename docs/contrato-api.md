@@ -972,17 +972,19 @@ viene. Un `estat` que no sea uno de los 4 valores válidos también es
 **`origen` en `PATCH /comandes/:id`** — reasigna el canal del pedido, sin
 importar cuál sea el origen actual (incluye pedidos hoy en `"woocommerce"`
 o en el valor histórico `"manual"`: cualquiera de los dos se puede mover a
-uno de los 3 canales manuales).
+uno de los 4 canales elegibles).
 
 ```json
 { "origen": "whatsapp" }
 ```
 
-Sólo acepta uno de los 3 canales manuales — `"whatsapp"`, `"telefon"`,
-`"correu"` — **nunca** `"woocommerce"`: cualquier otro valor (incluido
-`"woocommerce"` mismo) es `400 VALIDACIO`, con el mensaje indicando los 3
-códigos válidos. Un código bien formado pero inexistente en
-`origen_comanda` también es `400 VALIDACIO` (chequeo defensivo — los 3
+Sólo acepta uno de estos 4 códigos — `"whatsapp"`, `"telefon"`,
+`"correu"`, `"woocommerce"` — **nunca** `"manual"` (valor histórico):
+cualquier otro valor es `400 VALIDACIO`, con el mensaje indicando los
+códigos válidos. `"woocommerce"` es a la vez el valor que asigna la
+sincronización automática y un destino elegible a mano — las dos cosas
+coexisten sin conflicto. Un código bien formado pero inexistente en
+`origen_comanda` también es `400 VALIDACIO` (chequeo defensivo — los
 canales están sembrados de fábrica). Mismo `409 CONFLICTE` que el resto de
 los campos si el pedido está congelado — sin ninguna excepción especial
 para este campo. Si `origen` no viene en el body, no se toca.

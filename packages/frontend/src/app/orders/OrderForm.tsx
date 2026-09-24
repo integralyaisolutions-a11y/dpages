@@ -41,13 +41,13 @@ const NO_ORIGIN = 'Selecciona origen...';
 // canvi rellevant.
 const TARIFF_COVERAGE_DEBOUNCE_MS = 300;
 
-// Un pedido NUEVO sólo puede cargarse manualmente por estos 3 canales
-// (whatsapp/telefon/correu, ver origen_comanda). "manual" y "woocommerce"
-// siguen siendo códigos válidos (pedidos viejos/sincronizados ya los
-// tienen), pero nunca se ofrecen como opción al crear uno desde acá — por
-// eso el filtro es explícito por código, no "todo lo que devuelva
+// Un pedido puede cargarse/reasignarse manualmente a cualquiera de estos 4
+// canales (whatsapp/telefon/correu/woocommerce, ver origen_comanda) — tanto
+// al crear uno nuevo como al reasignar el origen de uno existente. Sólo
+// "manual" (valor histórico) sigue sin poder elegirse a mano — por eso el
+// filtro es explícito por código, no "todo lo que devuelva
 // GET /origens-comanda".
-const CODIS_ORIGEN_ELEGIBLES = ['whatsapp', 'telefon', 'correu'];
+const CODIS_ORIGEN_ELEGIBLES = ['whatsapp', 'telefon', 'correu', 'woocommerce'];
 
 // amb_incidencia queda FORA d'aquesta llista a propòsit (decisió de UX
 // confirmada): el selector de capçalera només serveix per triar
@@ -548,7 +548,7 @@ export const OrderForm = forwardRef<
 ) {
   const [estat, setEstat] = useState<string>(initialData?.estat ?? 'oberta');
   // Creació: cap valor triat encara (null). Edició: arrenca amb l'origen
-  // actual del pedido — pot ser "woocommerce"/"manual" (no elegibles per
+  // actual del pedido — pot ser "manual" (valor històric, no elegible per
   // triar, ver CODIS_ORIGEN_ELEGIBLES), que igualment s'ha de poder MOSTRAR
   // correctament fins que l'usuari el canviï a mà.
   const [origenCodi, setOrigenCodi] = useState<string | null>(
@@ -556,9 +556,9 @@ export const OrderForm = forwardRef<
   );
   // Mateix patró que tariffTouched/poblacioTouched: `editOrder` (useOrders.ts)
   // només inclou `origen` al PATCH quan l'usuari l'ha triat de veritat —
-  // reenviar per defecte l'origen actual d'un pedido en "woocommerce"/
-  // "manual" el rebutjaria el backend (400), encara que ningú volgués
-  // canviar-lo.
+  // reenviar per defecte l'origen actual d'un pedido en "manual" (l'únic
+  // codi que segueix sense poder-se triar) el rebutjaria el backend (400),
+  // encara que ningú volgués canviar-lo.
   const [origenTouched, setOrigenTouched] = useState(false);
   const [clientId, setClientId] = useState<number | null>(initialData?.client?.id ?? null);
   const [poblacioDesti, setPoblacioDesti] = useState(initialData?.poblacioDesti ?? '');
@@ -856,7 +856,7 @@ export const OrderForm = forwardRef<
           // no, `null` (ver JSDoc de OrderFormValues.origen en useOrders.ts:
           // editOrder omite la clave del PATCH en ese caso, en vez de
           // reenviar el valor actual, que el backend rechazaría si hoy es
-          // "woocommerce"/"manual").
+          // "manual").
           origen: mode === 'create' ? origenCodi : origenTouched ? origenCodi : null,
           tarifaId,
           transportistaId,
@@ -907,9 +907,9 @@ export const OrderForm = forwardRef<
     ? ESTAT_OPTIONS_SELECCIONABLES
     : [estat, ...ESTAT_OPTIONS_SELECCIONABLES];
 
-  // "manual"/"woocommerce" mai apareixen com a opció triable
+  // "manual" (valor històric) mai apareix com a opció triable
   // (CODIS_ORIGEN_ELEGIBLES dalt), ni en creació ni en edició — reassignar
-  // l'origen d'un pedido ja creat només pot anar cap a un d'aquests 3.
+  // l'origen d'un pedido ja creat només pot anar cap a un d'aquests 4.
   const eligibleOrigins = origins.filter((origin) => CODIS_ORIGEN_ELEGIBLES.includes(origin.codi));
   // En creació, "Selecciona origen..." és una opció triable més (cap valor
   // inicial real). En edició NO s'ofereix: el pedido sempre té un origen
@@ -918,8 +918,8 @@ export const OrderForm = forwardRef<
     mode === 'create'
       ? [NO_ORIGIN, ...eligibleOrigins.map((origin) => origin.nom)]
       : eligibleOrigins.map((origin) => origin.nom);
-  // `origenCodi` pot ser "woocommerce"/"manual" en edició (valor actual real
-  // però no elegible) — es resol contra el llistat COMPLET `origins`, no
+  // `origenCodi` pot ser "manual" en edició (valor històric real però no
+  // elegible) — es resol contra el llistat COMPLET `origins`, no
   // només `eligibleOrigins`, perquè SimpleDropdown el pugui MOSTRAR igual
   // encara que no estigui entre les `options` triables (mateix cuidado que
   // Rendiments Porcs: un value que no està a la llista d'opcions no trenca
