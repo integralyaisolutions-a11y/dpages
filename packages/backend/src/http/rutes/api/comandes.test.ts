@@ -1310,6 +1310,156 @@ describe('API negoci — /comandes (Postgres real, esquema aislado)', () => {
     });
   });
 
+  describe('PATCH /comandes/:id: reassignació d’origen (funcionalitat nova)', () => {
+    beforeAll(async () => {
+      await entorn.poolTest.query(
+        `INSERT INTO origen_comanda (codi, nom) VALUES ('whatsapp', 'WhatsApp'), ('telefon', 'Telèfon'), ('correu', 'Correu')
+         ON CONFLICT (codi) DO NOTHING`,
+      );
+    });
+
+    async function crearComandaAmbOrigen(
+      fastify: ReturnType<typeof construirServidor>,
+      origen: string,
+    ): Promise<ComandaDetallApi> {
+      const creada = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/comandes',
+        payload: {
+          dataComanda: '2026-08-01',
+          dataLliurament: '2026-08-30T00:00:00Z',
+          origen,
+          linies: [
+            {
+              dataProduccio: '2026-08-01T00:00:00Z',
+              producteId: producteFitxaId,
+              unitatsDemanades: 1,
+            },
+          ],
+        },
+      });
+      return cuerpoJson<ComandaDetallApi>(creada);
+    }
+
+    it('un pedido sincronitzat (origen "woocommerce") es pot reassignar a "whatsapp"', async () => {
+      const fastify = construirServidor();
+      const comandaCreada = await crearComandaAmbOrigen(fastify, 'woocommerce');
+      expect(comandaCreada.origen).toBe('woocommerce');
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { origen: 'whatsapp' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(cuerpoJson<ComandaDetallApi>(res).origen).toBe('whatsapp');
+
+      // Confirmació real contra la base, no només la resposta HTTP.
+      const fila = await entorn.poolTest.query<{ codi: string }>(
+        `SELECT oc.codi FROM comanda c JOIN origen_comanda oc ON oc.id = c.origen_id
+         WHERE c.id_seq = $1`,
+        [comandaCreada.id],
+      );
+      expect(fila.rows[0]?.codi).toBe('whatsapp');
+
+      await fastify.close();
+    });
+
+    it('el valor històric "manual" també es pot reassignar a un dels 3 canals (telefon)', async () => {
+      const fastify = construirServidor();
+      const comandaCreada = await crearComandaAmbOrigen(fastify, 'manual');
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { origen: 'telefon' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(cuerpoJson<ComandaDetallApi>(res).origen).toBe('telefon');
+
+      await fastify.close();
+    });
+
+    it('rebutja amb 400 VALIDACIO intentar reassignar cap a "woocommerce"', async () => {
+      const fastify = construirServidor();
+      const comandaCreada = await crearComandaAmbOrigen(fastify, 'manual');
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { origen: 'woocommerce' },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+      expect(
+        cuerpoJson<{ error: { detalls: { camp: string }[] } }>(res).error.detalls,
+      ).toContainEqual(expect.objectContaining({ camp: 'origen' }));
+
+      // No va quedar a mitges: l'origen segueix sent el que ja tenia.
+      const detall = await fastify.inject({
+        method: 'GET',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+      });
+      expect(cuerpoJson<ComandaDetallApi>(detall).origen).toBe('manual');
+
+      await fastify.close();
+    });
+
+    it('rebutja amb 400 VALIDACIO un codi que no existeix a origen_comanda', async () => {
+      const fastify = construirServidor();
+      const comandaCreada = await crearComandaAmbOrigen(fastify, 'manual');
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { origen: 'fax' },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { codi: 'VALIDACIO' } });
+
+      await fastify.close();
+    });
+
+    it('sense la clau "origen" al body, no es toca (mateix comportament que sempre)', async () => {
+      const fastify = construirServidor();
+      const comandaCreada = await crearComandaAmbOrigen(fastify, 'woocommerce');
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { bultos: 3 },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(cuerpoJson<ComandaDetallApi>(res).origen).toBe('woocommerce');
+
+      await fastify.close();
+    });
+
+    it('sobre una comanda congelada, rebutja amb 409 CONFLICTE — mateix guard que la resta de camps de capçalera', async () => {
+      const fastify = construirServidor();
+      const comandaCreada = await crearComandaAmbOrigen(fastify, 'woocommerce');
+      await entorn.poolTest.query(`UPDATE comanda SET congelat_a = now() WHERE id_seq = $1`, [
+        comandaCreada.id,
+      ]);
+
+      const res = await fastify.inject({
+        method: 'PATCH',
+        url: `/api/v1/comandes/${comandaCreada.id}`,
+        payload: { origen: 'whatsapp' },
+      });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toMatchObject({ error: { codi: 'CONFLICTE' } });
+
+      await fastify.close();
+    });
+  });
+
   describe('capa 32 — tarifaId explícit a POST /comandes (anul·la la del client per a l’alta)', () => {
     it('tarifaId explícit diferent de la del client: el preu resol contra la tarifa del body, no la del client', async () => {
       const tarifaClient = await entorn.poolTest.query<{ id: string }>(

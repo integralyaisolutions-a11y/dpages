@@ -27,6 +27,12 @@ import {
 // constraint de la taula, migració 0003).
 const ESTATS_COMANDA_VALIDS = ['oberta', 'en_proces', 'tancada', 'amb_incidencia'] as const;
 
+// Mateix criteri que CODIS_ORIGEN_ELEGIBLES al frontend (OrderForm.tsx):
+// "woocommerce" (sincronitzat) i "manual" (valor històric) mai es poden
+// triar a mà, ni en alta ni en edició — reassignar l'origen d'un pedido ja
+// creat només pot anar cap a un dels 3 canals manuals reals.
+const CODIS_ORIGEN_EDITABLES = ['whatsapp', 'telefon', 'correu'] as const;
+
 interface FilaComandaResum {
   id_seq: string;
   num: string;
@@ -843,6 +849,7 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
       adrecaLliurament: string | null;
       estat: string;
       detall: string;
+      origen: string;
     }>;
 
     // Issue #16 — dataComanda SÍ es editable después de creada (a diferencia
@@ -873,6 +880,33 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
           { camp: 'detall', missatge: 'és obligatori quan estat és amb_incidencia' },
         ]);
       }
+    }
+
+    // Reassignació d'origen (funcionalitat nova): només cap a un dels 3
+    // canals manuals — mai "woocommerce" ni "manual", sense importar quin
+    // sigui l'origen actual (inclou pedidos avui en 'woocommerce' o
+    // 'manual'). Es resol igual que a POST /comandes (codi → UUID), amb el
+    // mateix criteri de "no existeix" per si el codi no estigués sembrat.
+    let origenUuid: string | undefined;
+    if (cos.origen !== undefined) {
+      if (!CODIS_ORIGEN_EDITABLES.includes(cos.origen as (typeof CODIS_ORIGEN_EDITABLES)[number])) {
+        return enviarValidacio(reply, "L'origen indicat no es pot triar a mà", [
+          {
+            camp: 'origen',
+            missatge: `ha de ser un de: ${CODIS_ORIGEN_EDITABLES.join(', ')}`,
+          },
+        ]);
+      }
+      const origenFila = await pool.query<{ id: string }>(
+        'SELECT id FROM origen_comanda WHERE codi = $1',
+        [cos.origen],
+      );
+      if (!origenFila.rows[0]) {
+        return enviarValidacio(reply, "L'origen indicat no existeix", [
+          { camp: 'origen', missatge: 'no existeix' },
+        ]);
+      }
+      origenUuid = origenFila.rows[0].id;
     }
 
     // El cas delicat: si aquest PATCH canvia alguna de les 3 dates de
@@ -987,7 +1021,8 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
            poblacio_desti = CASE WHEN $20 THEN $21 ELSE poblacio_desti END,
            adreca_lliurament = CASE WHEN $22 THEN $23 ELSE adreca_lliurament END,
            estat = CASE WHEN $24 THEN $25 ELSE estat END,
-           data_comanda = CASE WHEN $26 THEN $27 ELSE data_comanda END
+           data_comanda = CASE WHEN $26 THEN $27 ELSE data_comanda END,
+           origen_id = CASE WHEN $28 THEN $29 ELSE origen_id END
          WHERE id = $1`,
         [
           comandaUuid,
@@ -1017,6 +1052,8 @@ export function registrarRutesComandes(fastify: FastifyInstance): void {
           cos.estat ?? null,
           cos.dataComanda !== undefined,
           cos.dataComanda ?? null,
+          origenUuid !== undefined,
+          origenUuid ?? null,
         ],
       );
 

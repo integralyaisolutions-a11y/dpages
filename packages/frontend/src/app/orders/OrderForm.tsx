@@ -25,7 +25,6 @@ import {
   type TarifaResumApi,
   type TransportistaApi,
 } from '@/lib/api';
-import { origenBadgeVariant } from '@/lib/comandaOrigen';
 import { formatDecimal, parseDecimalInput } from '@/lib/decimals';
 import { calculateOrderedWeightKg } from '@/lib/orderCalculations';
 import { MAX_LOCAL_COMBOBOX_RESULTS, matchesProductQuery } from '@/lib/productSearch';
@@ -548,7 +547,19 @@ export const OrderForm = forwardRef<
   ref,
 ) {
   const [estat, setEstat] = useState<string>(initialData?.estat ?? 'oberta');
-  const [origenCodi, setOrigenCodi] = useState<string | null>(null);
+  // Creació: cap valor triat encara (null). Edició: arrenca amb l'origen
+  // actual del pedido — pot ser "woocommerce"/"manual" (no elegibles per
+  // triar, ver CODIS_ORIGEN_ELEGIBLES), que igualment s'ha de poder MOSTRAR
+  // correctament fins que l'usuari el canviï a mà.
+  const [origenCodi, setOrigenCodi] = useState<string | null>(
+    mode === 'edit' ? (initialData?.origen ?? null) : null,
+  );
+  // Mateix patró que tariffTouched/poblacioTouched: `editOrder` (useOrders.ts)
+  // només inclou `origen` al PATCH quan l'usuari l'ha triat de veritat —
+  // reenviar per defecte l'origen actual d'un pedido en "woocommerce"/
+  // "manual" el rebutjaria el backend (400), encara que ningú volgués
+  // canviar-lo.
+  const [origenTouched, setOrigenTouched] = useState(false);
   const [clientId, setClientId] = useState<number | null>(initialData?.client?.id ?? null);
   const [poblacioDesti, setPoblacioDesti] = useState(initialData?.poblacioDesti ?? '');
   const [tarifaId, setTarifaId] = useState<number | null>(initialData?.tarifa?.id ?? null);
@@ -840,11 +851,13 @@ export const OrderForm = forwardRef<
       void onSave(
         {
           clientId,
-          // En edición, origen viaja informativo (PATCH nunca lo acepta,
-          // ver comentari a useOrders.ts) — se manda el que ya tenía el
-          // pedido, sin pasar por `origenCodi` (que en edició ni
-          // es toca, el camp queda de sòl lectura).
-          origen: mode === 'create' ? origenCodi : (initialData?.origen ?? null),
+          // Creació: origenCodi ja validat non-null més amunt. Edició: sólo
+          // se manda si el usuario lo tocó de verdad (origenTouched) — si
+          // no, `null` (ver JSDoc de OrderFormValues.origen en useOrders.ts:
+          // editOrder omite la clave del PATCH en ese caso, en vez de
+          // reenviar el valor actual, que el backend rechazaría si hoy es
+          // "woocommerce"/"manual").
+          origen: mode === 'create' ? origenCodi : origenTouched ? origenCodi : null,
           tarifaId,
           transportistaId,
           // Issue #16 — sempre non-buida en aquest punt (validat a dalt).
@@ -895,20 +908,26 @@ export const OrderForm = forwardRef<
     : [estat, ...ESTAT_OPTIONS_SELECCIONABLES];
 
   // "manual"/"woocommerce" mai apareixen com a opció triable
-  // (CODIS_ORIGEN_ELEGIBLES dalt), encara que siguin codis vàlids per a
-  // comandes ja existents.
+  // (CODIS_ORIGEN_ELEGIBLES dalt), ni en creació ni en edició — reassignar
+  // l'origen d'un pedido ja creat només pot anar cap a un d'aquests 3.
   const eligibleOrigins = origins.filter((origin) => CODIS_ORIGEN_ELEGIBLES.includes(origin.codi));
-  const originOptions = [NO_ORIGIN, ...eligibleOrigins.map((origin) => origin.nom)];
+  // En creació, "Selecciona origen..." és una opció triable més (cap valor
+  // inicial real). En edició NO s'ofereix: el pedido sempre té un origen
+  // real ja carregat, no té sentit poder "buidar-lo" triant-la.
+  const originOptions =
+    mode === 'create'
+      ? [NO_ORIGIN, ...eligibleOrigins.map((origin) => origin.nom)]
+      : eligibleOrigins.map((origin) => origin.nom);
+  // `origenCodi` pot ser "woocommerce"/"manual" en edició (valor actual real
+  // però no elegible) — es resol contra el llistat COMPLET `origins`, no
+  // només `eligibleOrigins`, perquè SimpleDropdown el pugui MOSTRAR igual
+  // encara que no estigui entre les `options` triables (mateix cuidado que
+  // Rendiments Porcs: un value que no està a la llista d'opcions no trenca
+  // ni es reseteja sol). Si `origins` encara no ha carregat, cau al propi
+  // codi cru en comptes de deixar el camp buit.
   const originValue = origenCodi
-    ? (eligibleOrigins.find((origin) => origin.codi === origenCodi)?.nom ?? NO_ORIGIN)
+    ? (origins.find((origin) => origin.codi === origenCodi)?.nom ?? origenCodi)
     : NO_ORIGIN;
-  // PATCH /comandes/:id no accepta `origen` (confirmat contra comandes.ts):
-  // en edició es mostra de sòl lectura, mai com a part del desplegable
-  // editable — resol l'etiqueta encara que el codi sigui "manual"/
-  // "woocommerce" (no estan a `eligibleOrigins`, però sí a `origins` sencer).
-  const existingOriginLabel = initialData?.origen
-    ? (origins.find((origin) => origin.codi === initialData.origen)?.nom ?? initialData.origen)
-    : '—';
 
   return (
     <div className="flex flex-col gap-6">
@@ -930,31 +949,18 @@ export const OrderForm = forwardRef<
             loadOptions={loadClientOptions}
             onChange={(option) => handleClientChange(option?.id ?? null)}
           />
-          {mode === 'create' ? (
-            <SimpleDropdown
-              label="Origen"
-              options={originOptions}
-              value={originValue}
-              onChange={(label) => {
-                setHeaderTouched(true);
-                const origin = eligibleOrigins.find((item) => item.nom === label);
-                setOrigenCodi(origin?.codi ?? null);
-              }}
-            />
-          ) : (
-            // Sòl lectura sempre en edició (PATCH /comandes/:id mai accepta
-            // `origen`, ver comentari a useOrders.ts) — badge en comptes de
-            // TextField gris, mateix component/colors que el llistat de
-            // Comandes (comandaOrigen.ts).
-            <div className="flex flex-col gap-1.5 text-sm">
-              <span className="font-medium text-gray-900">Origen</span>
-              <div>
-                <Badge variant={origenBadgeVariant(initialData?.origen ?? '')}>
-                  {existingOriginLabel}
-                </Badge>
-              </div>
-            </div>
-          )}
+          <SimpleDropdown
+            label="Origen"
+            options={originOptions}
+            value={originValue}
+            onChange={(label) => {
+              if (isFrozen) return;
+              setHeaderTouched(true);
+              if (mode === 'edit') setOrigenTouched(true);
+              const origin = eligibleOrigins.find((item) => item.nom === label);
+              setOrigenCodi(origin?.codi ?? null);
+            }}
+          />
           <SimpleDropdown
             label="Estat"
             options={estatOptions.map((value) => ESTAT_LABELS[value]!)}

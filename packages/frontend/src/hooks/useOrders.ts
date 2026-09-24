@@ -28,12 +28,20 @@ export type OrderListFilters = {
 export type OrderFormValues = {
   clientId: number | null;
   /**
-   * `OrigenComandaApi.codi`. Sólo se usa en creación (ver
-   * `createOrder` más abajo); `PATCH /comandes/:id` no acepta `origen`
-   * (confirmado contra comandes.ts, el handler nunca lee `cos.origen`), así
-   * que en edición este valor viaja informativo pero `editOrder` lo ignora.
-   * OrderForm.tsx valida que no sea `null` antes de llamar a `onSave` en
-   * modo creación.
+   * `OrigenComandaApi.codi`. En creación, obligatorio (OrderForm.tsx valida
+   * que no sea `null` antes de llamar a `onSave`) — `createOrder` lo manda
+   * siempre.
+   *
+   * En edición, `PATCH /comandes/:id` SÍ acepta `origen` (nueva
+   * funcionalidad): sólo hacia uno de los 3 canales manuales
+   * (whatsapp/telefon/correu), nunca "woocommerce" — el backend rechaza con
+   * 400 cualquier otro código, sin importar el origen actual del pedido.
+   * `null` en este campo significa "el usuario no tocó el origen" — mismo
+   * criterio que `tariffTouched`/`poblacioTouched` en OrderForm.tsx:
+   * `editOrder` (más abajo) sólo incluye `origen` en el PATCH cuando viene
+   * distinto de `null`, para no reenviar por accidente el valor actual de
+   * un pedido en "woocommerce"/"manual" (que el backend rechazaría aunque
+   * el usuario no haya querido cambiar nada).
    */
   origen: string | null;
   /**
@@ -312,6 +320,13 @@ export function useOrders(filters: OrderListFilters = {}): UseOrdersResult {
       // via cap a amb_incidencia és markIncidence, més avall.
       if (values.estat !== 'amb_incidencia') {
         cos.estat = values.estat;
+      }
+      // `null` = l'usuari no ha tocat l'origen (ver JSDoc de
+      // OrderFormValues.origen) — s'omet la clau del tot, no es manda
+      // `null` al PATCH (que el backend interpretaria com "no vingut",
+      // però és més clar no incloure-la).
+      if (values.origen !== null) {
+        cos.origen = values.origen;
       }
       await api.patch<ComandaDetallApi>(`/comandes/${id}`, cos);
       refetch();
