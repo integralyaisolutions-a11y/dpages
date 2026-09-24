@@ -6,7 +6,7 @@ export const ESTATS_COMANDA = ['oberta', 'en_proces', 'tancada', 'amb_incidencia
 export type EstatComanda = (typeof ESTATS_COMANDA)[number];
 
 /**
- * Origen del pedido. Confirmado con el cliente el 18/08/2026: dejó de ser
+ * Origen del pedido. Confirmado con el cliente: dejó de ser
  * un enum fijo en código — conceptualmente es una tabla mantenible
  * (`origen_comanda`), no un union literal, así que el tipo queda como
  * `string` a propósito. Valores válidos hoy: `'woocommerce'` y `'manual'`
@@ -47,13 +47,15 @@ export interface Comanda {
 
   dataCreacio: string;
   /**
-   * date_modified_gmt de WooCommerce (UTC, TIMESTAMPTZ); guardián de
-   * versión, ver ADR-004. Pierde relevancia para PEDIDOS desde el
-   * 18/08/2026: una vez que un pedido entra desde WooCommerce, ya no
-   * vuelve a sincronizarse (ver ADR pendiente de escritura) — el campo
-   * sigue existiendo por historia/trazabilidad, pero no hay un sync
-   * corriente que lo actualice. Sigue siendo relevante para el catálogo
-   * (`Producte`/`CategoriaProducte`), que sí se sincroniza en curso.
+   * date_modified_gmt de WooCommerce (UTC, TIMESTAMPTZ). Guardián de
+   * versión real y activo (ADR-004, `actualitzarCapcaleraSiCorrespon` en
+   * transform/comandes.ts): cada sync (webhook o polling) sólo pisa la
+   * cabecera del pedido si `congelatA` es null Y la versión entrante es
+   * más nueva que este valor — la condición va en el propio UPDATE
+   * (`data_modificacio_woo IS NULL OR data_modificacio_woo < entrante`),
+   * nunca se lee primero y se decide después. Deja de actualizarse
+   * únicamente cuando el pedido se congela (`congelatA` deja de ser
+   * null), no por el simple hecho de haber entrado ya una vez.
    */
   dataModificacioWoo: string | null;
 }

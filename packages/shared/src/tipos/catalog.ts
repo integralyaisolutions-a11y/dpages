@@ -13,9 +13,9 @@ export interface Producte {
   pesKg: string | null;
   actiu: boolean;
   /**
-   * Ya NO se sincroniza desde WooCommerce (confirmado con el cliente el
-   * 18/08/2026): la categoría es autoridad del propio sistema, relacionada
-   * por SKU — WooCommerce dejó de ser la fuente de verdad del catálogo
+   * Ya NO se sincroniza desde WooCommerce (confirmado con el cliente): la
+   * categoría es autoridad del propio sistema, relacionada por SKU —
+   * WooCommerce dejó de ser la fuente de verdad del catálogo
    * también en este punto, no sólo en pedidos. Null = todavía sin
    * categoría resuelta (poco común).
    */

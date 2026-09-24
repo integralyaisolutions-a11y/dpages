@@ -1,13 +1,13 @@
 /**
- * Formas de request/response de la API de negocio (docs/contrato-api.md,
- * capa 8) — lo que consume Michel en el frontend. Deliberadamente
- * DISTINTAS de los tipos de dominio en catalog.ts/comanda.ts/client.ts:
- * esos reflejan filas de la base (UUID, snake_case implícito vía nombres
- * de columna); estos reflejan el JSON exacto del contrato (enteros
- * secuenciales, camelCase, decimales como string).
+ * Formas de request/response de la API de negocio (docs/contrato-api.md) —
+ * lo que consume el frontend. Deliberadamente DISTINTAS de los tipos de
+ * dominio en catalog.ts/comanda.ts/client.ts: esos reflejan filas de la
+ * base (UUID, snake_case implícito vía nombres de columna); estos reflejan
+ * el JSON exacto del contrato (enteros secuenciales, camelCase, decimales
+ * como string).
  *
  * Por qué los `id` son `number` y no `string`: el contrato usa enteros
- * pequeños en todos sus ejemplos ("id": 12, "id": 142...) — Michel los
+ * pequeños en todos sus ejemplos ("id": 12, "id": 142...), que el frontend
  * copia tal cual a sus mocks. Las claves primarias internas siguen siendo
  * UUID (no cambia nada del sync ni de las FK); cada tabla expuesta por API
  * tiene además una columna `id_seq` de sólo lectura para esto (ver
@@ -91,9 +91,9 @@ export interface ProducteApi {
  * y `categoria` son de sólo lectura acá: se derivan de la categoria
  * asociada, no se editan en este CRUD.
  *
- * BREAKING (capa 22): ya no trae `producte` — Francesc sacó esa columna de
- * la pantalla (con datos reales, no aporta nada que `agrupacioProduccio`
- * no diga mejor). El campo de ENTRADA del alta (`POST /rendiments-porcs`,
+ * BREAKING: ya no trae `producte` — esa columna se sacó de la pantalla
+ * (con datos reales, no aporta nada que `agrupacioProduccio` no diga
+ * mejor). El campo de ENTRADA del alta (`POST /rendiments-porcs`,
  * ver `RendimentPorcEntradaApi` más abajo) es `categoriaId` +
  * `agrupacioProduccio` — `producteId` no existe ni como entrada ni como
  * salida desde la migración de issues #3/#4.
@@ -105,7 +105,7 @@ export interface RendimentPorcApi {
   /** Derivado de categoria.nom — sólo lectura. */
   categoria: string;
   /**
-   * Migración a clave por agrupació (issues #3/#4, Francesc): ya no se
+   * Migración a clave por agrupació (issues #3/#4): ya no se
    * deriva de un producte concreto — es el identificador del grupo junto
    * con categoriaId, guardado directo en rendiments_porcs. Nunca null
    * (a diferencia de ProducteApi.agrupacioProduccio): el grupo es la
@@ -120,7 +120,7 @@ export interface RendimentPorcApi {
 }
 
 /**
- * Migración a clave por agrupació (issues #3/#4, Francesc): identifica el
+ * Migración a clave por agrupació (issues #3/#4): identifica el
  * registro por categoriaId (id_seq público) + agrupacioProduccio, no por un
  * producte puntual — el rendimiento de un cerdo se define a nivel de grupo,
  * no de artículo individual. INMUTABLE tras crear el registro (mismo
@@ -161,13 +161,13 @@ export interface MatriuTarifesApi {
 export interface ClientApi {
   id: number;
   /**
-   * Autogenerado siempre (`CLI` + `id`, sin padding fijo) — capa 25 para
-   * clientes de WooCommerce, capa 29 para alta manual (`POST /clients`).
+   * Autogenerado siempre (`CLI` + `id`, sin padding fijo), tanto para
+   * clientes de WooCommerce como para alta manual (`POST /clients`).
    * De sólo lectura para siempre: ningún endpoint lo acepta como entrada
    * editable, ni al crear ni en `PATCH /clients/:id` después. El tipo
-   * sigue siendo `string | null` por los clientes cargados antes de la
-   * capa 25 (backfill ya corrido en local/producción, pero el tipo no
-   * fuerza esa garantía histórica).
+   * sigue siendo `string | null` por los clientes cargados antes de que
+   * existiera esta autogeneración (backfill ya corrido en
+   * local/producción, pero el tipo no fuerza esa garantía histórica).
    */
   codi: string | null;
   nom: string | null;
@@ -184,8 +184,8 @@ export interface ClientApi {
  * `POST /clients` — alta manual (teléfono/WhatsApp no traen cliente de
  * WooCommerce que resolver).
  *
- * Capa 29: `codi` NO va acá — se autogenera siempre (`CLI` + `id`), igual
- * que ya hacía el sync de WooCommerce desde la capa 25. Es de sólo lectura
+ * `codi` NO va acá — se autogenera siempre (`CLI` + `id`), igual
+ * que ya hacía el sync de WooCommerce. Es de sólo lectura
  * para siempre, en los dos orígenes por igual (ver `ClientApi.codi`);
  * ningún endpoint lo acepta como entrada, ni al crear ni después.
  */
@@ -209,8 +209,8 @@ export interface TransportistaApi {
 // ── 4.4b · Orígens de comanda ────────────────────────────────────────────
 
 /**
- * `origen_comanda` como tabla mantenible (confirmado 18/08/2026), no un
- * enum fijo — de ahí el CRUD completo. `codi` es el valor que aparece en
+ * `origen_comanda` como tabla mantenible, no un enum fijo — de ahí el CRUD
+ * completo. `codi` es el valor que aparece en
  * `ComandaResumApi.origen`/`ComandaDetallApi.origen` (hoy "woocommerce" y
  * "manual"; extensible a futuro sin tocar código, ej. "whatsapp").
  */
@@ -244,14 +244,14 @@ export interface ComandaResumApi {
   dataComanda: string;
   dataProduccio: string | null;
   /**
-   * Capa 21 — fechas de producción DISTINTAS entre las líneas del pedido
+   * Fechas de producción DISTINTAS entre las líneas del pedido
    * (`comanda_linia.dataProduccio`, ver `ComandaLiniaApi.dataProduccio`),
    * ordenadas cronológicamente, sin nulls. Array vacío si ninguna línea
    * tiene fecha de producción propia. Distinto de `dataProduccio` (arriba,
    * la de la CABECERA del pedido) — un pedido puede mostrar varias fechas
-   * acá si sus líneas se producen en días distintos (visto en el demo:
-   * "20/08/2026, 21/08/2026"). ISO-8601 UTC, igual que el resto de las
-   * fechas del contrato — el formateo/unión con coma lo hace el frontend.
+   * acá si sus líneas se producen en días distintos (ej. "2026-08-20,
+   * 2026-08-21"). ISO-8601 UTC, igual que el resto de las fechas del
+   * contrato — el formateo/unión con coma lo hace el frontend.
    */
   datesProduccioLinies: string[];
   dataExpedicio: string | null;
@@ -272,7 +272,7 @@ export interface ComandaLiniaApi {
   ordinal: number;
   producte: { id: number; codi: string | null; descripcio: string } | null;
   /**
-   * Capa 20 — mismos tres campos que ya devuelve `FilaPanellObradorApi`
+   * Mismos tres campos que ya devuelve `FilaPanellObradorApi`
    * para esta misma línea (`GET /panells/obrador`), resueltos igual
    * (join contra `producte`/`categoria_producte`): consistencia entre
    * ambos endpoints. `null` cuando `producte` también es `null`.
@@ -281,7 +281,7 @@ export interface ComandaLiniaApi {
   format: string | null;
   envasat: string | null;
   /**
-   * Capa 38 — BREAKING: pasó de `number` a `string`. La columna
+   * BREAKING: pasó de `number` a `string`. La columna
    * (`comanda_linia.unitats_demanades`) cambió de INTEGER a NUMERIC(10,2)
    * (permite entregas/pedidos parciales de pieza, ej. 2.5 unidades) — `pg`
    * siempre devuelve NUMERIC como string, igual que ya pasa con
@@ -292,7 +292,7 @@ export interface ComandaLiniaApi {
   unitatsDemanades: string;
   kgDemanats: string;
   kgEditable: boolean;
-  /** Capa 38 — mismo cambio que unitatsDemanades, misma razón (NUMERIC(10,2)). */
+  /** Mismo cambio que unitatsDemanades, misma razón (NUMERIC(10,2)). */
   unitatsLliurades: string;
   kgLliurats: string;
   confirmatA: string | null;
@@ -367,13 +367,13 @@ export interface ComandaCreacioApi {
   origen: string;
   clientId?: number;
   /**
-   * Capa 32. Si viene, anula la tarifa del cliente SÓLO para resolver el
+   * Si viene, anula la tarifa del cliente SÓLO para resolver el
    * precio de las líneas de esta alta — se guarda en `comanda.tarifaId`.
    * Editarlo después vía `PATCH /comandes/:id` NO recalcula estas líneas.
    */
   tarifaId?: number;
   /**
-   * Issue #16 (Francesc) — nuevo, OBLIGATORIO. Fecha de negocio editable
+   * Issue #16 — nuevo, OBLIGATORIO. Fecha de negocio editable
    * (columna `comanda.dataComanda`, DATE), distinta de `creat_en` (timestamp
    * real e inalterable de cuándo se guardó la fila, nunca expuesto en la
    * API). El frontend la precarga con HOY por defecto, pero es editable
@@ -381,7 +381,7 @@ export interface ComandaCreacioApi {
    */
   dataComanda: string;
   /**
-   * Issue #16 (Francesc) — BREAKING: pasó de opcional a OBLIGATORIA (regla
+   * Issue #16 — BREAKING: pasó de opcional a OBLIGATORIA (regla
    * de negocio confirmada). El frontend la precarga con HOY por defecto,
    * igual que dataComanda.
    */
@@ -392,7 +392,7 @@ export interface ComandaCreacioApi {
 }
 
 /**
- * Capa 30 — `POST /comandes/:comandaId/linies` (agregar línea a un pedido
+ * `POST /comandes/:comandaId/linies` (agregar línea a un pedido
  * ya creado). Mismo shape que `LiniaCreacioApi` para producteId/
  * unitatsDemanades/kgDemanats — la resolución de precio usa la misma
  * cascada que al crear el pedido (tarifa del cliente → precio de catálogo →
@@ -400,8 +400,8 @@ export interface ComandaCreacioApi {
  *
  * Dejó de ser un simple alias de `LiniaCreacioApi` cuando el issue #16
  * original hizo `dataProduccio` obligatoria sólo en `POST /comandes`, dejando
- * este endpoint (agregar línea a un pedido ya existente) sin tocar. Michelle/
- * Francesc confirmaron después que el mismo criterio aplica acá también.
+ * este endpoint (agregar línea a un pedido ya existente) sin tocar — el
+ * mismo criterio se confirmó después que aplica acá también.
  * Issue #21 la revierte a opcional en ambas interfaces por igual, mismo
  * shape que `LiniaCreacioApi.dataProduccio`. Se mantiene como interfaz
  * propia (no se vuelve a alias-ear) porque el resto de la forma (sin
@@ -416,7 +416,7 @@ export interface LiniaAfegidaApi {
 }
 
 /**
- * Capa 30 — `PATCH /comandes/:comandaId/linies/:liniaId` (editar línea
+ * `PATCH /comandes/:comandaId/linies/:liniaId` (editar línea
  * existente). Todos opcionales, actualiza sólo lo que venga. NO incluye
  * `preuUnitari`: editar cantidades nunca re-resuelve el precio, sólo
  * recalcula `totalLinia` con el `preuUnitari` ya asignado — si hace falta
@@ -433,7 +433,7 @@ export interface LiniaEdicioApi {
 // ── 5 · Empaquetado ──────────────────────────────────────────────────────
 
 export interface LliuramentBodyApi {
-  /** Entrada: sigue siendo un JS number normal, admite hasta 2 decimales (capa 38). */
+  /** Entrada: sigue siendo un JS number normal, admite hasta 2 decimales. */
   unitatsLliurades: number;
   kgLliurats: string;
 }
@@ -441,14 +441,21 @@ export interface LliuramentBodyApi {
 export interface LliuramentRespostaApi {
   liniaId: number;
   comandaId: number;
-  /** Capa 38 — BREAKING: pasó de `number` a `string`, ver ComandaLiniaApi.unitatsDemanades. */
+  /** BREAKING: pasó de `number` a `string`, ver ComandaLiniaApi.unitatsDemanades. */
   unitatsLliurades: string;
   kgLliurats: string;
   confirmatA: string;
   /**
-   * Firebase Auth llega en una capa posterior (ver docs/decisiones-arquitectura.md).
-   * Mientras tanto, en modo desarrollo sin token, este id/nom son un valor
-   * fijo — no representan un usuario real todavía.
+   * Usuario real que confirmó la entrega, resuelto por `resoldre-usuari.ts`
+   * a partir del uid de Firebase autenticado (ADR-021) — nunca un valor
+   * fijo del contrato. La fila de `usuari` se auto-provisiona la primera
+   * vez que se ve un uid nuevo (rol 'General' por defecto), así que
+   * `id`/`nom` siempre corresponden a una fila real, incluso para un
+   * usuario recién provisionado. En desarrollo local con
+   * `AUTH_DISABLED=true` el uid autenticado es el fijo 'dev-sense-auth' —
+   * `id`/`nom` terminan siendo los de ESE usuario auto-provisionado (`nom`
+   * cae al email sintético `dev-sense-auth@dpages.local`), una
+   * particularidad del modo desarrollo, no del contrato.
    */
   confirmatPer: { id: number; nom: string };
 }
@@ -465,14 +472,14 @@ export interface LliuramentDesferRespostaApi {
   confirmatPer: null;
 }
 
-// ── Capa 40 · Treball (Panell Obrador) ──────────────────────────────────
+// ── Treball (Panell Obrador) ─────────────────────────────────────────────
 
 export interface TreballBodyApi {
   marcat: boolean;
 }
 
 /**
- * Capa 40 — `PATCH /comandes/:comandaId/linies/:liniaId/treball`. A
+ * `PATCH /comandes/:comandaId/linies/:liniaId/treball`. A
  * diferencia de `LliuramentRespostaApi.confirmatPer` (uid de Firebase en
  * texto, diseñado antes de que existiera la tabla `usuari`), `treballatPer`
  * es un FK real — se resuelve con un JOIN, mismo shape `{id, nom}` que
@@ -506,13 +513,12 @@ export interface FilaPanellOficinaApi {
   dataComanda: string;
   dataExpedicio: string | null;
   dataLliurament: string | null;
-  /** Capa 35. */
   bultos: number | null;
   linies: number;
   totalKg: string;
   totalEur: string;
   /**
-   * Capa 35 — BREAKING: antes era el texto de `comanda.obsProduccio`
+   * BREAKING: antes era el texto de `comanda.obsProduccio`
    * (`string | null`); ahora es un booleano ("¿hay algo que ver?", para el
    * checkbox del panel) que sale `true` si la cabecera tiene contenido O
    * alguna línea activa (no esborrada) tiene `obsProduccio` propio — antes
@@ -520,7 +526,7 @@ export interface FilaPanellOficinaApi {
    */
   obsProduccio: boolean;
   /**
-   * Sin cambios (capa 35): sigue siendo el texto de `comanda.obsLliurament`.
+   * Sin cambios: sigue siendo el texto de `comanda.obsLliurament`.
    * `comanda_linia` no tiene una columna `obsLliurament` a nivel de línea —
    * no hay nada más que revisar acá.
    */
@@ -540,14 +546,14 @@ export interface PanellOficinaApi {
 
 export interface TotalsPanellObradorApi {
   linies: number;
-  /** Capa 38 — BREAKING: pasó de `number` a `string`, mismo motivo/criterio que `totalKg` (SUM de NUMERIC(10,2), ver ComandaLiniaApi.unitatsDemanades). */
+  /** BREAKING: pasó de `number` a `string`, mismo motivo/criterio que `totalKg` (SUM de NUMERIC(10,2), ver ComandaLiniaApi.unitatsDemanades). */
   totalUnitats: string;
   totalKg: string;
 }
 
 /**
- * Confirmado con el cliente el 18/08/2026 (prototipo + reunión): Obrador
- * muestra líneas de pedido INDIVIDUALES, sin agrupar por producto —
+ * Confirmado con el cliente: Obrador muestra líneas de pedido INDIVIDUALES,
+ * sin agrupar por producto —
  * reemplaza la forma agregada anterior. `TotalsPanellObradorApi` no
  * cambia: linies/totalUnitats/totalKg siguen siendo válidos sobre líneas
  * individuales.
@@ -561,11 +567,11 @@ export interface FilaPanellObradorApi {
   envasat: string | null;
   client: string | null;
   dataProduccio: string | null;
-  /** Capa 38 — BREAKING: pasó de `number` a `string` (`comanda_linia.unitats_demanades`, ver ComandaLiniaApi.unitatsDemanades). */
+  /** BREAKING: pasó de `number` a `string` (`comanda_linia.unitats_demanades`, ver ComandaLiniaApi.unitatsDemanades). */
   unitats: string;
   kg: string;
   obsProduccio: string | null;
-  /** Capa 40 — ver TreballLiniaRespostaApi. `null` si nadie marcó la línea como trabajada (o se desmarcó). */
+  /** Ver TreballLiniaRespostaApi. `null` si nadie marcó la línea como trabajada (o se desmarcó). */
   treballatA: string | null;
   treballatPer: ReferenciaApi | null;
 }
@@ -580,9 +586,9 @@ export interface PanellObradorApi {
 
 export interface TotalsPanellEmpaquetatApi {
   linies: number;
-  /** Capa 38 — BREAKING: pasó de `number` a `string`, mismo motivo/criterio que `kgDemanats` (SUM de NUMERIC(10,2), ver ComandaLiniaApi.unitatsDemanades). */
+  /** BREAKING: pasó de `number` a `string`, mismo motivo/criterio que `kgDemanats` (SUM de NUMERIC(10,2), ver ComandaLiniaApi.unitatsDemanades). */
   unitatsDemanades: string;
-  /** Capa 38 — BREAKING: mismo cambio que unitatsDemanades. */
+  /** BREAKING: mismo cambio que unitatsDemanades. */
   unitatsLliurades: string;
   kgDemanats: string;
   kgLliurats: string;
@@ -600,10 +606,10 @@ export interface FilaPanellEmpaquetatApi {
   client: string | null;
   codi: string | null;
   producte: string;
-  /** Capa 38 — BREAKING: pasó de `number` a `string` (ver ComandaLiniaApi.unitatsDemanades). */
+  /** BREAKING: pasó de `number` a `string` (ver ComandaLiniaApi.unitatsDemanades). */
   unitatsDemanades: string;
   kgDemanats: string;
-  /** Capa 38 — BREAKING: mismo cambio que unitatsDemanades. */
+  /** BREAKING: mismo cambio que unitatsDemanades. */
   unitatsLliurades: string;
   kgLliurats: string;
   confirmatA: string | null;
@@ -629,11 +635,11 @@ export interface PanellEmpaquetatApi {
  * - `agrupacioRendiment: "MAGRE"` → `rendiment`/`diferencia` van al total
  *   global de `PanellProduccioApi.totals`, no por línea (ambos null acá).
  *
- * BREAKING (capa 22): ya no trae `producte` — cada fila es una AGRUPACIÓN
+ * BREAKING: ya no trae `producte` — cada fila es una AGRUPACIÓN
  * de producción, que puede tener varios artículos asociados; mostrar sólo
  * uno (el de `id` más chico, elegido de forma determinística) confundía
- * más de lo que ayudaba con datos reales. Francesc lo sacó de la pantalla.
- * El filtro `?producte=` de `GET /panells/produccio` sigue existiendo —
+ * más de lo que ayudaba con datos reales. El filtro `?producte=` de
+ * `GET /panells/produccio` sigue existiendo —
  * esto sólo afecta la RESPUESTA, no la capacidad de filtrar por artículo.
  */
 export interface PanellProduccioFilaApi {
@@ -656,25 +662,25 @@ export interface PanellProduccioApi {
     totalKgMagro: string;
     diferencia: string;
     /**
-     * Capa 24 — rendimiento fijo por cerdo (jamón/recortes/paletillas),
-     * confirmado por Francesc: no calculado desde `rendiments_porcs`, son
-     * constantes de negocio (`KG_JAMON_PER_CERDO` × `nombrePorcs`, y así
-     * para los otros dos). `nombrePorcs` es obligatorio en este endpoint
-     * (ver `GET /panells/produccio`), así que estos tres campos siempre
-     * traen un valor — nunca `null`. `totalKgMagro` = suma de estos 3.
+     * Rendimiento fijo por cerdo (jamón/recortes/paletillas): no calculado
+     * desde `rendiments_porcs`, son constantes de negocio
+     * (`KG_JAMON_PER_CERDO` × `nombrePorcs`, y así para los otros dos).
+     * `nombrePorcs` es obligatorio en este endpoint (ver
+     * `GET /panells/produccio`), así que estos tres campos siempre traen
+     * un valor — nunca `null`. `totalKgMagro` = suma de estos 3.
      *
-     * REVERT (Francesc, confirmado 23/09/2026) — el 23/09/2026 se conectó
-     * esto a `rendiments_porcs` por error (se asumió sin confirmar que el
-     * desajuste contra `totalKgMagro` era un bug). Francesc aclaró que es
-     * una decisión de negocio fija e intencional, sin relación con esa
-     * tabla — NO reconectar bajo ningún concepto.
+     * ADVERTENCIA — esto se conectó una vez a `rendiments_porcs` por error
+     * (se asumió sin confirmar que el desajuste contra `totalKgMagro` era
+     * un bug). El cliente aclaró que es una decisión de negocio fija e
+     * intencional, sin relación con esa tabla — NO reconectar bajo ningún
+     * concepto.
      */
     kgJamon: string;
     kgRecortes: string;
     kgPaletillas: string;
     /**
-     * Sumatorio de líneas de la categoria CANALS (confirmado con Francesc),
-     * totalmente independiente del resto de esta tabla y de sus totales:
+     * Sumatorio de líneas de la categoria CANALS, totalmente independiente
+     * del resto de esta tabla y de sus totales:
      * CANALS tiene `elaborat_porc = false` a propósito, por eso nunca
      * aparece en `dades` ni afecta ninguno de los campos de arriba. Sólo
      * responde al mismo filtro de fecha (`dataDes`/`dataFins`) del resto del
@@ -718,8 +724,8 @@ export interface UsuariApi {
   nom: string;
   email: string;
   /**
-   * `modulsPermesos` viaja acá (no sólo en RolApi) porque GET /jo (capa 17)
-   * es lo primero que llama el frontend al iniciar sesión, y necesita saber
+   * `modulsPermesos` viaja acá (no sólo en RolApi) porque GET /jo es lo
+   * primero que llama el frontend al iniciar sesión, y necesita saber
    * qué mostrar sin una segunda llamada a GET /rols/:id.
    */
   rol: { id: number; nom: string; modulsPermesos: string[] };
@@ -735,7 +741,7 @@ export interface UsuariEntradaApi {
 }
 
 /**
- * `POST /usuaris` (capa 19) — alta manual por un Administrador. A
+ * `POST /usuaris` — alta manual por un Administrador. A
  * diferencia de `UsuariEntradaApi`, no lleva `firebaseUid`: lo genera el
  * backend al crear el usuario en Firebase, no lo elige quien da de alta.
  */
